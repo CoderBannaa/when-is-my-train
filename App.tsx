@@ -9,8 +9,9 @@ import { LiveStatusScreen } from './src/screens/LiveStatusScreen';
 import { LiveTrainTrackerScreen } from './src/screens/LiveTrainTrackerScreen';
 import { PnrScreen } from './src/screens/PnrScreen';
 import { TimetableScreen } from './src/screens/TimetableScreen';
-import { Colors } from './src/theme/colors';
 import { Station } from './src/data/stations';
+import { PreferencesProvider, usePreferences } from './src/context/PreferencesContext';
+import { PreferencesModal } from './src/components/PreferencesModal';
 
 interface ScreenState {
   tab: TabKey;
@@ -18,7 +19,9 @@ interface ScreenState {
   trackingTrain?: string | null;
 }
 
-export default function App() {
+function MainApp() {
+  const { colors, isDarkMode, t, showWelcomeModal, setShowWelcomeModal } = usePreferences();
+  const [showPrefsModal, setShowPrefsModal] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>('home');
   const [isSearching, setIsSearching] = useState(false);
   const [trackingTrainNumber, setTrackingTrainNumber] = useState<string | null>(null);
@@ -90,7 +93,7 @@ export default function App() {
 
     if (activeTab === 'home' && isSearching) {
       return {
-        title: searchParams ? `${searchParams.from.code} ➔ ${searchParams.to.code}` : 'Train Search',
+        title: searchParams ? `${searchParams.from.code} ➔ ${searchParams.to.code}` : t('findTrains'),
         subtitle: searchParams ? `${searchParams.date}` : '',
         showBack: true,
       };
@@ -99,27 +102,27 @@ export default function App() {
     switch (activeTab) {
       case 'live':
         return {
-          title: 'Live Train Running Status',
+          title: t('tabLive'),
           subtitle: 'Spot train location with GPS',
           showBack: canGoBack,
         };
       case 'pnr':
         return {
-          title: 'PNR Status Checker',
+          title: t('tabPnr'),
           subtitle: 'Live seat & berth confirmation',
           showBack: canGoBack,
         };
       case 'schedule':
         return {
-          title: 'Train Timetable & Route',
+          title: t('tabSchedule'),
           subtitle: '100% Offline schedule list',
           showBack: canGoBack,
         };
       case 'home':
       default:
         return {
-          title: 'When is my train',
-          subtitle: 'IRCTC & Live GPS Tracking',
+          title: t('appName'),
+          subtitle: t('tagline'),
           showBack: false,
         };
     }
@@ -184,38 +187,57 @@ export default function App() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar style="light" />
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.primary }]}>
+      <StatusBar style={isDarkMode ? 'light' : 'light'} />
 
-      {/* Top Header with universal Back Button support */}
+      {/* Top Header with universal Back Button, Language, & Day/Night Mode */}
       {!(activeTab === 'home' && isSearching) && !trackingTrainNumber && (
         <Header
           title={headerProps.title}
           subtitle={headerProps.subtitle}
           showBack={headerProps.showBack}
           onBack={handleBack}
+          onOpenPreferences={() => setShowPrefsModal(true)}
         />
       )}
 
       {/* Active Screen Content */}
-      <View style={styles.screenContent}>{renderCurrentScreen()}</View>
+      <View style={[styles.screenContent, { backgroundColor: colors.background }]}>
+        {renderCurrentScreen()}
+      </View>
 
-      {/* Bottom Navigation (Hidden during Search Results and full-screen Live Tracking) */}
+      {/* Bottom Navigation */}
       {!trackingTrainNumber && !isSearching && (
         <BottomTabBar activeTab={activeTab} onSelectTab={handleSelectTab} />
       )}
+
+      {/* Language (Hindi/English) & Day/Night Mode Modal */}
+      <PreferencesModal
+        visible={showWelcomeModal || showPrefsModal}
+        onClose={() => {
+          setShowWelcomeModal(false);
+          setShowPrefsModal(false);
+        }}
+        isFirstLaunch={showWelcomeModal}
+      />
     </SafeAreaView>
+  );
+}
+
+export default function App() {
+  return (
+    <PreferencesProvider>
+      <MainApp />
+    </PreferencesProvider>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.primary,
     paddingTop: Platform.OS === 'android' ? RNStatusBar.currentHeight : 0,
   },
   screenContent: {
     flex: 1,
-    backgroundColor: '#F0F7FD',
   },
 });

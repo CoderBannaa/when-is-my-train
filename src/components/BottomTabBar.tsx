@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../theme/colors';
+import { usePreferences } from '../context/PreferencesContext';
 
 export type TabKey = 'home' | 'live' | 'pnr' | 'schedule';
 
@@ -11,15 +11,17 @@ interface BottomTabBarProps {
 }
 
 export const BottomTabBar: React.FC<BottomTabBarProps> = ({ activeTab, onSelectTab }) => {
+  const { colors, t } = usePreferences();
+
   const tabs: { key: TabKey; label: string; iconName: keyof typeof Ionicons.glyphMap; activeIcon: keyof typeof Ionicons.glyphMap }[] = [
-    { key: 'home', label: 'Search', iconName: 'search-outline', activeIcon: 'search' },
-    { key: 'live', label: 'Live Status', iconName: 'navigate-outline', activeIcon: 'navigate' },
-    { key: 'pnr', label: 'PNR Status', iconName: 'receipt-outline', activeIcon: 'receipt' },
-    { key: 'schedule', label: 'Timetable', iconName: 'calendar-outline', activeIcon: 'calendar' },
+    { key: 'home', label: t('tabHome'), iconName: 'search-outline', activeIcon: 'search' },
+    { key: 'live', label: t('tabLive'), iconName: 'navigate-outline', activeIcon: 'navigate' },
+    { key: 'pnr', label: t('tabPnr'), iconName: 'receipt-outline', activeIcon: 'receipt' },
+    { key: 'schedule', label: t('tabSchedule'), iconName: 'calendar-outline', activeIcon: 'calendar' },
   ];
 
   return (
-    <View style={styles.tabBar}>
+    <View style={[styles.tabBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
       {tabs.map((tab) => {
         const isActive = activeTab === tab.key;
         return (
@@ -29,17 +31,17 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = ({ activeTab, onSelectT
             activeOpacity={0.7}
             onPress={() => onSelectTab(tab.key)}
           >
-            <View style={[styles.iconWrapper, isActive && styles.activeIconWrapper]}>
+            <View style={[styles.iconWrapper, isActive && { backgroundColor: colors.primarySoft }]}>
               <Ionicons
                 name={isActive ? tab.activeIcon : tab.iconName}
                 size={22}
-                color={isActive ? Colors.primary : Colors.textSecondary}
+                color={isActive ? colors.primary : colors.textSecondary}
               />
             </View>
-            <Text style={[styles.tabLabel, isActive && styles.activeTabLabel]}>
+            <Text style={[styles.tabLabel, { color: colors.textSecondary }, isActive && { color: colors.primary, fontWeight: '800' }]}>
               {tab.label}
             </Text>
-            {isActive && <View style={styles.activeIndicator} />}
+            {isActive && <View style={[styles.activeIndicator, { backgroundColor: colors.primary }]} />}
           </TouchableOpacity>
         );
       })}

@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '../theme/colors';
+import { usePreferences } from '../context/PreferencesContext';
 
 interface HeaderProps {
   title?: string;
@@ -9,6 +10,7 @@ interface HeaderProps {
   showBack?: boolean;
   onBack?: () => void;
   onNotificationPress?: () => void;
+  onOpenPreferences?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({ 
@@ -16,8 +18,15 @@ export const Header: React.FC<HeaderProps> = ({
   subtitle = "IRCTC & Live GPS Tracking",
   showBack = false,
   onBack,
-  onNotificationPress 
+  onNotificationPress,
+  onOpenPreferences,
 }) => {
+  const { language, setLanguage, isDarkMode, toggleTheme, t } = usePreferences();
+
+  const handleToggleLang = () => {
+    setLanguage(language === 'en' ? 'hi' : 'en');
+  };
+
   return (
     <View style={styles.headerContainer}>
       <View style={styles.leftSection}>
@@ -35,19 +44,49 @@ export const Header: React.FC<HeaderProps> = ({
           </View>
         )}
         <View style={styles.titleWrapper}>
-          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.title} numberOfLines={1}>{title}</Text>
           <View style={styles.livePill}>
             <View style={styles.greenPulse} />
-            <Text style={styles.liveText}>{showBack ? 'TAP TO GO BACK' : 'GPS READY'}</Text>
+            <Text style={styles.liveText}>{showBack ? t('tapToBack') : t('gpsReady')}</Text>
           </View>
         </View>
       </View>
 
       <View style={styles.rightSection}>
-        <TouchableOpacity style={styles.actionBtn} activeOpacity={0.7} onPress={onNotificationPress}>
-          <Ionicons name="notifications-outline" size={22} color="#FFFFFF" />
-          <View style={styles.alertDot} />
+        {/* Language Quick Switcher (EN / हिं) */}
+        <TouchableOpacity
+          style={styles.langPillBtn}
+          activeOpacity={0.75}
+          onPress={handleToggleLang}
+        >
+          <Text style={styles.langPillText}>
+            {language === 'en' ? 'हिन्दी' : 'EN'}
+          </Text>
         </TouchableOpacity>
+
+        {/* Day / Night Mode Toggle (☀️ / 🌙) */}
+        <TouchableOpacity
+          style={[styles.actionBtn, { marginLeft: 6 }]}
+          activeOpacity={0.7}
+          onPress={toggleTheme}
+        >
+          <Ionicons
+            name={isDarkMode ? 'sunny' : 'moon'}
+            size={18}
+            color={isDarkMode ? '#FDE047' : '#FFFFFF'}
+          />
+        </TouchableOpacity>
+
+        {/* Preferences / Settings Modal */}
+        {onOpenPreferences && (
+          <TouchableOpacity
+            style={[styles.actionBtn, { marginLeft: 6 }]}
+            activeOpacity={0.7}
+            onPress={onOpenPreferences}
+          >
+            <Ionicons name="settings-outline" size={18} color="#FFFFFF" />
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
@@ -128,13 +167,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   actionBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
+  },
+  langPillBtn: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  langPillText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0284C7',
   },
   alertDot: {
     position: 'absolute',

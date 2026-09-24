@@ -5,6 +5,7 @@ import { Colors } from '../theme/colors';
 import { Station, STATIONS_DATABASE, POPULAR_STATIONS } from '../data/stations';
 import { CORRIDOR_TRAINS_MASTER } from '../data/trainsBetweenStations';
 import { searchAndRankStations, searchAndRankTrains } from '../utils/searchRanker';
+import { usePreferences } from '../context/PreferencesContext';
 
 interface HomeScreenProps {
   onNavigateToTab: (tab: 'live' | 'pnr' | 'schedule') => void;
@@ -25,6 +26,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onSetFromStation,
   onSetToStation,
 }) => {
+  const { colors, language, isDarkMode, t } = usePreferences();
   const [validationError, setValidationError] = useState<string | null>(null);
   const [sourceHasError, setSourceHasError] = useState(false);
   const [destHasError, setDestHasError] = useState(false);
@@ -456,7 +458,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           <View style={[styles.stationInputRow, sourceHasError && styles.stationInputRowError]}>
             <View style={styles.stationInputContent}>
               <TextInput
-                style={styles.stationTextInput}
+                style={[styles.stationTextInput, { color: colors.textPrimary }]}
                 value={fromText}
                 onChangeText={handleFromChangeText}
                 onFocus={() => {
@@ -464,8 +466,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   setValidationError(null);
                   setSourceHasError(false);
                 }}
-                placeholder="Source Station"
-                placeholderTextColor="#94A3B8"
+                placeholder={t('fromStation')}
+                placeholderTextColor={colors.textMuted}
               />
               {fromText.length > 0 && (
                 <TouchableOpacity
@@ -473,7 +475,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   style={styles.clearStationBtn}
                 >
-                  <Ionicons name="close-circle" size={19} color="#94A3B8" />
+                  <Ionicons name="close-circle" size={19} color={colors.textMuted} />
                 </TouchableOpacity>
               )}
             </View>
@@ -481,7 +483,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
           {/* DROPDOWN JUST BELOW SOURCE ROW - only visible if matches exist */}
           {activeInlineSearch === 'from' && fromText.trim().length > 0 && fromRankedResults.length > 0 && (
-            <View style={styles.inlineDropdownCard}>
+            <View style={[styles.inlineDropdownCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <ScrollView
                 style={styles.inlineDropdownScroll}
                 contentContainerStyle={styles.inlineDropdownContent}
@@ -500,12 +502,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                       <Text style={styles.stationDropdownCodeText}>{st.code}</Text>
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.stationDropdownName}>{st.name}</Text>
-                      <Text style={styles.stationDropdownLocation}>
+                      <Text style={[styles.stationDropdownName, { color: colors.textPrimary }]}>{st.name}</Text>
+                      <Text style={[styles.stationDropdownLocation, { color: colors.textSecondary }]}>
                         {st.city === st.state ? st.city : `${st.city}, ${st.state}`}
                       </Text>
                     </View>
-                    <Ionicons name="chevron-forward" size={16} color={Colors.primary} />
+                    <Ionicons name="chevron-forward" size={16} color={colors.primary} />
                   </TouchableOpacity>
                 ))}
               </ScrollView>
@@ -514,7 +516,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
           {/* Divider line with Swap button */}
           <View style={styles.dividerWrapper}>
-            <View style={styles.dividerLine} />
+            <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
             <TouchableOpacity
               style={styles.swapBtnOnLine}
               activeOpacity={0.7}
@@ -529,7 +531,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           <View style={[styles.stationInputRow, destHasError && styles.stationInputRowError]}>
             <View style={styles.stationInputContent}>
               <TextInput
-                style={styles.stationTextInput}
+                style={[styles.stationTextInput, { color: colors.textPrimary }]}
                 value={toText}
                 onChangeText={handleToChangeText}
                 onFocus={() => {
@@ -537,8 +539,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   setValidationError(null);
                   setDestHasError(false);
                 }}
-                placeholder="Destination"
-                placeholderTextColor="#94A3B8"
+                placeholder={t('toStation')}
+                placeholderTextColor={colors.textMuted}
               />
               {toText.length > 0 && (
                 <TouchableOpacity
@@ -546,7 +548,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   style={styles.clearStationBtn}
                 >
-                  <Ionicons name="close-circle" size={19} color="#94A3B8" />
+                  <Ionicons name="close-circle" size={19} color={colors.textMuted} />
                 </TouchableOpacity>
               )}
             </View>
@@ -554,7 +556,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
           {/* DROPDOWN JUST BELOW DESTINATION ROW - only visible if matches exist */}
           {activeInlineSearch === 'to' && toText.trim().length > 0 && toRankedResults.length > 0 && (
-            <View style={styles.inlineDropdownCard}>
+            <View style={[styles.inlineDropdownCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <ScrollView
                 style={styles.inlineDropdownScroll}
                 contentContainerStyle={styles.inlineDropdownContent}
@@ -573,12 +575,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                       <Text style={styles.stationDropdownCodeText}>{st.code}</Text>
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.stationDropdownName}>{st.name}</Text>
-                      <Text style={styles.stationDropdownLocation}>
+                      <Text style={[styles.stationDropdownName, { color: colors.textPrimary }]}>{st.name}</Text>
+                      <Text style={[styles.stationDropdownLocation, { color: colors.textSecondary }]}>
                         {st.city === st.state ? st.city : `${st.city}, ${st.state}`}
                       </Text>
                     </View>
-                    <Ionicons name="chevron-forward" size={16} color={Colors.primary} />
+                    <Ionicons name="chevron-forward" size={16} color={colors.primary} />
                   </TouchableOpacity>
                 ))}
               </ScrollView>
@@ -587,9 +589,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </View>
 
         {/* Search Action Button */}
-        <TouchableOpacity style={styles.searchButton} activeOpacity={0.85} onPress={() => handleFindTrains()}>
+        <TouchableOpacity
+          style={[styles.searchButton, { backgroundColor: colors.searchBtnGreen }]}
+          activeOpacity={0.85}
+          onPress={() => handleFindTrains()}
+        >
           <Ionicons name="search" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
-          <Text style={styles.searchButtonText}>FIND TRAINS</Text>
+          <Text style={styles.searchButtonText}>{t('findTrains')}</Text>
         </TouchableOpacity>
       </View>
 
