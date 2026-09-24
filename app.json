@@ -9,7 +9,9 @@
     "ios": {
       "supportsTablet": true
     },
+    "owner": "atulsingh2008",
     "android": {
+      "package": "com.atulsingh2008.whenismytrain",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
