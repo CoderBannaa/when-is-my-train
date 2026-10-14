@@ -14,6 +14,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '../theme/colors';
 import { TrainBetweenStation, getTrainsBetweenStations } from '../data/trainsBetweenStations';
 import { Station } from '../data/stations';
+import { usePreferences } from '../context/PreferencesContext';
 
 interface SearchResultsScreenProps {
   fromStation: Station;
@@ -71,13 +72,14 @@ function get20RandomTrains(fromCode: string, toCode: string): TrainBetweenStatio
   return list.map((t, idx) => ({
     ...t,
     id: `${t.number}-${idx}`,
+    type: (t.type === 'Duronto' ? 'Superfast' : t.type) as any,
     isLocalEmu: !!(t as any).isLocalEmu,
     fromStationCode: fromCode || 'NDLS',
     fromStationName: 'Origin Station',
     toStationCode: toCode || 'PRYJ',
     toStationName: 'Dest Station',
     runsOn: [true, true, true, true, true, true, true],
-  }));
+  })) as TrainBetweenStation[];
 }
 
 export interface DynamicDateItem {
@@ -143,6 +145,7 @@ export const SearchResultsScreen: React.FC<SearchResultsScreenProps> = ({
   onBack,
   onTrackTrain,
 }) => {
+  const { isDarkMode, colors, t } = usePreferences();
   const dynamicDates = useMemo(() => getDynamicQuickDates(), []);
   const [currentDate, setCurrentDate] = useState(
     selectedDate || dynamicDates.find((d) => d.isToday)?.label || dynamicDates[1]?.label || 'Today'
@@ -341,7 +344,11 @@ Found on When is my train`;
 
       return (
         <TouchableOpacity
-          style={[styles.compactTrainCard, item.isLocalEmu && styles.emuCardHighlight]}
+          style={[
+            styles.compactTrainCard,
+            isDarkMode && { backgroundColor: colors.surface, borderColor: colors.border },
+            item.isLocalEmu && styles.emuCardHighlight,
+          ]}
           activeOpacity={0.82}
           onPress={() => onTrackTrain(item.number, item.name)}
         >
@@ -352,9 +359,9 @@ Found on When is my train`;
             </View>
 
             <View style={styles.cardTimeBlock}>
-              <Text style={styles.timeMainText}>{item.depTime}</Text>
-              <Text style={styles.timeDashText}>──</Text>
-              <Text style={styles.timeMainText}>{item.arrTime}</Text>
+              <Text style={[styles.timeMainText, isDarkMode && { color: colors.textPrimary }]}>{item.depTime}</Text>
+              <Text style={[styles.timeDashText, isDarkMode && { color: colors.textSecondary }]}>──</Text>
+              <Text style={[styles.timeMainText, isDarkMode && { color: colors.textPrimary }]}>{item.arrTime}</Text>
             </View>
 
             {/* Days letters S M T W T F S */}
@@ -374,13 +381,13 @@ Found on When is my train`;
 
           {/* Line 2: Duration | Stops */}
           <View style={styles.cardSubDetailsRow}>
-            <Text style={styles.durationStopsText}>
+            <Text style={[styles.durationStopsText, isDarkMode && { color: colors.textSecondary }]}>
               {item.duration} · {item.totalHaults > 0 ? `${item.totalHaults} Stops` : 'Non-stop'}
             </Text>
           </View>
 
           {/* Line 3: Train Name */}
-          <Text style={styles.compactTrainName} numberOfLines={1}>
+          <Text style={[styles.compactTrainName, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
             {item.name}
           </Text>
 
@@ -393,11 +400,11 @@ Found on When is my train`;
         </TouchableOpacity>
       );
     },
-    [onTrackTrain]
+    [onTrackTrain, isDarkMode, colors]
   );
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, isDarkMode && { backgroundColor: colors.background }]}>
       {/* ================= 1. COMPACT TOP HEADER & SHARE ================= */}
       {/* ================= 1. WHERE IS MY TRAIN STYLE TOP HEADER ================= */}
       <View style={styles.header}>

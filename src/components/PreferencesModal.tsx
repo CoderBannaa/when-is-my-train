@@ -1,7 +1,8 @@
-import React from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { usePreferences, Language, ThemeMode } from '../context/PreferencesContext';
+import { LiveTrainApi } from '../services/liveTrainApiService';
 
 interface PreferencesModalProps {
   visible: boolean;
@@ -15,6 +16,16 @@ export const PreferencesModal: React.FC<PreferencesModalProps> = ({
   isFirstLaunch = false,
 }) => {
   const { language, setLanguage, isDarkMode, setThemeMode, colors, t } = usePreferences();
+  const [railRadarKey, setRailRadarKey] = useState(LiveTrainApi.getRailRadarApiKey());
+
+  useEffect(() => {
+    setRailRadarKey(LiveTrainApi.getRailRadarApiKey());
+  }, [visible]);
+
+  const handleKeyChange = (key: string) => {
+    setRailRadarKey(key);
+    LiveTrainApi.setRailRadarApiKey(key);
+  };
 
   return (
     <Modal visible={visible} transparent animationType="fade">
@@ -137,6 +148,40 @@ export const PreferencesModal: React.FC<PreferencesModalProps> = ({
             </View>
           </View>
 
+          {/* Section 3: RailRadar.in Real-Time API Key */}
+          <View style={styles.sectionBlock}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+              <Text style={[styles.sectionLabel, { color: colors.textPrimary, marginBottom: 0 }]}>
+                📡 RailRadar Live API
+              </Text>
+              <View style={[styles.quotaBadge, { backgroundColor: railRadarKey ? '#DCFCE7' : '#FEF3C7' }]}>
+                <Text style={[styles.quotaText, { color: railRadarKey ? '#16A34A' : '#D97706' }]}>
+                  {railRadarKey ? 'Free Tier Active (100/mo)' : 'Key Needed'}
+                </Text>
+              </View>
+            </View>
+            <Text style={[styles.apiHelpText, { color: colors.textSecondary }]}>
+              Enter your RailRadar secret key from railradar.in/developers for live tracking:
+            </Text>
+            <View style={[styles.keyInputRow, { backgroundColor: colors.cardSecondary, borderColor: colors.border }]}>
+              <Ionicons name="key-outline" size={18} color={colors.textSecondary} style={{ marginRight: 8 }} />
+              <TextInput
+                style={[styles.keyInput, { color: colors.textPrimary }]}
+                value={railRadarKey}
+                onChangeText={handleKeyChange}
+                placeholder="Paste key e.g. rg_07900..."
+                placeholderTextColor={colors.textMuted}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              {railRadarKey.length > 0 && (
+                <TouchableOpacity onPress={() => handleKeyChange('')}>
+                  <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+
           {/* Save / Continue Button */}
           <TouchableOpacity
             style={[styles.continueBtn, { backgroundColor: colors.searchBtnGreen }]}
@@ -248,5 +293,33 @@ const styles = StyleSheet.create({
     fontSize: 14.5,
     fontWeight: '800',
     letterSpacing: 0.4,
+  },
+  quotaBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  quotaText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  apiHelpText: {
+    fontSize: 12,
+    marginBottom: 8,
+    lineHeight: 16,
+  },
+  keyInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  keyInput: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    padding: 0,
   },
 });

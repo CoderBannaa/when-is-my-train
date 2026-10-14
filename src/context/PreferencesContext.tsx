@@ -4,7 +4,7 @@ import { Colors } from '../theme/colors';
 
 // Universal Safe Storage (works without requiring native pod/async-storage build)
 const memoryStore: Record<string, string> = {};
-const SafeStorage = {
+export const SafeStorage = {
   getItem: async (key: string): Promise<string | null> => {
     try {
       if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {

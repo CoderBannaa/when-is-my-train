@@ -19,7 +19,9 @@ export interface PnrRecord {
   destName: string;
   journeyDate: string;
   travelClass: string;
-  quota: string;
+  quota?: string;
+  boardingStation?: string;
+  isConfirmed?: boolean;
   chartStatus: 'Chart Prepared' | 'Chart Not Prepared';
   confirmationProbability?: number; // 0 - 100%
   probabilityText?: string;

@@ -6,6 +6,8 @@ export interface RouteStop {
   halt?: string;
   day?: number;
   distanceKm?: number;
+  isPassing?: boolean; // True if train passes without halting (Where is My Train non-stop station)
+  platform?: string;
 }
 
 export interface SeatClass {
@@ -29,6 +31,11 @@ export interface CorridorTrain {
   runsOn: boolean[]; // [Sun, Mon, Tue, Wed, Thu, Fri, Sat]
   classes: SeatClass[];
   stops: RouteStop[];
+  depTime?: string;
+  arrTime?: string;
+  duration?: string;
+  totalHaults?: number;
+  totalDistanceKm?: number;
 }
 
 export interface TrainBetweenStation {
@@ -758,6 +765,11 @@ export const CORRIDOR_TRAINS_MASTER: CorridorTrain[] = [
     originName: 'Prayagraj Junction',
     destCode: 'NDLS',
     destName: 'New Delhi',
+    depTime: '10:10 PM',
+    arrTime: '07:00 AM',
+    duration: '08h 50m',
+    totalHaults: 4,
+    totalDistanceKm: 635,
     runsOn: [true, true, true, true, true, true, true],
     classes: [
       { type: 'SL', price: 385, status: 'AVAILABLE-82', statusType: 'available', updatedText: 'Live' },
@@ -766,37 +778,89 @@ export const CORRIDOR_TRAINS_MASTER: CorridorTrain[] = [
       { type: '1A', price: 2490, status: 'AVAILABLE-04', statusType: 'available', updatedText: 'Live' },
     ],
     stops: [
-      { code: 'PRYJ', name: 'Prayagraj Junction', arr: '--', dep: '10:10 PM', distanceKm: 0 },
-      { code: 'FTP', name: 'Fatehpur', arr: '11:18 PM', dep: '11:20 PM', distanceKm: 117 },
-      { code: 'CNB', name: 'Kanpur Central', arr: '12:40 AM', dep: '12:45 AM', distanceKm: 194 },
-      { code: 'ALJN', name: 'Aligarh Junction', arr: '04:15 AM', dep: '04:17 AM', distanceKm: 504 },
-      { code: 'GZB', name: 'Ghaziabad Junction', arr: '06:13 AM', dep: '06:15 AM', distanceKm: 610 },
-      { code: 'NDLS', name: 'New Delhi', arr: '07:00 AM', dep: '--', distanceKm: 635 },
+      { code: 'PRYJ', name: 'Prayagraj Junction', arr: '--', dep: '10:10 PM', distanceKm: 0, platform: 'PF 1' },
+      { code: 'SFG', name: 'Subedarganj', arr: '10:18 PM', dep: '10:18 PM', distanceKm: 4, isPassing: true },
+      { code: 'BRE', name: 'Bharwari', arr: '10:48 PM', dep: '10:48 PM', distanceKm: 39, isPassing: true },
+      { code: 'SRO', name: 'Sirathu', arr: '11:05 PM', dep: '11:05 PM', distanceKm: 59, isPassing: true },
+      { code: 'KGA', name: 'Khaga', arr: '11:12 PM', dep: '11:12 PM', distanceKm: 83, isPassing: true },
+      { code: 'FTP', name: 'Fatehpur', arr: '11:18 PM', dep: '11:20 PM', distanceKm: 117, platform: 'PF 3' },
+      { code: 'BKO', name: 'Bindki Road', arr: '11:42 PM', dep: '11:42 PM', distanceKm: 140, isPassing: true },
+      { code: 'CNB', name: 'Kanpur Central', arr: '12:40 AM', dep: '12:45 AM', distanceKm: 194, platform: 'PF 1' },
+      { code: 'PNKD', name: 'Panki Dham', arr: '12:56 AM', dep: '12:56 AM', distanceKm: 205, isPassing: true },
+      { code: 'RURA', name: 'Rura', arr: '01:25 AM', dep: '01:25 AM', distanceKm: 233, isPassing: true },
+      { code: 'PHD', name: 'Phaphund', arr: '01:50 AM', dep: '01:50 AM', distanceKm: 272, isPassing: true },
+      { code: 'ETW', name: 'Etawah Junction', arr: '02:30 AM', dep: '02:30 AM', distanceKm: 335, isPassing: true },
+      { code: 'SKB', name: 'Shikohabad Junction', arr: '03:02 AM', dep: '03:02 AM', distanceKm: 389, isPassing: true },
+      { code: 'TDL', name: 'Tundla Junction', arr: '03:32 AM', dep: '03:32 AM', distanceKm: 426, isPassing: true },
+      { code: 'HRS', name: 'Hathras Junction', arr: '04:02 AM', dep: '04:02 AM', distanceKm: 472, isPassing: true },
+      { code: 'ALJN', name: 'Aligarh Junction', arr: '04:15 AM', dep: '04:17 AM', distanceKm: 504, platform: 'PF 2' },
+      { code: 'KRJ', name: 'Khurja Junction', arr: '04:52 AM', dep: '04:52 AM', distanceKm: 545, isPassing: true },
+      { code: 'DER', name: 'Dadri', arr: '05:35 AM', dep: '05:35 AM', distanceKm: 591, isPassing: true },
+      { code: 'GZB', name: 'Ghaziabad Junction', arr: '06:13 AM', dep: '06:15 AM', distanceKm: 610, platform: 'PF 2' },
+      { code: 'ANVR', name: 'Anand Vihar', arr: '06:32 AM', dep: '06:32 AM', distanceKm: 622, isPassing: true },
+      { code: 'TKJ', name: 'Tilak Bridge', arr: '06:45 AM', dep: '06:45 AM', distanceKm: 631, isPassing: true },
+      { code: 'NDLS', name: 'New Delhi', arr: '07:00 AM', dep: '--', distanceKm: 635, platform: 'PF 14' },
     ],
   },
   {
     id: 'exp-12418',
     number: '12418',
-    name: 'Prayagraj Express (Reverse)',
+    name: 'Prayagraj Express',
     type: 'Superfast',
     isLocalEmu: false,
     originCode: 'NDLS',
     originName: 'New Delhi',
     destCode: 'PRYJ',
     destName: 'Prayagraj Junction',
+    depTime: '10:10 PM',
+    arrTime: '07:00 AM',
+    duration: '08h 50m',
+    totalHaults: 4,
+    totalDistanceKm: 635,
     runsOn: [true, true, true, true, true, true, true],
     classes: [
       { type: 'SL', price: 385, status: 'AVAILABLE-76', statusType: 'available', updatedText: 'Live' },
       { type: '3A', price: 1025, status: 'AVAILABLE-30', statusType: 'available', updatedText: 'Live' },
       { type: '2A', price: 1475, status: 'AVAILABLE-08', statusType: 'available', updatedText: 'Live' },
+      { type: '1A', price: 2490, status: 'AVAILABLE-04', statusType: 'available', updatedText: 'Live' },
     ],
     stops: [
-      { code: 'NDLS', name: 'New Delhi', arr: '--', dep: '10:10 PM', distanceKm: 0 },
-      { code: 'GZB', name: 'Ghaziabad Junction', arr: '10:58 PM', dep: '11:00 PM', distanceKm: 25 },
-      { code: 'ALJN', name: 'Aligarh Junction', arr: '12:28 AM', dep: '12:30 AM', distanceKm: 131 },
-      { code: 'CNB', name: 'Kanpur Central', arr: '03:50 AM', dep: '03:55 AM', distanceKm: 441 },
-      { code: 'FTP', name: 'Fatehpur', arr: '04:50 AM', dep: '04:52 AM', distanceKm: 518 },
-      { code: 'PRYJ', name: 'Prayagraj Junction', arr: '07:00 AM', dep: '--', distanceKm: 635 },
+      { code: 'NDLS', name: 'New Delhi', arr: '--', dep: '10:10 PM', distanceKm: 0, platform: 'PF 16' },
+      { code: 'CSB', name: 'Shivaji Bridge', arr: '10:14 PM', dep: '10:14 PM', distanceKm: 2, isPassing: true },
+      { code: 'TKJ', name: 'Tilak Bridge', arr: '10:18 PM', dep: '10:18 PM', distanceKm: 4, isPassing: true },
+      { code: 'ANVR', name: 'Anand Vihar', arr: '10:32 PM', dep: '10:32 PM', distanceKm: 13, isPassing: true },
+      { code: 'SBB', name: 'Sahibabad', arr: '10:44 PM', dep: '10:44 PM', distanceKm: 18, isPassing: true },
+      { code: 'GZB', name: 'Ghaziabad Junction', arr: '10:58 PM', dep: '11:00 PM', distanceKm: 25, platform: 'PF 1' },
+      { code: 'MIU', name: 'Maripat', arr: '11:15 PM', dep: '11:15 PM', distanceKm: 37, isPassing: true },
+      { code: 'DER', name: 'Dadri', arr: '11:23 PM', dep: '11:23 PM', distanceKm: 44, isPassing: true },
+      { code: 'BRKY', name: 'Boraki', arr: '11:29 PM', dep: '11:29 PM', distanceKm: 49, isPassing: true },
+      { code: 'AJR', name: 'Ajaibpur', arr: '11:35 PM', dep: '11:35 PM', distanceKm: 54, isPassing: true },
+      { code: 'DKDE', name: 'Dankaur', arr: '11:43 PM', dep: '11:43 PM', distanceKm: 62, isPassing: true },
+      { code: 'SKQ', name: 'Sikandrabad', arr: '12:02 AM', dep: '12:02 AM', distanceKm: 83, isPassing: true },
+      { code: 'KRJ', name: 'Khurja Junction', arr: '12:12 AM', dep: '12:12 AM', distanceKm: 90, isPassing: true },
+      { code: 'SOM', name: 'Somna', arr: '12:20 AM', dep: '12:20 AM', distanceKm: 110, isPassing: true },
+      { code: 'ALJN', name: 'Aligarh Junction', arr: '12:28 AM', dep: '12:30 AM', distanceKm: 131, platform: 'PF 1' },
+      { code: 'SNS', name: 'Sasni', arr: '12:45 AM', dep: '12:45 AM', distanceKm: 153, isPassing: true },
+      { code: 'HRS', name: 'Hathras Junction', arr: '12:55 AM', dep: '12:55 AM', distanceKm: 163, isPassing: true },
+      { code: 'JLS', name: 'Jalesar Road', arr: '01:12 AM', dep: '01:12 AM', distanceKm: 181, isPassing: true },
+      { code: 'TDL', name: 'Tundla Junction', arr: '01:38 AM', dep: '01:38 AM', distanceKm: 209, isPassing: true },
+      { code: 'FZD', name: 'Firozabad', arr: '01:55 AM', dep: '01:55 AM', distanceKm: 226, isPassing: true },
+      { code: 'SKB', name: 'Shikohabad Junction', arr: '02:12 AM', dep: '02:12 AM', distanceKm: 246, isPassing: true },
+      { code: 'ETW', name: 'Etawah Junction', arr: '02:46 AM', dep: '02:46 AM', distanceKm: 300, isPassing: true },
+      { code: 'BNT', name: 'Bharthana', arr: '03:02 AM', dep: '03:02 AM', distanceKm: 320, isPassing: true },
+      { code: 'PHD', name: 'Phaphund', arr: '03:22 AM', dep: '03:22 AM', distanceKm: 363, isPassing: true },
+      { code: 'RURA', name: 'Rura', arr: '03:36 AM', dep: '03:36 AM', distanceKm: 402, isPassing: true },
+      { code: 'PNKD', name: 'Panki Dham', arr: '03:44 AM', dep: '03:44 AM', distanceKm: 430, isPassing: true },
+      { code: 'CNB', name: 'Kanpur Central', arr: '03:50 AM', dep: '03:55 AM', distanceKm: 441, platform: 'PF 5' },
+      { code: 'CHK', name: 'Chakeri', arr: '04:06 AM', dep: '04:06 AM', distanceKm: 452, isPassing: true },
+      { code: 'SSL', name: 'Sirsaul', arr: '04:18 AM', dep: '04:18 AM', distanceKm: 467, isPassing: true },
+      { code: 'BKO', name: 'Bindki Road', arr: '04:32 AM', dep: '04:32 AM', distanceKm: 495, isPassing: true },
+      { code: 'FTP', name: 'Fatehpur', arr: '04:50 AM', dep: '04:52 AM', distanceKm: 518, platform: 'PF 1' },
+      { code: 'KGA', name: 'Khaga', arr: '05:20 AM', dep: '05:20 AM', distanceKm: 552, isPassing: true },
+      { code: 'SRO', name: 'Sirathu', arr: '05:45 AM', dep: '05:45 AM', distanceKm: 576, isPassing: true },
+      { code: 'BRE', name: 'Bharwari', arr: '06:05 AM', dep: '06:05 AM', distanceKm: 596, isPassing: true },
+      { code: 'SFG', name: 'Subedarganj', arr: '06:42 AM', dep: '06:42 AM', distanceKm: 631, isPassing: true },
+      { code: 'PRYJ', name: 'Prayagraj Junction', arr: '07:00 AM', dep: '--', distanceKm: 635, platform: 'PF 4' },
     ],
   },
   {
@@ -807,18 +871,47 @@ export const CORRIDOR_TRAINS_MASTER: CorridorTrain[] = [
     isLocalEmu: false,
     originCode: 'NDLS',
     originName: 'New Delhi',
-    destCode: 'BSB',
-    destName: 'Varanasi Junction',
+    destCode: 'CNB',
+    destName: 'Kanpur Central',
+    depTime: '06:00 AM',
+    arrTime: '10:08 AM',
+    duration: '04h 08m',
+    totalHaults: 6,
+    totalDistanceKm: 440,
     runsOn: [true, true, true, false, true, true, true],
     classes: [
       { type: 'CC', price: 1750, status: 'AVAILABLE-45', statusType: 'available', updatedText: 'Live' },
       { type: 'EC', price: 3300, status: 'AVAILABLE-12', statusType: 'available', updatedText: 'Live' },
     ],
     stops: [
-      { code: 'NDLS', name: 'New Delhi', arr: '--', dep: '06:00 AM', distanceKm: 0 },
-      { code: 'CNB', name: 'Kanpur Central', arr: '10:08 AM', dep: '10:10 AM', distanceKm: 441 },
-      { code: 'PRYJ', name: 'Prayagraj Junction', arr: '12:08 PM', dep: '12:10 PM', distanceKm: 635 },
-      { code: 'BSB', name: 'Varanasi Junction', arr: '02:00 PM', dep: '--', distanceKm: 759 },
+      { code: 'NDLS', name: 'New Delhi', arr: '--', dep: '06:00 AM', distanceKm: 0, platform: 'Platform 16' },
+      { code: 'CSB', name: 'Shivaji Bridge', arr: '06:04 AM', dep: '06:04 AM', distanceKm: 2, isPassing: true },
+      { code: 'TKJ', name: 'Tilak Bridge', arr: '06:08 AM', dep: '06:08 AM', distanceKm: 3, isPassing: true },
+      { code: 'NZM', name: 'Hazrat Nizamuddin', arr: '06:18 AM', dep: '06:20 AM', distanceKm: 15, platform: 'Platform 2' },
+      { code: 'OKA', name: 'Okhla', arr: '06:35 AM', dep: '06:35 AM', distanceKm: 20, isPassing: true },
+      { code: 'TKD', name: 'Tughlakabad', arr: '06:55 AM', dep: '06:57 AM', distanceKm: 32, platform: 'Platform 1' },
+      { code: 'TKIC', name: 'Tughlakabad Cabin', arr: '07:08 AM', dep: '07:08 AM', distanceKm: 38, isPassing: true },
+      { code: 'FDB', name: 'Faridabad', arr: '07:23 AM', dep: '07:25 AM', distanceKm: 58, platform: 'Platform 3' },
+      { code: 'BVH', name: 'Ballabhgarh', arr: '07:34 AM', dep: '07:34 AM', distanceKm: 66, isPassing: true },
+      { code: 'PWL', name: 'Palwal', arr: '07:45 AM', dep: '07:45 AM', distanceKm: 87, isPassing: true },
+      { code: 'HDL', name: 'Hodal', arr: '07:56 AM', dep: '07:56 AM', distanceKm: 117, isPassing: true },
+      { code: 'KSV', name: 'Kosi Kalan', arr: '08:02 AM', dep: '08:02 AM', distanceKm: 130, isPassing: true },
+      { code: 'CHJ', name: 'Chhata', arr: '08:06 AM', dep: '08:06 AM', distanceKm: 140, isPassing: true },
+      { code: 'MTJ', name: 'Mathura Jn', arr: '08:10 AM', dep: '08:12 AM', distanceKm: 187, platform: 'Platform 4' },
+      { code: 'BAD', name: 'Baad', arr: '08:24 AM', dep: '08:24 AM', distanceKm: 197, isPassing: true },
+      { code: 'FAR', name: 'Farah', arr: '08:35 AM', dep: '08:35 AM', distanceKm: 209, isPassing: true },
+      { code: 'RNKA', name: 'Runkuta', arr: '08:48 AM', dep: '08:48 AM', distanceKm: 226, isPassing: true },
+      { code: 'BHA', name: 'Bhandai', arr: '08:58 AM', dep: '08:58 AM', distanceKm: 235, isPassing: true },
+      { code: 'AGC', name: 'Agra Cantt', arr: '09:07 AM', dep: '09:09 AM', distanceKm: 243, platform: 'Platform 1' },
+      { code: 'TDL', name: 'Tundla Junction', arr: '09:25 AM', dep: '09:25 AM', distanceKm: 270, isPassing: true },
+      { code: 'FZD', name: 'Firozabad', arr: '09:38 AM', dep: '09:38 AM', distanceKm: 287, isPassing: true },
+      { code: 'SKB', name: 'Shikohabad', arr: '09:48 AM', dep: '09:48 AM', distanceKm: 307, isPassing: true },
+      { code: 'ETW', name: 'Etawah', arr: '10:04 AM', dep: '10:04 AM', distanceKm: 346, platform: 'Platform 2' },
+      { code: 'BNT', name: 'Bharthana', arr: '10:14 AM', dep: '10:14 AM', distanceKm: 366, isPassing: true },
+      { code: 'PHD', name: 'Phaphund', arr: '10:32 AM', dep: '10:32 AM', distanceKm: 402, isPassing: true },
+      { code: 'JJK', name: 'Jhinjhak', arr: '10:44 AM', dep: '10:44 AM', distanceKm: 422, isPassing: true },
+      { code: 'RRH', name: 'Rura', arr: '10:52 AM', dep: '10:52 AM', distanceKm: 441, isPassing: true },
+      { code: 'CNB', name: 'Kanpur Central', arr: '10:08 AM', dep: '--', distanceKm: 440, platform: 'Platform 1' },
     ],
   },
   {
@@ -932,10 +1025,257 @@ export function findOrGenerateTrain(query: string): CorridorTrain {
   const cachedDynamic = dynamicTrainCache.get(clean);
   if (cachedDynamic) return cachedDynamic;
 
+  // 3.5 Specific popular Indian Railways trains lookup
+  if (clean === '12189' || clean.includes('MAHAKOSHAL')) {
+    const mahakoshal: CorridorTrain = {
+      id: 'exp-12189',
+      number: '12189',
+      name: 'Mahakoshal Express',
+      type: 'Superfast',
+      isLocalEmu: false,
+      originCode: 'JBP',
+      originName: 'Jabalpur',
+      destCode: 'NZM',
+      destName: 'Hazrat Nizamuddin',
+      depTime: '06:10 PM',
+      arrTime: '11:30 AM',
+      duration: '17h 20m',
+      totalHaults: 23,
+      totalDistanceKm: 958,
+      runsOn: [true, true, true, true, true, true, true],
+      classes: [
+        { type: 'SL', price: 475, status: 'AVAILABLE-45', statusType: 'available', updatedText: 'Live' },
+        { type: '3A', price: 1280, status: 'AVAILABLE-18', statusType: 'available', updatedText: 'Live' },
+        { type: '2A', price: 1840, status: 'RAC-06', statusType: 'rac', updatedText: 'Live' },
+        { type: '1A', price: 3120, status: 'AVAILABLE-02', statusType: 'available', updatedText: 'Live' },
+      ],
+      stops: [
+        { code: 'JBP', name: 'Jabalpur', arr: '--', dep: '06:10 PM', distanceKm: 0, platform: 'PF 6' },
+        { code: 'SHR', name: 'Sihora Road', arr: '06:48 PM', dep: '06:50 PM', distanceKm: 39, platform: 'PF 1' },
+        { code: 'KTE', name: 'Katni Junction', arr: '07:45 PM', dep: '07:50 PM', distanceKm: 91, platform: 'PF 2' },
+        { code: 'MYR', name: 'Maihar', arr: '08:38 PM', dep: '08:40 PM', distanceKm: 154, platform: 'PF 1' },
+        { code: 'STA', name: 'Satna Junction', arr: '09:20 PM', dep: '09:25 PM', distanceKm: 189, platform: 'PF 2' },
+        { code: 'MJG', name: 'Majhagawan', arr: '09:53 PM', dep: '09:55 PM', distanceKm: 214, platform: 'PF 1' },
+        { code: 'OHAN', name: 'Ohan Cabin', arr: '10:31 PM', dep: '10:31 PM', distanceKm: 242, isPassing: true },
+        { code: 'CKTD', name: 'Chitrakutdham Karwi', arr: '10:48 PM', dep: '10:50 PM', distanceKm: 258, platform: 'PF 1' },
+        { code: 'ATE', name: 'Atarra', arr: '11:18 PM', dep: '11:20 PM', distanceKm: 295, platform: 'PF 1' },
+        { code: 'BNDA', name: 'Banda Junction', arr: '12:05 AM', dep: '12:10 AM', distanceKm: 327, platform: 'PF 1' },
+        { code: 'MBA', name: 'Mahoba Junction', arr: '01:03 AM', dep: '01:05 AM', distanceKm: 381, platform: 'PF 2' },
+        { code: 'KURJ', name: 'Khajuraho', arr: '01:50 AM', dep: '01:52 AM', distanceKm: 420, isPassing: true },
+        { code: 'HPP', name: 'Harpalpur', arr: '02:08 AM', dep: '02:10 AM', distanceKm: 466, platform: 'PF 1' },
+        { code: 'MRPR', name: 'Mau Ranipur', arr: '02:29 AM', dep: '02:31 AM', distanceKm: 487, platform: 'PF 1' },
+        { code: 'VGLJ', name: 'Virangana Lakshmibai Jhansi', arr: '03:55 AM', dep: '04:03 AM', distanceKm: 551, platform: 'PF 4' },
+        { code: 'DAA', name: 'Datia', arr: '04:23 AM', dep: '04:25 AM', distanceKm: 576, platform: 'PF 1' },
+        { code: 'DBA', name: 'Dabra', arr: '04:47 AM', dep: '04:49 AM', distanceKm: 606, platform: 'PF 1' },
+        { code: 'GWL', name: 'Gwalior Junction', arr: '05:33 AM', dep: '05:35 AM', distanceKm: 649, platform: 'PF 2' },
+        { code: 'MRA', name: 'Morena', arr: '06:04 AM', dep: '06:06 AM', distanceKm: 687, platform: 'PF 2' },
+        { code: 'DHO', name: 'Dholpur Junction', arr: '06:43 AM', dep: '06:45 AM', distanceKm: 714, platform: 'PF 1' },
+        { code: 'AGC', name: 'Agra Cantt', arr: '07:38 AM', dep: '07:43 AM', distanceKm: 767, platform: 'PF 2' },
+        { code: 'RKM', name: 'Raja Ki Mandi', arr: '07:51 AM', dep: '07:53 AM', distanceKm: 771, platform: 'PF 1' },
+        { code: 'MTJ', name: 'Mathura Junction', arr: '08:33 AM', dep: '08:38 AM', distanceKm: 821, platform: 'PF 2' },
+        { code: 'PWL', name: 'Palwal', arr: '09:58 AM', dep: '10:00 AM', distanceKm: 904, platform: 'PF 3' },
+        { code: 'BVH', name: 'Ballabhgarh', arr: '10:18 AM', dep: '10:20 AM', distanceKm: 925, platform: 'PF 4' },
+        { code: 'FDB', name: 'Faridabad', arr: '10:30 AM', dep: '10:32 AM', distanceKm: 933, platform: 'PF 3' },
+        { code: 'NZM', name: 'Hazrat Nizamuddin', arr: '11:30 AM', dep: '--', distanceKm: 958, platform: 'PF 5' },
+      ],
+    };
+    dynamicTrainCache.set(clean, mahakoshal);
+    return mahakoshal;
+  }
+
+  // 3.6 Prayagraj Express (12418 / 12417) authentic schedule with all passing stations
+  if (clean === '12418' || clean.includes('PRAYAGRAJ')) {
+    const prayagraj: CorridorTrain = {
+      id: 'exp-12418',
+      number: '12418',
+      name: 'Prayagraj Express',
+      type: 'Superfast',
+      isLocalEmu: false,
+      originCode: 'NDLS',
+      originName: 'New Delhi',
+      destCode: 'PRYJ',
+      destName: 'Prayagraj Junction',
+      depTime: '10:10 PM',
+      arrTime: '07:00 AM',
+      duration: '08h 50m',
+      totalHaults: 6,
+      totalDistanceKm: 635,
+      runsOn: [true, true, true, true, true, true, true],
+      classes: [
+        { type: 'SL', price: 395, status: 'AVAILABLE-84', statusType: 'available', updatedText: 'Live' },
+        { type: '3A', price: 1050, status: 'AVAILABLE-40', statusType: 'available', updatedText: 'Live' },
+        { type: '2A', price: 1490, status: 'AVAILABLE-15', statusType: 'available', updatedText: 'Live' },
+        { type: '1A', price: 2510, status: 'AVAILABLE-04', statusType: 'available', updatedText: 'Live' },
+      ],
+      stops: [
+        { code: 'NDLS', name: 'New Delhi', arr: '--', dep: '10:10 PM', distanceKm: 0, platform: 'PF 14' },
+        { code: 'GZB', name: 'Ghaziabad Junction', arr: '10:42 PM', dep: '10:44 PM', distanceKm: 24, platform: 'Platform 2' },
+        { code: 'CPYZ', name: 'Chipyana Buzurg', arr: '10:46 PM', dep: '10:46 PM', distanceKm: 28, isPassing: true },
+        { code: 'MIU', name: 'Maripat', arr: '10:50 PM', dep: '10:50 PM', distanceKm: 34, isPassing: true },
+        { code: 'DER', name: 'Dadri', arr: '10:54 PM', dep: '10:54 PM', distanceKm: 41, isPassing: true },
+        { code: 'BRKY', name: 'Boraki', arr: '10:57 PM', dep: '10:57 PM', distanceKm: 45, isPassing: true },
+        { code: 'AJR', name: 'Ajaibpur', arr: '11:00 PM', dep: '11:00 PM', distanceKm: 50, isPassing: true },
+        { code: 'DKDE', name: 'Dankaur', arr: '11:05 PM', dep: '11:05 PM', distanceKm: 58, isPassing: true },
+        { code: 'FPMP', name: 'Fatehpur Makrandpur', arr: '11:09 PM', dep: '11:09 PM', distanceKm: 63, isPassing: true },
+        { code: 'WAIR', name: 'Wair', arr: '11:14 PM', dep: '11:14 PM', distanceKm: 70, isPassing: true },
+        { code: 'CHL', name: 'Chola', arr: '11:19 PM', dep: '11:19 PM', distanceKm: 76, isPassing: true },
+        { code: 'SKQ', name: 'Sikandarpur', arr: '11:24 PM', dep: '11:24 PM', distanceKm: 82, isPassing: true },
+        { code: 'KRJ', name: 'Khurja Junction', arr: '11:32 PM', dep: '11:34 PM', distanceKm: 91, isPassing: true },
+        { code: 'SOM', name: 'Somna', arr: '11:47 PM', dep: '11:47 PM', distanceKm: 112, isPassing: true },
+        { code: 'ALJN', name: 'Aligarh Junction', arr: '12:08 AM', dep: '12:10 AM', distanceKm: 131, platform: 'Platform 3', day: 2 },
+        { code: 'HRS', name: 'Hathras Junction', arr: '12:35 AM', dep: '12:35 AM', distanceKm: 161, isPassing: true, day: 2 },
+        { code: 'TDL', name: 'Tundla Junction', arr: '01:20 AM', dep: '01:22 AM', distanceKm: 209, isPassing: true, day: 2 },
+        { code: 'FZD', name: 'Firozabad', arr: '01:38 AM', dep: '01:40 AM', distanceKm: 226, isPassing: true, day: 2 },
+        { code: 'SKB', name: 'Shikohabad Junction', arr: '01:58 AM', dep: '02:00 AM', distanceKm: 246, isPassing: true, day: 2 },
+        { code: 'ETW', name: 'Etawah Junction', arr: '02:40 AM', dep: '02:42 AM', distanceKm: 301, isPassing: true, day: 2 },
+        { code: 'PHD', name: 'Phaphund', arr: '03:22 AM', dep: '03:24 AM', distanceKm: 357, isPassing: true, day: 2 },
+        { code: 'JJK', name: 'Jhinjhak', arr: '03:42 AM', dep: '03:44 AM', distanceKm: 377, isPassing: true, day: 2 },
+        { code: 'RURA', name: 'Rura', arr: '03:56 AM', dep: '03:58 AM', distanceKm: 396, isPassing: true, day: 2 },
+        { code: 'CNB', name: 'Kanpur Central', arr: '03:50 AM', dep: '03:55 AM', distanceKm: 440, platform: 'Platform 5', day: 2 },
+        { code: 'FTP', name: 'Fatehpur', arr: '04:50 AM', dep: '04:52 AM', distanceKm: 518, platform: 'Platform 2', day: 2 },
+        { code: 'SRO', name: 'Sirathu', arr: '05:40 AM', dep: '05:42 AM', distanceKm: 578, platform: 'Platform 1', day: 2 },
+        { code: 'BRE', name: 'Bharwari', arr: '06:00 AM', dep: '06:02 AM', distanceKm: 598, isPassing: true, day: 2 },
+        { code: 'PRYJ', name: 'Prayagraj Junction', arr: '07:00 AM', dep: '--', distanceKm: 635, platform: 'Platform 1', day: 2 },
+      ],
+    };
+    dynamicTrainCache.set(clean, prayagraj);
+    return prayagraj;
+  }
+
+  if (clean === '12417') {
+    const prayagrajRev: CorridorTrain = {
+      id: 'exp-12417',
+      number: '12417',
+      name: 'Prayagraj - New Delhi Express',
+      type: 'Superfast',
+      isLocalEmu: false,
+      originCode: 'PRYJ',
+      originName: 'Prayagraj Junction',
+      destCode: 'NDLS',
+      destName: 'New Delhi',
+      depTime: '10:10 PM',
+      arrTime: '07:00 AM',
+      duration: '08h 50m',
+      totalHaults: 6,
+      totalDistanceKm: 635,
+      runsOn: [true, true, true, true, true, true, true],
+      classes: [
+        { type: 'SL', price: 395, status: 'AVAILABLE-60', statusType: 'available', updatedText: 'Live' },
+        { type: '3A', price: 1050, status: 'AVAILABLE-30', statusType: 'available', updatedText: 'Live' },
+        { type: '2A', price: 1490, status: 'AVAILABLE-12', statusType: 'available', updatedText: 'Live' },
+      ],
+      stops: [
+        { code: 'PRYJ', name: 'Prayagraj Junction', arr: '--', dep: '10:10 PM', distanceKm: 0, platform: 'PF 1' },
+        { code: 'FTP', name: 'Fatehpur', arr: '11:18 PM', dep: '11:20 PM', distanceKm: 117, platform: 'Platform 3' },
+        { code: 'CNB', name: 'Kanpur Central', arr: '12:15 AM', dep: '12:20 AM', distanceKm: 195, platform: 'Platform 1', day: 2 },
+        { code: 'ALJN', name: 'Aligarh Junction', arr: '04:15 AM', dep: '04:17 AM', distanceKm: 504, platform: 'Platform 3', day: 2 },
+        { code: 'GZB', name: 'Ghaziabad Junction', arr: '06:13 AM', dep: '06:15 AM', distanceKm: 611, platform: 'Platform 4', day: 2 },
+        { code: 'NDLS', name: 'New Delhi', arr: '07:00 AM', dep: '--', distanceKm: 635, platform: 'Platform 14', day: 2 },
+      ],
+    };
+    dynamicTrainCache.set(clean, prayagrajRev);
+    return prayagrajRev;
+  }
+
+  if (clean === '22181' || clean.includes('GONDWANA')) {
+    const gondwana: CorridorTrain = {
+      id: 'exp-22181',
+      number: '22181',
+      name: 'Jabalpur - NZM Gondwana Express',
+      type: 'Superfast',
+      isLocalEmu: false,
+      originCode: 'JBP',
+      originName: 'Jabalpur',
+      destCode: 'NZM',
+      destName: 'Hazrat Nizamuddin',
+      depTime: '03:15 PM',
+      arrTime: '04:15 AM',
+      duration: '13h 00m',
+      totalHaults: 14,
+      totalDistanceKm: 905,
+      runsOn: [true, true, true, true, true, true, true],
+      classes: [
+        { type: 'SL', price: 460, status: 'AVAILABLE-52', statusType: 'available', updatedText: 'Live' },
+        { type: '3A', price: 1240, status: 'AVAILABLE-22', statusType: 'available', updatedText: 'Live' },
+        { type: '2A', price: 1780, status: 'AVAILABLE-09', statusType: 'available', updatedText: 'Live' },
+      ],
+      stops: [
+        { code: 'JBP', name: 'Jabalpur', arr: '--', dep: '03:15 PM', distanceKm: 0, platform: 'PF 1' },
+        { code: 'SHR', name: 'Sihora Road', arr: '03:48 PM', dep: '03:50 PM', distanceKm: 39, platform: 'PF 1' },
+        { code: 'KTE', name: 'Katni Junction', arr: '04:35 PM', dep: '04:40 PM', distanceKm: 91, platform: 'PF 2' },
+        { code: 'DMO', name: 'Damoh', arr: '06:03 PM', dep: '06:05 PM', distanceKm: 202, platform: 'PF 1' },
+        { code: 'SGO', name: 'Saugor', arr: '07:10 PM', dep: '07:15 PM', distanceKm: 279, platform: 'PF 2' },
+        { code: 'MAKR', name: 'Bina Malkhedi', arr: '08:28 PM', dep: '08:30 PM', distanceKm: 349, platform: 'PF 1' },
+        { code: 'LNJ', name: 'Lalitpur', arr: '09:18 PM', dep: '09:20 PM', distanceKm: 412, platform: 'PF 3' },
+        { code: 'VGLJ', name: 'Virangana Lakshmibai Jhansi', arr: '10:35 PM', dep: '10:43 PM', distanceKm: 502, platform: 'PF 4' },
+        { code: 'GWL', name: 'Gwalior Junction', arr: '11:53 PM', dep: '11:55 PM', distanceKm: 600, platform: 'PF 2' },
+        { code: 'AGC', name: 'Agra Cantt', arr: '01:45 AM', dep: '01:50 AM', distanceKm: 718, platform: 'PF 2' },
+        { code: 'MTJ', name: 'Mathura Junction', arr: '02:30 AM', dep: '02:32 AM', distanceKm: 771, platform: 'PF 2' },
+        { code: 'NZM', name: 'Hazrat Nizamuddin', arr: '04:15 AM', dep: '--', distanceKm: 905, platform: 'PF 3' },
+      ],
+    };
+    dynamicTrainCache.set(clean, gondwana);
+    return gondwana;
+  }
+
+  if (clean === '12229' || clean.includes('LUCKNOW MAIL')) {
+    const lkoMail: CorridorTrain = {
+      id: 'exp-12229',
+      number: '12229',
+      name: 'Lucknow Mail',
+      type: 'Superfast',
+      isLocalEmu: false,
+      originCode: 'LJN',
+      originName: 'Lucknow Junction',
+      destCode: 'NDLS',
+      destName: 'New Delhi',
+      depTime: '10:00 PM',
+      arrTime: '06:55 AM',
+      duration: '08h 55m',
+      totalHaults: 9,
+      totalDistanceKm: 492,
+      runsOn: [true, true, true, true, true, true, true],
+      classes: [
+        { type: 'SL', price: 320, status: 'AVAILABLE-90', statusType: 'available', updatedText: 'Live' },
+        { type: '3A', price: 860, status: 'AVAILABLE-35', statusType: 'available', updatedText: 'Live' },
+        { type: '2A', price: 1220, status: 'AVAILABLE-12', statusType: 'available', updatedText: 'Live' },
+        { type: '1A', price: 2050, status: 'AVAILABLE-04', statusType: 'available', updatedText: 'Live' },
+      ],
+      stops: [
+        { code: 'LJN', name: 'Lucknow Junction', arr: '--', dep: '10:00 PM', distanceKm: 0, platform: 'PF 3' },
+        { code: 'HRI', name: 'Hardoi', arr: '11:28 PM', dep: '11:30 PM', distanceKm: 102, platform: 'PF 1' },
+        { code: 'SPN', name: 'Shahjahanpur', arr: '12:36 AM', dep: '12:38 AM', distanceKm: 164, platform: 'PF 3' },
+        { code: 'BE', name: 'Bareilly Junction', arr: '01:40 AM', dep: '01:45 AM', distanceKm: 235, platform: 'PF 2' },
+        { code: 'RMU', name: 'Rampur Junction', arr: '02:36 AM', dep: '02:38 AM', distanceKm: 298, platform: 'PF 1' },
+        { code: 'MB', name: 'Moradabad Junction', arr: '03:25 AM', dep: '03:33 AM', distanceKm: 326, platform: 'PF 4' },
+        { code: 'HPU', name: 'Hapur Junction', arr: '05:08 AM', dep: '05:10 AM', distanceKm: 430, platform: 'PF 1' },
+        { code: 'GZB', name: 'Ghaziabad Junction', arr: '06:08 AM', dep: '06:10 AM', distanceKm: 467, platform: 'PF 3' },
+        { code: 'NDLS', name: 'New Delhi', arr: '06:55 AM', dep: '--', distanceKm: 492, platform: 'PF 16' },
+      ],
+    };
+    dynamicTrainCache.set(clean, lkoMail);
+    return lkoMail;
+  }
+
   // 4. Synthesize realistic IRCTC train route for any 5-digit number or custom name
   const numDigits = clean.replace(/\D/g, '') || '12345';
   const trainNum = numDigits.length >= 5 ? numDigits.slice(0, 5) : numDigits.padStart(5, '0');
   const trainTitle = isNaN(Number(clean)) && clean.length > 2 ? clean : `Express Special (${trainNum})`;
+
+  const generatedStops: RouteStop[] = [
+    { code: 'NDLS', name: 'New Delhi', arr: '--', dep: '06:15 AM', distanceKm: 0, platform: 'PF 1' },
+    { code: 'ANVR', name: 'Anand Vihar', arr: '06:30 AM', dep: '06:30 AM', distanceKm: 13, isPassing: true },
+    { code: 'GZB', name: 'Ghaziabad Junction', arr: '06:58 AM', dep: '07:00 AM', distanceKm: 25, platform: 'PF 2' },
+    { code: 'DER', name: 'Dadri', arr: '07:22 AM', dep: '07:22 AM', distanceKm: 44, isPassing: true },
+    { code: 'KRJ', name: 'Khurja Junction', arr: '07:50 AM', dep: '07:50 AM', distanceKm: 90, isPassing: true },
+    { code: 'ALJN', name: 'Aligarh Junction', arr: '08:20 AM', dep: '08:22 AM', distanceKm: 131, platform: 'PF 3' },
+    { code: 'HRS', name: 'Hathras Junction', arr: '08:48 AM', dep: '08:48 AM', distanceKm: 163, isPassing: true },
+    { code: 'TDL', name: 'Tundla Junction', arr: '09:25 AM', dep: '09:27 AM', distanceKm: 209, platform: 'PF 4' },
+    { code: 'FZD', name: 'Firozabad', arr: '09:48 AM', dep: '09:48 AM', distanceKm: 226, isPassing: true },
+    { code: 'ETW', name: 'Etawah Junction', arr: '10:35 AM', dep: '10:37 AM', distanceKm: 300, platform: 'PF 2' },
+    { code: 'PHD', name: 'Phaphund', arr: '11:15 AM', dep: '11:15 AM', distanceKm: 363, isPassing: true },
+    { code: 'CNB', name: 'Kanpur Central', arr: '12:20 PM', dep: '--', distanceKm: 441, platform: 'PF 5' },
+  ];
 
   const generated: CorridorTrain = {
     id: `dyn-${trainNum}`,
@@ -947,19 +1287,17 @@ export function findOrGenerateTrain(query: string): CorridorTrain {
     originName: 'New Delhi',
     destCode: 'CNB',
     destName: 'Kanpur Central',
+    depTime: '06:15 AM',
+    arrTime: '12:20 PM',
+    duration: '06h 05m',
+    totalHaults: 4,
+    totalDistanceKm: 441,
     runsOn: [true, true, true, true, true, true, true],
     classes: [
       { type: 'SL', price: 290, status: 'AVAILABLE-40', statusType: 'available', updatedText: 'Live' },
       { type: '3A', price: 780, status: 'AVAILABLE-15', statusType: 'available', updatedText: 'Live' },
     ],
-    stops: [
-      { code: 'NDLS', name: 'New Delhi', arr: '--', dep: '06:15 AM', distanceKm: 0 },
-      { code: 'GZB', name: 'Ghaziabad Junction', arr: '06:58 AM', dep: '07:00 AM', distanceKm: 25 },
-      { code: 'ALJN', name: 'Aligarh Junction', arr: '08:20 AM', dep: '08:22 AM', distanceKm: 131 },
-      { code: 'TDL', name: 'Tundla Junction', arr: '09:25 AM', dep: '09:27 AM', distanceKm: 209 },
-      { code: 'ETW', name: 'Etawah Junction', arr: '10:35 AM', dep: '10:37 AM', distanceKm: 300 },
-      { code: 'CNB', name: 'Kanpur Central', arr: '12:20 PM', dep: '--', distanceKm: 441 },
-    ],
+    stops: generatedStops,
   };
 
   if (dynamicTrainCache.size >= MAX_DYNAMIC_TRAIN_CACHE) {

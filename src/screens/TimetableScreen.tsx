@@ -4,8 +4,10 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '../theme/colors';
 import { CORRIDOR_TRAINS_MASTER } from '../data/trainsBetweenStations';
 import { searchAndRankTrains } from '../utils/searchRanker';
+import { usePreferences } from '../context/PreferencesContext';
 
 export const TimetableScreen: React.FC = () => {
+  const { isDarkMode, colors, t } = usePreferences();
   const [trainQuery, setTrainQuery] = useState('64902');
   const [selectedTrainNum, setSelectedTrainNum] = useState('64902');
 
@@ -29,9 +31,13 @@ export const TimetableScreen: React.FC = () => {
   };
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+    <ScrollView
+      style={[styles.container, isDarkMode && { backgroundColor: colors.background }]}
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+    >
       {/* Search Bar */}
-      <View style={styles.card}>
+      <View style={[styles.card, isDarkMode && { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <Text style={styles.cardLabel}>TRAIN TIMETABLE & ROUTE</Text>
         <View style={styles.searchBar}>
           <Ionicons name="calendar-outline" size={20} color={Colors.primary} style={{ marginRight: 10 }} />
@@ -85,7 +91,7 @@ export const TimetableScreen: React.FC = () => {
       </View>
 
       {/* Train Info Card */}
-      <View style={styles.infoCard}>
+      <View style={[styles.infoCard, isDarkMode && { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.trainHeader}>
           <View style={[styles.trainNumBadge, activeTrain.isLocalEmu && styles.emuBadge]}>
             <Text style={styles.trainNumText}>{activeTrain.number}</Text>
@@ -98,27 +104,35 @@ export const TimetableScreen: React.FC = () => {
           </View>
         </View>
 
-        <Text style={styles.trainName}>{activeTrain.name}</Text>
-        <Text style={styles.classesText}>
+        <Text style={[styles.trainName, isDarkMode && { color: colors.textPrimary }]}>{activeTrain.name}</Text>
+        <Text style={[styles.classesText, isDarkMode && { color: colors.textSecondary }]}>
           Route: {activeTrain.originName} ({activeTrain.originCode}) ➔ {activeTrain.destName} ({activeTrain.destCode})
         </Text>
 
-        <View style={styles.tableHeader}>
-          <Text style={[styles.thText, { flex: 2 }]}>STATION</Text>
-          <Text style={[styles.thText, { flex: 1, textAlign: 'center' }]}>ARR / DEP</Text>
-          <Text style={[styles.thText, { flex: 1, textAlign: 'right' }]}>HALT / PF</Text>
+        <View style={[styles.tableHeader, isDarkMode && { backgroundColor: colors.cardSecondary, borderBottomColor: colors.border }]}>
+          <Text style={[styles.thText, { flex: 2 }, isDarkMode && { color: colors.textSecondary }]}>STATION</Text>
+          <Text style={[styles.thText, { flex: 1, textAlign: 'center' }, isDarkMode && { color: colors.textSecondary }]}>ARR / DEP</Text>
+          <Text style={[styles.thText, { flex: 1, textAlign: 'right' }, isDarkMode && { color: colors.textSecondary }]}>HALT / PF</Text>
         </View>
 
         {/* Stations List */}
         {activeTrain.stops.map((st, idx) => (
-          <View key={`${st.code}-${idx}`} style={[styles.tableRow, idx % 2 === 0 && styles.rowEven]}>
+          <View
+            key={`${st.code}-${idx}`}
+            style={[
+              styles.tableRow,
+              idx % 2 === 0 && (isDarkMode ? { backgroundColor: colors.cardSecondary } : styles.rowEven),
+            ]}
+          >
             <View style={{ flex: 2 }}>
-              <Text style={styles.stCode}>{st.code} - <Text style={styles.stName}>{st.name}</Text></Text>
+              <Text style={[styles.stCode, isDarkMode && { color: colors.textSecondary }]}>
+                {st.code} - <Text style={[styles.stName, isDarkMode && { color: colors.textPrimary }]}>{st.name}</Text>
+              </Text>
               <Text style={styles.stDist}>{st.day ? `Day ${st.day}` : 'Daily'}</Text>
             </View>
 
             <View style={{ flex: 1, alignItems: 'center' }}>
-              <Text style={styles.stTime}>{st.arr === '--' ? st.dep : st.arr}</Text>
+              <Text style={[styles.stTime, isDarkMode && { color: colors.textPrimary }]}>{st.arr === '--' ? st.dep : st.arr}</Text>
               <Text style={styles.stTimeDep}>{st.arr !== '--' ? `Dep ${st.dep}` : 'Origin'}</Text>
             </View>
 

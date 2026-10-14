@@ -75,7 +75,7 @@ function MainApp() {
     navigateTo('home', true, null);
   }, [navigateTo]);
 
-  const [activeLiveTrainNumber, setActiveLiveTrainNumber] = useState<string>('64902');
+  const [activeLiveTrainNumber, setActiveLiveTrainNumber] = useState<string>('22436');
 
   const handleTrackTrain = useCallback((trainNumber: string, _trainName: string) => {
     setActiveLiveTrainNumber(trainNumber);

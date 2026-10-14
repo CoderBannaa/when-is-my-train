@@ -5,6 +5,7 @@ import { Colors } from '../theme/colors';
 import { CORRIDOR_TRAINS_MASTER, CorridorTrain, findOrGenerateTrain } from '../data/trainsBetweenStations';
 import { searchAndRankTrains } from '../utils/searchRanker';
 import { calculateLiveStatus, parseTimeToMinutes } from '../utils/liveStatusEngine';
+import { usePreferences } from '../context/PreferencesContext';
 
 interface LiveStatusScreenProps {
   initialTrainNumber?: string;
@@ -21,8 +22,9 @@ const QUICK_TRAINS = [
 ];
 
 export const LiveStatusScreen: React.FC<LiveStatusScreenProps> = ({ initialTrainNumber, onTrackTrain }) => {
-  const [trainQuery, setTrainQuery] = useState(initialTrainNumber || '05379');
-  const [selectedTrainNum, setSelectedTrainNum] = useState(initialTrainNumber || '05379');
+  const { isDarkMode, colors, t } = usePreferences();
+  const [trainQuery, setTrainQuery] = useState(initialTrainNumber || '22436');
+  const [selectedTrainNum, setSelectedTrainNum] = useState(initialTrainNumber || '22436');
   const [trackingMode, setTrackingMode] = useState<'gps' | 'internet'>('gps');
   const [timeMode, setTimeMode] = useState<'real' | 'simulated'>('simulated');
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -86,7 +88,7 @@ export const LiveStatusScreen: React.FC<LiveStatusScreenProps> = ({ initialTrain
 
   return (
     <ScrollView
-      style={styles.container}
+      style={[styles.container, isDarkMode && { backgroundColor: colors.background }]}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
       refreshControl={
@@ -94,7 +96,7 @@ export const LiveStatusScreen: React.FC<LiveStatusScreenProps> = ({ initialTrain
       }
     >
       {/* 1. Iconic "Where is My Train" Top Tracking Mode Switcher */}
-      <View style={styles.modeCard}>
+      <View style={[styles.modeCard, isDarkMode && { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.modeTabs}>
           <TouchableOpacity
             style={[styles.modeTab, trackingMode === 'gps' && styles.modeTabActive]}
@@ -144,12 +146,12 @@ export const LiveStatusScreen: React.FC<LiveStatusScreenProps> = ({ initialTrain
       </View>
 
       {/* 2. Spot Train Search Bar */}
-      <View style={styles.searchCard}>
+      <View style={[styles.searchCard, isDarkMode && { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <Text style={styles.cardLabel}>SPOT TRAIN / EMU LOCAL</Text>
-        <View style={styles.searchBar}>
+        <View style={[styles.searchBar, isDarkMode && { backgroundColor: colors.cardSecondary, borderColor: colors.border }]}>
           <Ionicons name="search" size={19} color={Colors.primary} style={{ marginRight: 10 }} />
           <TextInput
-            style={styles.input}
+            style={[styles.input, isDarkMode && { color: colors.textPrimary }]}
             value={trainQuery}
             onChangeText={(text) => {
               setTrainQuery(text);
@@ -157,7 +159,7 @@ export const LiveStatusScreen: React.FC<LiveStatusScreenProps> = ({ initialTrain
               if (exact) setSelectedTrainNum(exact.number);
             }}
             placeholder="Search train no or name (e.g. 64902, Mathura, Taj)..."
-            placeholderTextColor={Colors.textMuted}
+            placeholderTextColor={colors.textMuted}
           />
           {trainQuery.length > 0 && (
             <TouchableOpacity onPress={() => setTrainQuery('')}>
