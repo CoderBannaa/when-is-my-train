@@ -12,6 +12,7 @@
     "owner": "atulsingh2008",
     "android": {
       "package": "com.atulsingh2008.whenismytrain",
+      "versionCode": 2,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
