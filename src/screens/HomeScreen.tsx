@@ -226,6 +226,48 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     return () => blinkLoop.stop();
   }, [liveBlinkAnim]);
 
+  // Page Entrance Animation (Fade + Slide-Up)
+  const screenFadeAnim = useRef(new Animated.Value(0)).current;
+  const screenSlideAnim = useRef(new Animated.Value(16)).current;
+  const stationPulseAnim = useRef(new Animated.Value(1)).current;
+  const findBtnScale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(screenFadeAnim, {
+        toValue: 1,
+        duration: 380,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }),
+      Animated.timing(screenSlideAnim, {
+        toValue: 0,
+        duration: 380,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    const pulseLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(stationPulseAnim, {
+          toValue: 1.35,
+          duration: 1100,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(stationPulseAnim, {
+          toValue: 1,
+          duration: 1100,
+          easing: Easing.in(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    pulseLoop.start();
+    return () => pulseLoop.stop();
+  }, [screenFadeAnim, screenSlideAnim, stationPulseAnim]);
+
   const trainTranslateY = trainProgress.interpolate({
     inputRange: [0, 1],
     outputRange: [0, 48],
@@ -583,13 +625,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       )}
 
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        <Animated.View style={{ opacity: screenFadeAnim, transform: [{ translateY: screenSlideAnim }] }}>
         {/* Modern Clean Search Card - Single card, no nested boxes */}
         <View style={[styles.modernSearchCard, { backgroundColor: colors.surface, borderColor: isDarkMode ? '#1E293B' : '#E2E8F0' }]}>
           
           {/* 1. FROM STATION ROW */}
           <View style={[styles.stationRowContainer, sourceHasError && styles.stationRowError]}>
             <View style={styles.stationIndicatorCol}>
-              <View style={styles.sourceDotPulse} />
+              <Animated.View style={[styles.sourceDotPulse, { transform: [{ scale: stationPulseAnim }] }]} />
               <View style={styles.sourceDotInner} />
             </View>
             <View style={styles.stationDetailsCol}>
@@ -687,7 +730,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           {/* 2. TO STATION ROW */}
           <View style={[styles.stationRowContainer, destHasError && styles.stationRowError]}>
             <View style={styles.stationIndicatorCol}>
-              <View style={styles.destDotPulse} />
+              <Animated.View style={[styles.destDotPulse, { transform: [{ scale: stationPulseAnim }] }]} />
               <View style={styles.destDotInner} />
             </View>
             <View style={styles.stationDetailsCol}>
@@ -761,21 +804,25 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             </View>
           )}
 
-          {/* 3. FIND TRAINS ACTION BUTTON (NO DATE PILLS - DIRECT SEARCH) */}
-          <TouchableOpacity
-            style={[
-              styles.modernFindTrainsBtn,
-              {
-                backgroundColor: isDarkMode ? '#059669' : colors.searchBtnGreen,
-                shadowColor: isDarkMode ? '#10B981' : colors.searchBtnGreen,
-              },
-            ]}
-            activeOpacity={0.85}
-            onPress={() => handleFindTrains()}
-          >
-            <Ionicons name="search" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
-            <Text style={styles.modernFindTrainsText}>{t('findTrains')}</Text>
-          </TouchableOpacity>
+          {/* 3. FIND TRAINS ACTION BUTTON (WITH SPRING PRESS MICRO-ANIMATION) */}
+          <Animated.View style={{ transform: [{ scale: findBtnScale }] }}>
+            <TouchableOpacity
+              style={[
+                styles.modernFindTrainsBtn,
+                {
+                  backgroundColor: isDarkMode ? '#059669' : colors.searchBtnGreen,
+                  shadowColor: isDarkMode ? '#10B981' : colors.searchBtnGreen,
+                },
+              ]}
+              activeOpacity={0.9}
+              onPressIn={() => Animated.spring(findBtnScale, { toValue: 0.96, useNativeDriver: true }).start()}
+              onPressOut={() => Animated.spring(findBtnScale, { toValue: 1, friction: 4, useNativeDriver: true }).start()}
+              onPress={() => handleFindTrains()}
+            >
+              <Ionicons name="search" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
+              <Text style={styles.modernFindTrainsText}>{t('findTrains')}</Text>
+            </TouchableOpacity>
+          </Animated.View>
         </View>
 
       {/* 2. Spot Your Train Card */}
@@ -988,8 +1035,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         )}
       </View>
 
-      <View style={{ height: 24 }} />
-    </ScrollView>
+        <View style={{ height: 24 }} />
+        </Animated.View>
+      </ScrollView>
 
     {/* Station Wake-up Alarm Modal (Competitor Killer Feature) */}
     <Modal

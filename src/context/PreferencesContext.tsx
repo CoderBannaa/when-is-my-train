@@ -27,8 +27,12 @@ export const SafeStorage = {
   },
 };
 
-export type Language = 'en' | 'hi';
+export type Language = 'en' | 'hi' | 'mr' | 'bn' | 'ta' | 'te' | 'gu';
 export type ThemeMode = 'light' | 'dark';
+export type SpeedUnit = 'kmh' | 'mph';
+export type TimeFormat = '12h' | '24h';
+export type DefaultTrackingSource = 'cell' | 'gps' | 'internet';
+export type AlarmRingtone = 'horn' | 'whistle' | 'chime' | 'bell';
 
 export interface ThemeColors {
   primary: string;
@@ -258,6 +262,14 @@ interface PreferencesContextType {
   isDarkMode: boolean;
   toggleTheme: () => void;
   setThemeMode: (mode: ThemeMode) => void;
+  speedUnit: SpeedUnit;
+  setSpeedUnit: (unit: SpeedUnit) => void;
+  timeFormat: TimeFormat;
+  setTimeFormat: (fmt: TimeFormat) => void;
+  trackingSource: DefaultTrackingSource;
+  setTrackingSource: (source: DefaultTrackingSource) => void;
+  alarmSound: AlarmRingtone;
+  setAlarmSound: (sound: AlarmRingtone) => void;
   colors: ThemeColors;
   t: (key: keyof typeof translations.en) => string;
   showWelcomeModal: boolean;
@@ -269,11 +281,19 @@ const PreferencesContext = createContext<PreferencesContextType | undefined>(und
 const PREF_LANG_KEY = '@train_app_lang';
 const PREF_THEME_KEY = '@train_app_theme';
 const PREF_FIRST_LAUNCH_KEY = '@train_app_first_launch';
+const PREF_SPEED_KEY = '@pref_speed_unit';
+const PREF_TIME_FMT_KEY = '@pref_time_format';
+const PREF_TRACK_SRC_KEY = '@pref_tracking_source';
+const PREF_ALARM_SND_KEY = '@pref_alarm_sound';
 
 export const PreferencesProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [language, setLanguageState] = useState<Language>('en');
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
   const [showWelcomeModal, setShowWelcomeModal] = useState<boolean>(false);
+  const [speedUnit, setSpeedUnitState] = useState<SpeedUnit>('kmh');
+  const [timeFormat, setTimeFormatState] = useState<TimeFormat>('24h');
+  const [trackingSource, setTrackingSourceState] = useState<DefaultTrackingSource>('cell');
+  const [alarmSound, setAlarmSoundState] = useState<AlarmRingtone>('horn');
 
   // Load saved preferences on startup
   useEffect(() => {
@@ -282,12 +302,28 @@ export const PreferencesProvider: React.FC<{ children: ReactNode }> = ({ childre
         const savedLang = await SafeStorage.getItem(PREF_LANG_KEY);
         const savedTheme = await SafeStorage.getItem(PREF_THEME_KEY);
         const hasLaunched = await SafeStorage.getItem(PREF_FIRST_LAUNCH_KEY);
+        const savedSpeed = await SafeStorage.getItem(PREF_SPEED_KEY);
+        const savedTimeFmt = await SafeStorage.getItem(PREF_TIME_FMT_KEY);
+        const savedTrackSrc = await SafeStorage.getItem(PREF_TRACK_SRC_KEY);
+        const savedAlarmSnd = await SafeStorage.getItem(PREF_ALARM_SND_KEY);
 
-        if (savedLang === 'hi' || savedLang === 'en') {
-          setLanguageState(savedLang);
+        if (savedLang) {
+          setLanguageState(savedLang as Language);
         }
         if (savedTheme === 'dark') {
           setIsDarkMode(true);
+        }
+        if (savedSpeed === 'kmh' || savedSpeed === 'mph') {
+          setSpeedUnitState(savedSpeed);
+        }
+        if (savedTimeFmt === '12h' || savedTimeFmt === '24h') {
+          setTimeFormatState(savedTimeFmt);
+        }
+        if (savedTrackSrc === 'cell' || savedTrackSrc === 'gps' || savedTrackSrc === 'internet') {
+          setTrackingSourceState(savedTrackSrc);
+        }
+        if (savedAlarmSnd === 'horn' || savedAlarmSnd === 'whistle' || savedAlarmSnd === 'chime' || savedAlarmSnd === 'bell') {
+          setAlarmSoundState(savedAlarmSnd);
         }
         // Show welcome language & theme selection on first launch
         if (!hasLaunched) {
@@ -310,6 +346,26 @@ export const PreferencesProvider: React.FC<{ children: ReactNode }> = ({ childre
     SafeStorage.setItem(PREF_THEME_KEY, mode).catch(() => {});
   };
 
+  const setSpeedUnit = (unit: SpeedUnit) => {
+    setSpeedUnitState(unit);
+    SafeStorage.setItem(PREF_SPEED_KEY, unit).catch(() => {});
+  };
+
+  const setTimeFormat = (fmt: TimeFormat) => {
+    setTimeFormatState(fmt);
+    SafeStorage.setItem(PREF_TIME_FMT_KEY, fmt).catch(() => {});
+  };
+
+  const setTrackingSource = (source: DefaultTrackingSource) => {
+    setTrackingSourceState(source);
+    SafeStorage.setItem(PREF_TRACK_SRC_KEY, source).catch(() => {});
+  };
+
+  const setAlarmSound = (sound: AlarmRingtone) => {
+    setAlarmSoundState(sound);
+    SafeStorage.setItem(PREF_ALARM_SND_KEY, sound).catch(() => {});
+  };
+
   const toggleTheme = () => {
     setThemeMode(isDarkMode ? 'light' : 'dark');
   };
@@ -326,8 +382,8 @@ export const PreferencesProvider: React.FC<{ children: ReactNode }> = ({ childre
   }, [isDarkMode]);
 
   const t = (key: keyof typeof translations.en): string => {
-    const dict = translations[language] || translations.en;
-    return dict[key] || translations.en[key] || String(key);
+    const dict = translations[language as 'en' | 'hi'] || translations.en;
+    return (dict as any)[key] || translations.en[key] || String(key);
   };
 
   return (
@@ -338,6 +394,14 @@ export const PreferencesProvider: React.FC<{ children: ReactNode }> = ({ childre
         isDarkMode,
         toggleTheme,
         setThemeMode,
+        speedUnit,
+        setSpeedUnit,
+        timeFormat,
+        setTimeFormat,
+        trackingSource,
+        setTrackingSource,
+        alarmSound,
+        setAlarmSound,
         colors,
         t,
         showWelcomeModal,

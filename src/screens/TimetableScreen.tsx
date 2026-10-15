@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Animated, Easing } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '../theme/colors';
 import { CORRIDOR_TRAINS_MASTER } from '../data/trainsBetweenStations';
@@ -10,6 +10,27 @@ export const TimetableScreen: React.FC = () => {
   const { isDarkMode, colors, t } = usePreferences();
   const [trainQuery, setTrainQuery] = useState('64902');
   const [selectedTrainNum, setSelectedTrainNum] = useState('64902');
+
+  // Entrance animation
+  const screenFadeAnim = useRef(new Animated.Value(0)).current;
+  const screenSlideAnim = useRef(new Animated.Value(16)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(screenFadeAnim, {
+        toValue: 1,
+        duration: 350,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(screenSlideAnim, {
+        toValue: 0,
+        duration: 350,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
 
   // Search and rank suggestions
   const searchSuggestions = useMemo(() => {
@@ -36,6 +57,7 @@ export const TimetableScreen: React.FC = () => {
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
     >
+      <Animated.View style={{ flex: 1, opacity: screenFadeAnim, transform: [{ translateY: screenSlideAnim }] }}>
       {/* Search Bar */}
       <View style={[styles.card, isDarkMode && { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <Text style={styles.cardLabel}>TRAIN TIMETABLE & ROUTE</Text>
@@ -145,6 +167,7 @@ export const TimetableScreen: React.FC = () => {
       </View>
 
       <View style={{ height: 30 }} />
+      </Animated.View>
     </ScrollView>
   );
 };

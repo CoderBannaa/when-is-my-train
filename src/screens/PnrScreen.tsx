@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Share, Platform, ActivityIndicator, Modal } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Share, Platform, ActivityIndicator, Modal, Animated, Easing } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '../theme/colors';
 import { getPnrStatusRecord, PnrRecord } from '../data/pnrDatabase';
@@ -14,6 +14,45 @@ export const PnrScreen: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [apiNotice, setApiNotice] = useState<string | null>(null);
   const [showVacantModal, setShowVacantModal] = useState(false);
+
+  // Entrance & Progress Bar Animations
+  const screenFadeAnim = useRef(new Animated.Value(0)).current;
+  const screenSlideAnim = useRef(new Animated.Value(14)).current;
+  const probAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(screenFadeAnim, {
+        toValue: 1,
+        duration: 350,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }),
+      Animated.timing(screenSlideAnim, {
+        toValue: 0,
+        duration: 350,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [screenFadeAnim, screenSlideAnim]);
+
+  useEffect(() => {
+    probAnim.setValue(0);
+    if (currentRecord && currentRecord.confirmationProbability !== undefined) {
+      Animated.timing(probAnim, {
+        toValue: currentRecord.confirmationProbability,
+        duration: 1000,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }).start();
+    }
+  }, [currentRecord, probAnim]);
+
+  const probWidth = probAnim.interpolate({
+    inputRange: [0, 100],
+    outputRange: ['0%', '100%'],
+  });
 
   const handleCheckPnr = async (pnrToQuery?: string) => {
     const targetPnr = pnrToQuery || pnrInput;
@@ -112,6 +151,7 @@ Shared via When is my train App`;
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <Animated.View style={{ opacity: screenFadeAnim, transform: [{ translateY: screenSlideAnim }] }}>
       {/* 1. PNR Input Card */}
       <View style={styles.card}>
         <View style={styles.cardHeaderRow}>
@@ -273,7 +313,7 @@ Shared via When is my train App`;
           </View>
         </View>
 
-        {/* 3. Confirmation Probability Gauge (Passenger's Favorite Feature) */}
+        {/* 3. Confirmation Probability Gauge (Passenger's Favorite Feature with Smooth Fill) */}
         {currentRecord.confirmationProbability !== undefined && (
           <View style={styles.probabilityCard}>
             <View style={styles.probHeaderRow}>
@@ -296,13 +336,13 @@ Shared via When is my train App`;
               </Text>
             </View>
 
-            {/* Visual Probability Bar */}
+            {/* Visual Probability Bar with Animated Smooth Fill */}
             <View style={styles.progressBarTrack}>
-              <View
+              <Animated.View
                 style={[
                   styles.progressBarFill,
                   {
-                    width: `${currentRecord.confirmationProbability}%`,
+                    width: probWidth,
                     backgroundColor: currentRecord.confirmationProbability >= 80 ? Colors.secondary : Colors.accent,
                   },
                 ]}
@@ -553,6 +593,7 @@ Shared via When is my train App`;
           </View>
         </View>
       </Modal>
+      </Animated.View>
     </ScrollView>
   );
 };

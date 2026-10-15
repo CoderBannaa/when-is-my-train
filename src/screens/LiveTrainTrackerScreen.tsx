@@ -358,6 +358,18 @@ export const LiveTrainTrackerScreen: React.FC<LiveTrainTrackerScreenProps> = ({
   const scrollRef = useRef<ScrollView>(null);
   const spinAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const whistleBounce = useRef(new Animated.Value(1)).current;
+  const [showHornBanner, setShowHornBanner] = useState(false);
+
+  const handlePlayHorn = () => {
+    Animated.sequence([
+      Animated.timing(whistleBounce, { toValue: 1.35, duration: 90, useNativeDriver: true }),
+      Animated.timing(whistleBounce, { toValue: 0.85, duration: 90, useNativeDriver: true }),
+      Animated.timing(whistleBounce, { toValue: 1, duration: 90, useNativeDriver: true }),
+    ]).start();
+    setShowHornBanner(true);
+    setTimeout(() => setShowHornBanner(false), 2400);
+  };
 
   const togglePassingGroup = useCallback((groupKey: string) => {
     setExpandedPassingGroups((prev) => ({
@@ -1175,6 +1187,14 @@ Tracked on When is my train App`;
             </View>
           </ScrollView>
 
+          {/* Animated Horn Toast */}
+          {showHornBanner && (
+            <View style={styles.hornSimulatedBanner}>
+              <MaterialCommunityIcons name="bullhorn" size={16} color="#FBBF24" style={{ marginRight: 6 }} />
+              <Text style={styles.hornSimulatedText}>Train horn sound triggered 📢 Level crossing alert</Text>
+            </View>
+          )}
+
           {/* Floating ETA & Speed Capsule (Reference Screenshots 1 & 8) */}
           <View style={[styles.floatingEtaCapsule, { backgroundColor: isDarkMode ? '#1E293B' : '#0F172A' }]}>
             <View style={styles.floatingEtaLeft}>
@@ -1186,15 +1206,19 @@ Tracked on When is my train App`;
             <View style={styles.floatingEtaRight}>
               <TouchableOpacity
                 style={styles.floatingWhistleBtn}
-                onPress={() => alert('Train horn whistle simulated 📢')}
+                onPress={handlePlayHorn}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                activeOpacity={0.8}
               >
-                <MaterialCommunityIcons name="bullhorn-outline" size={16} color="#FBBF24" />
+                <Animated.View style={{ transform: [{ scale: whistleBounce }] }}>
+                  <MaterialCommunityIcons name="bullhorn-outline" size={16} color="#FBBF24" />
+                </Animated.View>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.floatingWhistleBtn, { marginLeft: 8 }]}
                 onPress={handleShare}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                activeOpacity={0.8}
               >
                 <Ionicons name="share-social-outline" size={16} color="#FFFFFF" />
               </TouchableOpacity>
@@ -3400,6 +3424,24 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  hornSimulatedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0F172A',
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+    borderRadius: 14,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    marginHorizontal: 14,
+    marginBottom: 6,
+  },
+  hornSimulatedText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FBBF24',
   },
 });
 

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   Platform,
   Share,
   Modal,
+  Animated,
+  Easing,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '../theme/colors';
@@ -262,6 +264,26 @@ Found on When is my train`;
     setSelectedClassesMap((prev) => ({ ...prev, [trainId]: classIndex }));
   }, []);
 
+  const screenFadeAnim = useRef(new Animated.Value(0)).current;
+  const screenSlideAnim = useRef(new Animated.Value(14)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(screenFadeAnim, {
+        toValue: 1,
+        duration: 350,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }),
+      Animated.timing(screenSlideAnim, {
+        toValue: 0,
+        duration: 350,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [screenFadeAnim, screenSlideAnim, currentDate]);
+
   const getSortLabel = () => {
     switch (sortBy) {
       case 'fastest':
@@ -466,6 +488,7 @@ Found on When is my train`;
       )}
 
       {/* ================= 2. WHERE IS MY TRAIN STYLE FILTER BAR ================= */}
+      <Animated.View style={{ flex: 1, opacity: screenFadeAnim, transform: [{ translateY: screenSlideAnim }] }}>
       <View style={styles.filterMasterBar}>
         {/* ROW 1: 2-Line Date Pills + Rightmost Calendar Button */}
         <View style={styles.dateRowWrapper}>
@@ -564,6 +587,7 @@ Found on When is my train`;
           </View>
         }
       />
+      </Animated.View>
 
       {/* ================= 4. SORT BY MODAL ================= */}
       <Modal visible={showSortModal} transparent animationType="fade">

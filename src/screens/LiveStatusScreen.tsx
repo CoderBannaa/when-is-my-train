@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, RefreshControl, Animated, Easing } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '../theme/colors';
 import { CORRIDOR_TRAINS_MASTER, CorridorTrain, findOrGenerateTrain } from '../data/trainsBetweenStations';
@@ -159,6 +159,26 @@ export const LiveStatusScreen: React.FC<LiveStatusScreenProps> = ({ initialTrain
     }, 400);
   }, []);
 
+  const screenFadeAnim = useRef(new Animated.Value(0)).current;
+  const screenSlideAnim = useRef(new Animated.Value(14)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(screenFadeAnim, {
+        toValue: 1,
+        duration: 350,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }),
+      Animated.timing(screenSlideAnim, {
+        toValue: 0,
+        duration: 350,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [screenFadeAnim, screenSlideAnim, screenMode]);
+
   return (
     <ScrollView
       style={[styles.container, isDarkMode && { backgroundColor: colors.background }]}
@@ -168,6 +188,7 @@ export const LiveStatusScreen: React.FC<LiveStatusScreenProps> = ({ initialTrain
         <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} colors={[Colors.primary]} />
       }
     >
+      <Animated.View style={{ opacity: screenFadeAnim, transform: [{ translateY: screenSlideAnim }] }}>
       {/* 0. Top Segmented View Switcher: Spot Train vs Station Live Departures */}
       <View style={[styles.topSegmentedSwitcher, isDarkMode && { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <TouchableOpacity
@@ -706,6 +727,7 @@ export const LiveStatusScreen: React.FC<LiveStatusScreenProps> = ({ initialTrain
   )}
 
       <View style={{ height: 35 }} />
+      </Animated.View>
     </ScrollView>
   );
 };
