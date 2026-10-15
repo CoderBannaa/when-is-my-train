@@ -19,6 +19,33 @@ interface ScreenState {
   trackingTrain?: string | null;
 }
 
+// Global Web Style Reset: remove browser default focus outline/squares around text inputs
+if (Platform.OS === 'web' && typeof document !== 'undefined') {
+  const styleId = 'global-no-outline-styles';
+  if (!document.getElementById(styleId)) {
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.textContent = `
+      input, textarea, [contenteditable="true"] {
+        outline: none !important;
+        outline-style: none !important;
+        outline-width: 0 !important;
+        border: none !important;
+        box-shadow: none !important;
+        -webkit-tap-highlight-color: transparent !important;
+      }
+      input:focus, textarea:focus, [contenteditable="true"]:focus {
+        outline: none !important;
+        outline-style: none !important;
+        outline-width: 0 !important;
+        border: none !important;
+        box-shadow: none !important;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+}
+
 function MainApp() {
   const { colors, isDarkMode, t, showWelcomeModal, setShowWelcomeModal } = usePreferences();
   const [showPrefsModal, setShowPrefsModal] = useState(false);
@@ -76,14 +103,30 @@ function MainApp() {
   }, [navigateTo]);
 
   const [activeLiveTrainNumber, setActiveLiveTrainNumber] = useState<string>('22436');
+  const [trackingTrainMeta, setTrackingTrainMeta] = useState<{
+    number: string;
+    name?: string;
+    fromStation?: Station;
+    toStation?: Station;
+  } | null>(null);
 
-  const handleTrackTrain = useCallback((trainNumber: string, _trainName: string) => {
+  const handleTrackTrain = useCallback((trainNumber: string, trainName?: string, fromStation?: Station, toStation?: Station) => {
     setActiveLiveTrainNumber(trainNumber);
+    setTrackingTrainMeta({
+      number: trainNumber,
+      name: trainName,
+      fromStation: fromStation || searchParams?.from || selectedFromStation || undefined,
+      toStation: toStation || searchParams?.to || selectedToStation || undefined,
+    });
     navigateTo('home', false, trainNumber);
-  }, [navigateTo]);
+  }, [navigateTo, searchParams, selectedFromStation, selectedToStation]);
 
   const handleSelectTab = useCallback((tab: TabKey) => {
     if (tab === activeTab && !isSearching) return;
+    if (tab === 'live') {
+      navigateTo('home', false, '22436');
+      return;
+    }
     navigateTo(tab, false);
   }, [activeTab, isSearching, navigateTo]);
 
@@ -132,7 +175,17 @@ function MainApp() {
 
   const renderCurrentScreen = () => {
     if (trackingTrainNumber) {
-      return <LiveTrainTrackerScreen trainNumber={trackingTrainNumber} onBack={handleBack} />;
+      return (
+        <LiveTrainTrackerScreen
+          trainNumber={trackingTrainNumber}
+          trainName={trackingTrainMeta?.name}
+          fromStationCode={trackingTrainMeta?.fromStation?.code}
+          toStationCode={trackingTrainMeta?.toStation?.code}
+          fromStationName={trackingTrainMeta?.fromStation?.name}
+          toStationName={trackingTrainMeta?.toStation?.name}
+          onBack={handleBack}
+        />
+      );
     }
 
     if (activeTab === 'home' && isSearching && searchParams) {
@@ -206,8 +259,8 @@ function MainApp() {
         {renderCurrentScreen()}
       </View>
 
-      {/* Bottom Navigation */}
-      {!trackingTrainNumber && !isSearching && (
+      {/* Bottom Navigation: Hidden on HomeScreen as requested because Quick Railway Services already handles navigation */}
+      {!trackingTrainNumber && !isSearching && activeTab !== 'home' && (
         <BottomTabBar activeTab={activeTab} onSelectTab={handleSelectTab} />
       )}
 

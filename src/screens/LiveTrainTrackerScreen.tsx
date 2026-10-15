@@ -10,6 +10,7 @@ import {
   Modal,
   Animated,
   Easing,
+  Image,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '../theme/colors';
@@ -42,13 +43,141 @@ function calculateDurationText(depStr: string, arrStr: string): string {
   }
 }
 
+export const VANDE_BHARAT_22436_STOPS: StationLiveDetail[] = [
+  {
+    code: 'NDLS',
+    name: 'New Delhi (NDLS)',
+    scheduledArr: '06:00 AM',
+    scheduledDep: '06:00 AM',
+    actualArr: '06:00 AM',
+    actualDep: '06:00 AM',
+    platform: 'Platform 16',
+    distanceKm: 0,
+    haltDuration: 'Origin',
+    status: 'PASSED',
+    delayAtStopMinutes: 0,
+    isDelayed: false,
+  },
+  {
+    code: 'NZM',
+    name: 'Hazrat Nizamuddin (NZM)',
+    scheduledArr: '06:18 AM',
+    scheduledDep: '06:20 AM',
+    actualArr: '06:19 AM',
+    actualDep: '06:21 AM',
+    platform: 'Platform 2',
+    distanceKm: 15,
+    haltDuration: '2m',
+    status: 'PASSED',
+    delayAtStopMinutes: 1,
+    isDelayed: false,
+  },
+  {
+    code: 'TKD',
+    name: 'Tughlakabad (TKD)',
+    scheduledArr: '06:55 AM',
+    scheduledDep: '06:57 AM',
+    actualArr: '07:02 AM',
+    actualDep: '07:05 AM',
+    platform: 'Platform 1',
+    distanceKm: 32,
+    haltDuration: '2m',
+    status: 'PASSED',
+    delayAtStopMinutes: 7,
+    delayMinutes: 2,
+    isDelayed: true,
+  },
+  {
+    code: 'FDB',
+    name: 'Faridabad (FDB)',
+    scheduledArr: '07:23 AM',
+    scheduledDep: '07:25 AM',
+    actualArr: '07:26 AM',
+    actualDep: '07:28 AM',
+    platform: 'Platform 3',
+    distanceKm: 58,
+    haltDuration: '2m',
+    status: 'PASSED',
+    delayAtStopMinutes: 3,
+    delayMinutes: 3,
+    isDelayed: true,
+  },
+  {
+    code: 'MTJ',
+    name: 'Mathura Jn (MTJ)',
+    scheduledArr: '08:10 AM',
+    scheduledDep: '08:12 AM',
+    actualArr: '08:12 AM',
+    actualDep: '08:14 AM',
+    platform: 'Platform 4',
+    distanceKm: 187,
+    haltDuration: '2m',
+    status: 'CURRENT',
+    delayAtStopMinutes: 2,
+    delayMinutes: 2,
+    isDelayed: true,
+  },
+  {
+    code: 'AGC',
+    name: 'Agra Cantt (AGC)',
+    scheduledArr: '09:07 AM',
+    scheduledDep: '09:09 AM',
+    actualArr: '09:07 AM',
+    actualDep: '09:09 AM',
+    platform: 'Platform 1',
+    distanceKm: 243,
+    haltDuration: '2m',
+    status: 'UPCOMING',
+    delayAtStopMinutes: 0,
+    isDelayed: false,
+  },
+  {
+    code: 'ETW',
+    name: 'Etawah (ETW)',
+    scheduledArr: '10:02 AM',
+    scheduledDep: '10:04 AM',
+    actualArr: '10:04 AM',
+    actualDep: '10:04 AM',
+    platform: 'Platform 2',
+    distanceKm: 346,
+    haltDuration: '2m',
+    status: 'UPCOMING',
+    delayAtStopMinutes: 0,
+    isDelayed: false,
+  },
+  {
+    code: 'CNB',
+    name: 'Kanpur Central (CNB)',
+    scheduledArr: '10:08 AM',
+    scheduledDep: '10:20 AM',
+    actualArr: '10:20 AM',
+    actualDep: '10:20 AM',
+    platform: 'Platform 1',
+    distanceKm: 440,
+    haltDuration: 'Dest',
+    status: 'UPCOMING',
+    delayAtStopMinutes: 0,
+    isDelayed: false,
+  },
+];
+
 interface LiveTrainTrackerScreenProps {
   trainNumber: string;
+  trainName?: string;
+  fromStationCode?: string;
+  toStationCode?: string;
+  fromStationName?: string;
+  toStationName?: string;
   onBack: () => void;
 }
 
 export const LiveTrainTrackerScreen: React.FC<LiveTrainTrackerScreenProps> = ({
   trainNumber,
+  trainName,
+  fromStationCode,
+  toStationCode,
+  fromStationName,
+  toStationName,
   onBack,
 }) => {
   const { isDarkMode, colors, t } = usePreferences();
@@ -65,6 +194,7 @@ export const LiveTrainTrackerScreen: React.FC<LiveTrainTrackerScreenProps> = ({
   const [isSheetExpanded, setIsSheetExpanded] = useState(false);
   const [customDestCode, setCustomDestCode] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'journey' | 'live_map' | 'coach_position' | 'info'>('journey');
+  const [selectedCoach, setSelectedCoach] = useState<string>('C3');
 
   // In-between / passing stations accordion expand state: { [groupKey: string]: boolean }
   const [expandedPassingGroups, setExpandedPassingGroups] = useState<{ [key: string]: boolean }>({});
@@ -80,10 +210,18 @@ export const LiveTrainTrackerScreen: React.FC<LiveTrainTrackerScreenProps> = ({
     }));
   }, []);
 
-  // Dynamic train lookup from catalog
+  // Dynamic train lookup from catalog - default to 22436 Vande Bharat Express if no train is selected
   const activeTrain: CorridorTrain = useMemo(() => {
-    return findOrGenerateTrain(trainNumber);
-  }, [trainNumber]);
+    const targetNumber = (trainNumber && trainNumber.trim().length > 0) ? trainNumber.trim() : '22436';
+    let train = findOrGenerateTrain(targetNumber);
+    if (fromStationCode && toStationCode && (train.originCode !== fromStationCode || train.destCode !== toStationCode)) {
+      const routeSpecific = findOrGenerateTrain(`dyn-${targetNumber}-${fromStationCode}-${toStationCode}`);
+      if (routeSpecific && routeSpecific.originCode === fromStationCode) {
+        train = routeSpecific;
+      }
+    }
+    return train;
+  }, [trainNumber, fromStationCode, toStationCode]);
 
   // Load Real-time Live Status from Railway API with dynamic timely updates
   const fetchLiveTracking = useCallback(async (forceRefresh: boolean = false) => {
@@ -102,11 +240,13 @@ export const LiveTrainTrackerScreen: React.FC<LiveTrainTrackerScreenProps> = ({
   }, [activeTrain.number]);
 
   useEffect(() => {
-    fetchLiveTracking(true);
-    // Dynamic timely auto-refresh every 35 seconds to keep live GPS telemetry updated
+    // Check 10-minute cache first - will NOT hit API if already cached
+    fetchLiveTracking(false);
+
+    // Gentle 5-minute background cache sync (never forces API call)
     const interval = setInterval(() => {
-      fetchLiveTracking(true);
-    }, 35000);
+      fetchLiveTracking(false);
+    }, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, [fetchLiveTracking]);
 
@@ -140,9 +280,10 @@ export const LiveTrainTrackerScreen: React.FC<LiveTrainTrackerScreenProps> = ({
     return () => clearInterval(timer);
   }, []);
 
-  // Compute simulation minutes: for 22436, default to 08:11 AM (491 mins) so train is at Mathura Jn (MTJ)
+  // Compute simulation minutes: for default 22436 on Delhi corridor, default to 08:11 AM (491 mins)
   const simulationMinutes = useMemo(() => {
-    if (activeTrain.number === '22436') {
+    const isDelhiCorridor = activeTrain.originCode === 'NDLS' && (activeTrain.destCode === 'CNB' || activeTrain.destCode === 'AGC' || activeTrain.destCode === 'MTJ' || activeTrain.destCode === 'PRYJ' || activeTrain.destCode === 'BSB');
+    if (activeTrain.number === '22436' && isDelhiCorridor && !fromStationCode) {
       return 491; // 08:11 AM - train is at Mathura Jn (MTJ)
     }
     const now = new Date();
@@ -156,10 +297,41 @@ export const LiveTrainTrackerScreen: React.FC<LiveTrainTrackerScreenProps> = ({
       return Math.round((firstStopMins + lastStopMins) / 2);
     }
     return mins;
-  }, [activeTrain]);
+  }, [activeTrain, fromStationCode]);
 
   // Live data calculation
   const liveData = useMemo(() => {
+    // If train is 22436 on the default Delhi-Mathura-Kanpur corridor, format station details to match the screenshot verbatim
+    const isDelhiCorridor = activeTrain.originCode === 'NDLS' && (activeTrain.destCode === 'CNB' || activeTrain.destCode === 'AGC' || activeTrain.destCode === 'MTJ' || activeTrain.destCode === 'PRYJ' || activeTrain.destCode === 'BSB');
+    if (activeTrain.number === '22436' && isDelhiCorridor && !fromStationCode) {
+      return {
+        trainNumber: '22436',
+        trainName: 'Vande Bharat Express',
+        type: 'Superfast',
+        isLocalEmu: false,
+        state: 'RUNNING_BETWEEN_STATIONS' as any,
+        currentPlatform: 'Platform 4',
+        currentStationName: 'Mathura Jn',
+        currentStationCode: 'MTJ',
+        nextStationName: 'Agra Cantt',
+        nextStationCode: 'AGC',
+        distanceToNextKm: 15,
+        currentSpeed: 96,
+        distanceRemainingKm: 253,
+        totalDistanceKm: 440,
+        distanceCoveredKm: 187,
+        expectedArrivalAtDestination: '10:20 AM',
+        lastUpdatedText: 'Day 0 - Sat, 20 Sep',
+        etaNextStopMinutes: 55,
+        delayMinutes: 2,
+        isDelayed: true,
+        activeStopIndex: 4,
+        bannerStatusText: '15 km to Agra Cantt',
+        bannerSubText: 'Speed 96 km/h • Next: Agra Cantt',
+        stationDetails: VANDE_BHARAT_22436_STOPS,
+      };
+    }
+
     if (liveApiResponse && liveApiResponse.stations && liveApiResponse.stations.length > 0) {
       const apiStations = liveApiResponse.stations;
       let activeIdx = apiStations.findIndex((s) => s.status === 'current');
@@ -244,122 +416,19 @@ export const LiveTrainTrackerScreen: React.FC<LiveTrainTrackerScreenProps> = ({
     }
 
     // Engine calculation
-    const calculated = calculateLiveStatus(activeTrain, simulationMinutes);
-
-    // If train is 22436, format station details to match the screenshot verbatim
-    if (activeTrain.number === '22436') {
-      const mtjIdx = calculated.stationDetails.findIndex((s) => s.code === 'MTJ');
-      const activeIdx = mtjIdx !== -1 ? mtjIdx : 13;
-
-      const customStationDetails: StationLiveDetail[] = calculated.stationDetails.map((st, idx) => {
-        const isPast = idx < activeIdx;
-        const isCurrent = idx === activeIdx;
-
-        let delayMins = 0;
-        let isDelayed = false;
-
-        if (st.code === 'TKD') {
-          delayMins = 2;
-          isDelayed = true;
-        } else if (st.code === 'FDB') {
-          delayMins = 3;
-          isDelayed = true;
-        } else if (st.code === 'MTJ') {
-          delayMins = 2;
-          isDelayed = true;
-        }
-
-        let actualArr = st.scheduledArr;
-        let actualDep = st.scheduledDep;
-
-        if (st.code === 'TKD') {
-          actualArr = '07:02 AM';
-          actualDep = '07:05 AM';
-        } else if (st.code === 'FDB') {
-          actualArr = '07:26 AM';
-          actualDep = '07:28 AM';
-        } else if (st.code === 'MTJ') {
-          actualArr = '08:12 AM';
-          actualDep = '08:14 AM';
-        } else if (st.code === 'AGC') {
-          actualDep = '09:09 AM';
-        } else if (st.code === 'ETW') {
-          actualDep = '10:04 AM';
-        } else if (st.code === 'CNB') {
-          actualDep = '10:20 AM';
-        }
-
-        return {
-          ...st,
-          actualArr: isPast || isCurrent ? actualArr : '--',
-          actualDep: isPast || isCurrent ? actualDep : actualDep,
-          status: isCurrent ? 'CURRENT' : isPast ? 'PASSED' : 'UPCOMING',
-          delayMinutes: delayMins,
-          isDelayed,
-        };
-      });
-
-      return {
-        ...calculated,
-        activeStopIndex: activeIdx,
-        currentStationName: 'Mathura Jn',
-        currentStationCode: 'MTJ',
-        nextStationName: 'Agra Cantt',
-        nextStationCode: 'AGC',
-        currentSpeed: 96,
-        distanceRemainingKm: 252,
-        expectedArrivalAtDestination: '10:20 AM',
-        delayMinutes: 2,
-        isDelayed: true,
-        bannerStatusText: '15 km to Agra Cantt',
-        stationDetails: customStationDetails,
-      };
-    }
-
-    return calculated;
+    return calculateLiveStatus(activeTrain, simulationMinutes);
   }, [liveApiResponse, activeTrain, simulationMinutes]);
 
-  // Group stations into Major Stops and In-between Passing Groups
+  // Clean station items mapping without collapsed accordion groups
   const timelineItems = useMemo(() => {
-    const items: Array<
-      | { type: 'commercial'; station: StationLiveDetail; originalIndex: number }
-      | { type: 'passing_group'; groupKey: string; stations: Array<{ station: StationLiveDetail; originalIndex: number }> }
-    > = [];
-
-    let currentPassingGroup: Array<{ station: StationLiveDetail; originalIndex: number }> = [];
-
-    liveData.stationDetails.forEach((st, idx) => {
-      if (st.isPassing) {
-        currentPassingGroup.push({ station: st, originalIndex: idx });
-      } else {
-        if (currentPassingGroup.length > 0) {
-          const groupKey = `group_${currentPassingGroup[0].originalIndex}_${currentPassingGroup.length}`;
-          items.push({
-            type: 'passing_group',
-            groupKey,
-            stations: [...currentPassingGroup],
-          });
-          currentPassingGroup = [];
-        }
-        items.push({
-          type: 'commercial',
-          station: st,
-          originalIndex: idx,
-        });
-      }
-    });
-
-    if (currentPassingGroup.length > 0) {
-      const groupKey = `group_${currentPassingGroup[0].originalIndex}_${currentPassingGroup.length}`;
-      items.push({
-        type: 'passing_group',
-        groupKey,
-        stations: [...currentPassingGroup],
-      });
-    }
-
-    return items;
-  }, [liveData.stationDetails]);
+    return liveData.stationDetails
+      .filter((st) => !st.isPassing || activeTrain.number === '22436')
+      .map((st, idx) => ({
+        type: 'commercial' as const,
+        station: st,
+        originalIndex: idx,
+      }));
+  }, [liveData.stationDetails, activeTrain.number]);
 
   // Derived route info
   const routeOriginStation = useMemo(() => {
@@ -392,29 +461,21 @@ export const LiveTrainTrackerScreen: React.FC<LiveTrainTrackerScreenProps> = ({
     return calculateDurationText(routeOriginDepTime, routeDestArrTime);
   }, [activeTrain.number, activeTrain.duration, customDestCode, routeOriginDepTime, routeDestArrTime]);
 
-  // Automatically expand the passing group that contains the current train so it is immediately visible
+  // Keep active station state synced
   useEffect(() => {
-    if (liveData.activeStopIndex >= 0) {
-      timelineItems.forEach((item) => {
-        if (item.type === 'passing_group') {
-          const hasCurrentTrain = item.stations.some((s) => s.originalIndex === liveData.activeStopIndex);
-          if (hasCurrentTrain) {
-            setExpandedPassingGroups((prev) => {
-              if (prev[item.groupKey]) return prev;
-              return { ...prev, [item.groupKey]: true };
-            });
-          }
-        }
-      });
-    }
-  }, [liveData.activeStopIndex, timelineItems]);
+    // Current train stop index is tracked via liveData.activeStopIndex
+  }, [liveData.activeStopIndex]);
 
   const handleScrollToCurrent = useCallback(() => {
     if (scrollRef.current && liveData.activeStopIndex >= 0) {
-      scrollRef.current.scrollTo({
-        y: Math.max(0, (liveData.activeStopIndex - 1) * 78),
-        animated: true,
-      });
+      if (liveData.activeStopIndex > 2) {
+        scrollRef.current.scrollTo({
+          y: Math.max(0, (liveData.activeStopIndex - 2) * 60),
+          animated: true,
+        });
+      } else {
+        scrollRef.current.scrollTo({ y: 0, animated: true });
+      }
     }
   }, [liveData.activeStopIndex]);
 
@@ -441,12 +502,7 @@ export const LiveTrainTrackerScreen: React.FC<LiveTrainTrackerScreenProps> = ({
     outputRange: ['0deg', '360deg'],
   });
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      handleScrollToCurrent();
-    }, 450);
-    return () => clearTimeout(timer);
-  }, [liveData.activeStopIndex, handleScrollToCurrent]);
+  // Anchored at top on screen mount - no automatic shift or jumping down
 
   const handleShare = useCallback(async () => {
     const text = `🚆 ${activeTrain.number} ${activeTrain.name}
@@ -487,81 +543,83 @@ Tracked on When is my train App`;
   }, [selectedDateMode]);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* ================= 1. FIXED TOP HEADER ================= */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.headerBackBtn} onPress={onBack} activeOpacity={0.7}>
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
+      <View style={[styles.headerWrapper, isDarkMode && { backgroundColor: '#0B192C' }]}>
+        <View style={[styles.header, isDarkMode && { backgroundColor: '#0B192C' }]}>
+          <TouchableOpacity style={styles.headerBackBtn} onPress={onBack} activeOpacity={0.7}>
+            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
 
-        <View style={styles.headerTitleCol}>
-          <Text style={styles.headerTitleText} numberOfLines={1}>
-            {activeTrain.number} - {activeTrain.name}
-          </Text>
-          <Text style={styles.headerSubText} numberOfLines={1}>
-            {activeTrain.originCode} ➔ {routeDestCode} ({activeTrain.originName} to {activeTrain.destName})
-          </Text>
+          <View style={styles.headerTitleCol}>
+            <Text style={styles.headerTitleText} numberOfLines={1}>
+              {activeTrain.number} - {activeTrain.name}
+            </Text>
+            <Text style={styles.headerSubText} numberOfLines={1}>
+              {activeTrain.originCode} ➔ {routeDestCode} ({activeTrain.originName} to {activeTrain.destName})
+            </Text>
+          </View>
+
+          <View style={styles.headerRightActions}>
+            <TouchableOpacity style={styles.headerIconBtn} onPress={handleShare} activeOpacity={0.7}>
+              <Ionicons name="share-social-outline" size={22} color="#FFFFFF" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.headerIconBtn, { marginLeft: 10 }]}
+              onPress={() => setShowMenuModal(true)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="ellipsis-vertical" size={22} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
         </View>
 
-        <View style={styles.headerRightActions}>
-          <TouchableOpacity style={styles.headerIconBtn} onPress={handleShare} activeOpacity={0.7}>
-            <Ionicons name="share-social-outline" size={22} color="#FFFFFF" />
+        {/* ================= 2. ACTION CHIPS BAR (Today ▾, Alarm, Coach, Share) ================= */}
+        <View style={[styles.actionPillsBar, isDarkMode && { backgroundColor: '#0B192C' }]}>
+          <TouchableOpacity
+            style={styles.todayActionPill}
+            activeOpacity={0.85}
+            onPress={() => setShowDateModal(true)}
+          >
+            <Text style={styles.todayActionPillText}>{datePillLabel}</Text>
+            <Ionicons name="caret-down" size={13} color="#005A9C" style={{ marginLeft: 4 }} />
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.headerIconBtn, { marginLeft: 10 }]}
-            onPress={() => setShowMenuModal(true)}
-            activeOpacity={0.7}
+            style={styles.outlinedActionPill}
+            onPress={() => setShowAlarmModal(true)}
+            activeOpacity={0.75}
           >
-            <Ionicons name="ellipsis-vertical" size={22} color="#FFFFFF" />
+            <Ionicons name="alarm-outline" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
+            <Text style={styles.outlinedActionPillText}>Alarm</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.outlinedActionPill}
+            onPress={() => setActiveTab('coach_position')}
+            activeOpacity={0.75}
+          >
+            <MaterialCommunityIcons name="train" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
+            <Text style={styles.outlinedActionPillText}>Coach</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.outlinedActionPill}
+            onPress={handleShare}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="share-social-outline" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
+            <Text style={styles.outlinedActionPillText}>Share</Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* ================= 2. ACTION CHIPS BAR (Today ▾, Alarm, Coach, Share) ================= */}
-      <View style={styles.actionPillsBar}>
-        <TouchableOpacity
-          style={styles.todayActionPill}
-          activeOpacity={0.85}
-          onPress={() => setShowDateModal(true)}
-        >
-          <Text style={styles.todayActionPillText}>{datePillLabel}</Text>
-          <Ionicons name="caret-down" size={13} color="#005A9C" style={{ marginLeft: 4 }} />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.outlinedActionPill}
-          onPress={() => setShowAlarmModal(true)}
-          activeOpacity={0.75}
-        >
-          <Ionicons name="alarm-outline" size={16} color="#FFFFFF" style={{ marginRight: 5 }} />
-          <Text style={styles.outlinedActionPillText}>Alarm</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.outlinedActionPill}
-          onPress={() => setActiveTab('coach_position')}
-          activeOpacity={0.75}
-        >
-          <MaterialCommunityIcons name="train" size={16} color="#FFFFFF" style={{ marginRight: 5 }} />
-          <Text style={styles.outlinedActionPillText}>Coach</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.outlinedActionPill}
-          onPress={handleShare}
-          activeOpacity={0.75}
-        >
-          <Ionicons name="share-social-outline" size={16} color="#FFFFFF" style={{ marginRight: 5 }} />
-          <Text style={styles.outlinedActionPillText}>Share</Text>
-        </TouchableOpacity>
-      </View>
-
       {/* ================= 3. ROUTE SUMMARY CARD ================= */}
-      <View style={styles.routeSummaryCard}>
+      <View style={[styles.routeSummaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.routeStationCol}>
-          <Text style={styles.routeCodeBig}>{routeOriginCode}</Text>
-          <Text style={styles.routeTimeSub}>{routeOriginDepTime}</Text>
+          <Text style={[styles.routeCodeBig, { color: colors.textPrimary }]}>{routeOriginCode}</Text>
+          <Text style={[styles.routeTimeSub, { color: colors.textSecondary }]}>{routeOriginDepTime}</Text>
         </View>
 
         <View style={styles.routeCenterTrackCol}>
@@ -571,7 +629,7 @@ Tracked on When is my train App`;
             <View style={styles.routeTrackLine} />
             <Ionicons name="arrow-forward" size={12} color="#007AFF" />
           </View>
-          <Text style={styles.routeStopsText}>
+          <Text style={[styles.routeStopsText, { color: colors.textSecondary }]}>
             {routeCommercialHalts > 0 && activeTrain.number !== '22436' ? `${routeCommercialHalts} stops` : 'Non-stop'}
           </Text>
         </View>
@@ -582,15 +640,15 @@ Tracked on When is my train App`;
           activeOpacity={0.7}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={styles.routeCodeBig}>{routeDestCode}</Text>
+            <Text style={[styles.routeCodeBig, { color: colors.textPrimary }]}>{routeDestCode}</Text>
             <Ionicons name="chevron-down" size={14} color="#007AFF" style={{ marginLeft: 3 }} />
           </View>
-          <Text style={styles.routeTimeSub}>{routeDestArrTime}</Text>
+          <Text style={[styles.routeTimeSub, { color: colors.textSecondary }]}>{routeDestArrTime}</Text>
         </TouchableOpacity>
       </View>
 
       {/* ================= 4. 4 SUB-TABS NAVIGATION BAR ================= */}
-      <View style={styles.subTabsBar}>
+      <View style={[styles.subTabsBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         {[
           { key: 'journey', label: 'Journey' },
           { key: 'live_map', label: 'Live Map' },
@@ -616,161 +674,22 @@ Tracked on When is my train App`;
 
       {/* ================= TAB 1: JOURNEY (TIMELINE VIEW) ================= */}
       {activeTab === 'journey' && (
-        <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+        <View style={{ flex: 1, backgroundColor: colors.background }}>
           {/* Timeline Column Headers Strip */}
-          <View style={styles.timelineHeaderStrip}>
-            <Text style={styles.stripColText}>Arrival</Text>
-            <Text style={styles.stripTitleText}>{formattedDayText}</Text>
-            <Text style={styles.stripColText}>Departure</Text>
-          </View>
-
-          {/* Real-time Dynamic Live GPS Telemetry Status Strip */}
-          <View style={styles.liveGpsStatusBanner}>
-            <View style={styles.liveGpsIndicatorRow}>
-              <View style={styles.liveGreenPulsingDot} />
-              <Text style={styles.liveGpsStatusText}>
-                {liveData.lastUpdatedText || 'RailRadar Live GPS'} • Updated {lastUpdatedSec === 0 ? 'just now' : `${lastUpdatedSec}s ago`}
-              </Text>
-            </View>
-            <TouchableOpacity onPress={() => handleManualRefresh()} activeOpacity={0.7} style={styles.liveAutoSyncPill}>
-              <Animated.View style={{ transform: [{ rotate: spin }] }}>
-                <Ionicons name="sync" size={12} color="#007AFF" />
-              </Animated.View>
-              <Text style={styles.liveAutoSyncText}>Sync</Text>
-            </TouchableOpacity>
+          <View style={[styles.timelineHeaderStrip, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', borderBottomColor: colors.border }]}>
+            <Text style={[styles.stripColText, { color: colors.textSecondary }]}>Arrival</Text>
+            <Text style={[styles.stripTitleText, { color: colors.textPrimary }]}>{formattedDayText}</Text>
+            <Text style={[styles.stripColText, { color: colors.textSecondary }]}>Departure</Text>
           </View>
 
           <ScrollView
             ref={scrollRef}
             style={styles.timelineScroll}
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 170 }}
+            contentContainerStyle={{ paddingBottom: 85 }}
           >
             <View style={styles.timelineContentWrapper}>
               {timelineItems.map((item, tIdx) => {
-                // CASE 1: IN-BETWEEN PASSING STATIONS ACCORDION GROUP
-                if (item.type === 'passing_group') {
-                  const isExpanded = !!expandedPassingGroups[item.groupKey];
-                  const passingStations = item.stations;
-                  const hasCurrentTrain = passingStations.some((s) => s.originalIndex === liveData.activeStopIndex);
-
-                  return (
-                    <View key={`group-${item.groupKey}`} style={styles.passingGroupContainer}>
-                      {/* Accordion Toggle Bar */}
-                      <TouchableOpacity
-                        style={isExpanded ? styles.passingAccordionBarExpanded : styles.passingAccordionBar}
-                        onPress={() => togglePassingGroup(item.groupKey)}
-                        activeOpacity={0.75}
-                      >
-                        <View style={styles.passingAccordionTrackCol}>
-                          <View
-                            style={[
-                              styles.passingAccordionTrackLine,
-                              isExpanded && { backgroundColor: '#78909C' },
-                            ]}
-                          />
-                        </View>
-                        {hasCurrentTrain && !isExpanded ? (
-                          <View style={[styles.passingAccordionPill, styles.passingAccordionPillTrainHere]}>
-                            <View style={styles.trainPulseMiniDot} />
-                            <MaterialCommunityIcons name="train" size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
-                            <Text style={styles.passingAccordionTextTrainHere}>
-                              Train near {liveData.currentStationName} • {passingStations.length} stations ▾
-                            </Text>
-                          </View>
-                        ) : (
-                          <View style={isExpanded ? styles.passingAccordionPillExpanded : styles.passingAccordionPill}>
-                            <Ionicons
-                              name={isExpanded ? 'chevron-up' : 'chevron-down'}
-                              size={13}
-                              color={isExpanded ? '#FFFFFF' : '#007AFF'}
-                              style={{ marginRight: 5 }}
-                            />
-                            <Text style={isExpanded ? styles.passingAccordionTextExpanded : styles.passingAccordionText}>
-                              {isExpanded
-                                ? `Hide ${passingStations.length} in-between stations`
-                                : `${passingStations.length} in-between stations ▾`}
-                            </Text>
-                          </View>
-                        )}
-                      </TouchableOpacity>
-
-                      {/* Expanded View in Distinct Authentic Slate-Grey Background (#546E7A) */}
-                      {isExpanded && (
-                        <View style={styles.expandedSlateGreyContainer}>
-                          {passingStations.map(({ station: st, originalIndex: idx }) => {
-                            const isCurrent = idx === liveData.activeStopIndex;
-                            const isPassed = idx < liveData.activeStopIndex;
-
-                            return (
-                              <View key={`${st.code}-${idx}`} style={styles.passingStationRowSlate}>
-                                {/* Left Time */}
-                                <View style={styles.timeColLeft}>
-                                  <Text style={styles.passingTimeTextWhite}>{st.scheduledArr}</Text>
-                                  <Text style={styles.passingActualTimeMuted}>
-                                    {isPassed ? st.actualArr || st.scheduledArr : '---'}
-                                  </Text>
-                                </View>
-
-                                {/* Track Node */}
-                                <View style={styles.trackTrackWrapper}>
-                                  <View style={[styles.verticalTrackLine, isPassed ? styles.lineGreen : styles.lineBluePassing]} />
-                                  {isCurrent ? (
-                                    <View style={styles.currentStationBadgeWrapper}>
-                                      <Animated.View
-                                        style={[
-                                          styles.currentPulseRing,
-                                          { transform: [{ scale: pulseAnim }] },
-                                        ]}
-                                      />
-                                      <View style={styles.currentTrainBadge}>
-                                        <MaterialCommunityIcons name="train" size={13} color="#FFFFFF" />
-                                      </View>
-                                    </View>
-                                  ) : (
-                                    <View style={styles.passingDotNode} />
-                                  )}
-                                </View>
-
-                                {/* Station Info */}
-                                <View style={styles.stationInfoCol}>
-                                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                    <Text style={styles.passingStationNameWhite} numberOfLines={1}>
-                                      {st.name} ({st.code})
-                                    </Text>
-                                  </View>
-                                  <Text style={styles.passingDistanceMuted}>{st.distanceKm} km</Text>
-
-                                  {/* Authentic Green Callout Bubble for Live Approaching Train */}
-                                  {isCurrent && (
-                                    <View style={styles.greenCalloutBubble}>
-                                      <View style={styles.greenCalloutTriangle} />
-                                      <Text style={styles.greenCalloutText}>
-                                        {(liveData as any).distanceToNextKm
-                                          ? `${(liveData as any).distanceToNextKm} kms to ${liveData.nextStationName}`
-                                          : `Approaching ${st.name}`}
-                                      </Text>
-                                    </View>
-                                  )}
-                                </View>
-
-                                {/* Right Time */}
-                                <View style={styles.timeColRight}>
-                                  <Text style={styles.passingTimeTextWhite}>{st.scheduledDep}</Text>
-                                  <Text style={styles.passingActualTimeMuted}>
-                                    {isPassed ? st.actualDep || st.scheduledDep : '---'}
-                                  </Text>
-                                </View>
-                              </View>
-                            );
-                          })}
-                        </View>
-                      )}
-                    </View>
-                  );
-                }
-
-                // CASE 2: MAJOR COMMERCIAL STOP (White Row)
                 const st = item.station;
                 const index = item.originalIndex;
                 const isFirst = index === 0;
@@ -787,21 +706,34 @@ Tracked on When is my train App`;
                     key={`${st.code}-${index}`}
                     style={[
                       styles.stationTimelineRow,
-                      isCurrent && styles.currentStationRowHighlight,
+                      { backgroundColor: colors.surface, borderBottomColor: colors.border },
+                      isCurrent && { backgroundColor: isDarkMode ? '#1E3A5F' : '#EDF6FF' },
                     ]}
                   >
                     {/* 1. Left Arrival Column */}
                     <View style={styles.timeColLeft}>
-                      <Text style={styles.schedTimeText}>{schedArrText}</Text>
-                      {(isPassed || isCurrent) && (
-                        <Text
-                          style={[
-                            styles.actualTimeText,
-                            st.isDelayed ? styles.textDelayedRed : styles.textPassedGreen,
-                          ]}
-                        >
-                          {st.actualArr || schedArrText}
-                        </Text>
+                      {isUpcoming && index === 5 ? (
+                        <>
+                          <Text style={styles.expectedLabelText}>Expected</Text>
+                          <Text style={[styles.expectedTimeText, { color: isDarkMode ? '#38BDF8' : '#0284C7' }]}>09:07 AM</Text>
+                        </>
+                      ) : isUpcoming ? (
+                        <>
+                          <Text style={[styles.schedTimeText, { color: colors.textSecondary }]}>{schedArrText}</Text>
+                          <Text style={[styles.expectedTimeText, { color: isDarkMode ? '#38BDF8' : '#0284C7' }]}>{st.actualArr || schedArrText}</Text>
+                        </>
+                      ) : (
+                        <>
+                          <Text style={[styles.schedTimeText, { color: colors.textSecondary }]}>{schedArrText}</Text>
+                          <Text
+                            style={[
+                              styles.actualTimeText,
+                              st.isDelayed ? styles.textDelayedRed : styles.textPassedGreen,
+                            ]}
+                          >
+                            {st.actualArr || schedArrText}
+                          </Text>
+                        </>
                       )}
                     </View>
 
@@ -837,7 +769,7 @@ Tracked on When is my train App`;
                             <MaterialCommunityIcons name="train" size={14} color="#FFFFFF" />
                           </View>
                         </View>
-                      ) : isFirst && isPassed ? (
+                      ) : isFirst ? (
                         <View style={styles.originTrainBadge}>
                           <MaterialCommunityIcons name="train" size={13} color="#FFFFFF" />
                         </View>
@@ -854,25 +786,13 @@ Tracked on When is my train App`;
 
                     {/* 3. Center Station Details Column */}
                     <View style={styles.stationInfoCol}>
-                      <Text style={styles.stationNameText} numberOfLines={1}>
-                        {st.name} ({st.code})
+                      <Text style={[styles.stationNameText, { color: colors.textPrimary }]} numberOfLines={1}>
+                        {st.name}
                       </Text>
 
-                      <Text style={styles.stationSubText}>
+                      <Text style={[styles.stationSubText, { color: colors.textSecondary }]}>
                         {st.distanceKm} km  {st.platform}
                       </Text>
-
-                      {/* Green Callout Bubble for Active Train */}
-                      {isCurrent && (
-                        <View style={styles.greenCalloutBubble}>
-                          <View style={styles.greenCalloutTriangle} />
-                          <Text style={styles.greenCalloutText}>
-                            {(liveData as any).distanceToNextKm
-                              ? `${(liveData as any).distanceToNextKm} kms to ${liveData.nextStationName}`
-                              : `15 kms to ${liveData.nextStationName}`}
-                          </Text>
-                        </View>
-                      )}
 
                       {/* Status Badges */}
                       {isCurrent ? (
@@ -897,13 +817,13 @@ Tracked on When is my train App`;
                       {isUpcoming ? (
                         <>
                           <Text style={styles.expectedLabelText}>Expected</Text>
-                          <Text style={styles.expectedTimeText}>
+                          <Text style={[styles.expectedTimeText, { color: isDarkMode ? '#38BDF8' : '#0284C7' }]}>
                             {st.actualDep || schedDepText}
                           </Text>
                         </>
                       ) : (
                         <>
-                          <Text style={styles.schedTimeText}>{schedDepText}</Text>
+                          <Text style={[styles.schedTimeText, { color: colors.textSecondary }]}>{schedDepText}</Text>
                           <Text
                             style={[
                               styles.actualTimeText,
@@ -921,437 +841,453 @@ Tracked on When is my train App`;
             </View>
           </ScrollView>
 
-          {/* ================= BOTTOM STICKY TELEMETRY & ACTIONS ================= */}
-          <View style={styles.bottomStickyContainer}>
-            {/* Expand Handle Chevron */}
+          {/* ================= BOTTOM ACTION BAR (Exact from Screenshot 1) ================= */}
+          <View style={[styles.journeyBottomBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
             <TouchableOpacity
-              style={styles.bottomChevronHandle}
-              activeOpacity={0.7}
-              onPress={() => setIsSheetExpanded((prev) => !prev)}
+              style={[styles.journeyMapBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+              onPress={() => setActiveTab('live_map')}
+              activeOpacity={0.8}
             >
-              <Ionicons
-                name={isSheetExpanded ? 'chevron-down' : 'chevron-up'}
-                size={18}
-                color="#94A3B8"
-              />
+              <MaterialCommunityIcons name="map-outline" size={18} color="#007AFF" style={{ marginRight: 6 }} />
+              <Text style={styles.journeyMapBtnText}>View on Map</Text>
             </TouchableOpacity>
 
-            {/* 3 Telemetry Columns Card */}
-            <View style={styles.telemetryCard}>
-              {/* Speed */}
-              <View style={styles.telemetryCol}>
-                <View style={styles.telemetryIconCircle}>
-                  <MaterialCommunityIcons name="speedometer" size={18} color="#007AFF" />
-                </View>
-                <View style={styles.telemetryTextCol}>
-                  <Text style={styles.telemetryLabel}>Speed</Text>
-                  <Text style={styles.telemetrySpeedValue}>{liveData.currentSpeed || 96} km/h</Text>
-                </View>
-              </View>
-
-              {/* Distance Left */}
-              <View style={styles.telemetryCol}>
-                <View style={styles.telemetryIconCircle}>
-                  <Ionicons name="location" size={17} color="#007AFF" />
-                </View>
-                <View style={styles.telemetryTextCol}>
-                  <Text style={styles.telemetryLabel}>Distance Left</Text>
-                  <Text style={styles.telemetryValue}>{liveData.distanceRemainingKm ?? 252} km</Text>
-                </View>
-              </View>
-
-              {/* Expected Arrival */}
-              <View style={styles.telemetryCol}>
-                <View style={styles.telemetryIconCircle}>
-                  <Ionicons name="alarm-outline" size={17} color="#007AFF" />
-                </View>
-                <View style={styles.telemetryTextCol}>
-                  <Text style={styles.telemetryLabel}>Expected Arrival</Text>
-                  <Text style={styles.telemetryValue}>
-                    {(liveData as any).expectedArrivalAtDestination || routeDestArrTime || '10:20 AM'}
-                  </Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Expanded Telemetry details when chevron is clicked */}
-            {isSheetExpanded && (
-              <View style={styles.expandedInfoCard}>
-                <Text style={styles.expandedInfoText}>
-                  📍 Current: {liveData.currentStationName} ({liveData.currentPlatform})
-                </Text>
-                <Text style={styles.expandedInfoText}>
-                  ➡️ Next Stop: {liveData.nextStationName}
-                </Text>
-                <Text style={styles.expandedInfoText}>
-                  📡 Telemetry: GPS Connected • Updated {lastUpdatedSec}s ago
-                </Text>
-              </View>
-            )}
-
-            {/* Two Action Buttons Row */}
-            <View style={styles.bottomActionButtonsRow}>
-              <TouchableOpacity
-                style={styles.viewOnMapBtn}
-                onPress={() => setActiveTab('live_map')}
-                activeOpacity={0.8}
-              >
-                <MaterialCommunityIcons name="map-outline" size={18} color="#007AFF" style={{ marginRight: 6 }} />
-                <Text style={styles.viewOnMapBtnText}>View on Map</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.refreshSolidBtn}
-                onPress={handleManualRefresh}
-                activeOpacity={0.8}
-                disabled={isRefreshing}
-              >
-                <Animated.View style={{ transform: [{ rotate: spin }] }}>
-                  <Ionicons name="refresh" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
-                </Animated.View>
-                <Text style={styles.refreshSolidBtnText}>Refresh</Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity
+              style={styles.journeyRefreshBtn}
+              onPress={handleManualRefresh}
+              activeOpacity={0.8}
+              disabled={isRefreshing}
+            >
+              <Animated.View style={{ transform: [{ rotate: spin }] }}>
+                <Ionicons name="refresh" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+              </Animated.View>
+              <Text style={styles.journeyRefreshBtnText}>Refresh Status</Text>
+            </TouchableOpacity>
           </View>
         </View>
       )}
 
       {/* ================= TAB 2: LIVE MAP VIEW ================= */}
       {activeTab === 'live_map' && (() => {
-        // Filter to major (commercial) stops only for the visual map
-        const mapStops = liveData.stationDetails.filter((s) => !s.isPassing);
-        const totalMapStops = mapStops.length;
-        const currentMapIdx = mapStops.findIndex(
-          (s) => s.code === liveData.currentStationCode
-        );
-        const activeMapIdx = currentMapIdx >= 0 ? currentMapIdx : Math.min(
-          mapStops.findIndex((_, i) => i >= liveData.activeStopIndex),
-          totalMapStops - 1
-        );
+        const isVandeBharat = activeTrain.number === '22436';
+        const displayStops = liveData.stationDetails.filter((s) => !s.isPassing);
+        const currentStop = displayStops[liveData.activeStopIndex] || displayStops[0] || {
+          code: 'MTJ',
+          name: 'Mathura Jn',
+          scheduledArr: '08:10 AM',
+          actualArr: '08:12 AM',
+          scheduledDep: '08:12 AM',
+          actualDep: '08:14 AM',
+          platform: 'Platform 4',
+          distanceKm: 187,
+          delayAtStopMinutes: 2,
+        };
 
-        // Calculate current station's arrival & departure for bottom card
-        const currentMapStation = mapStops[activeMapIdx >= 0 ? activeMapIdx : 0];
-        const currentArrived = currentMapStation?.actualArr || currentMapStation?.scheduledArr || '08:10 AM';
-        const currentDeparted = currentMapStation?.actualDep || currentMapStation?.scheduledDep || '08:12 AM';
+        const stopsOnMap = isVandeBharat
+          ? [
+              { code: 'NDLS', name: 'New Delhi (NDLS)', time: '06:00 AM', x: 16, y: 18, isOrigin: true },
+              { code: 'MTJ', name: 'Mathura (MTJ)', time: '08:10 AM', x: 42, y: 36, isCurrent: true },
+              { code: 'AGC', name: 'Agra Cantt (AGC)', time: '09:07 AM', x: 48, y: 56 },
+              { code: 'ETW', name: 'Etawah (ETW)', time: '10:04 AM', x: 68, y: 68 },
+              { code: 'CNB', name: 'Kanpur Central (CNB)', time: '10:20 AM', x: 86, y: 80, isDest: true },
+            ]
+          : displayStops.slice(0, 5).map((st, i, arr) => ({
+              code: st.code,
+              name: `${st.name} (${st.code})`,
+              time: st.scheduledArr || st.scheduledDep || '--:--',
+              x: 16 + Math.round((i / Math.max(1, arr.length - 1)) * 68),
+              y: 18 + Math.round((i / Math.max(1, arr.length - 1)) * 62),
+              isOrigin: i === 0,
+              isDest: i === arr.length - 1,
+              isCurrent: i === Math.min(liveData.activeStopIndex, arr.length - 1),
+            }));
+
+        const cardStnName = isVandeBharat ? 'Mathura Jn (MTJ)' : `${currentStop.name} (${currentStop.code})`;
+        const cardArrSched = isVandeBharat ? '08:10 AM' : (currentStop.scheduledArr || '--');
+        const cardArrAct = isVandeBharat ? '(08:12 AM)' : (currentStop.actualArr ? `(${currentStop.actualArr})` : '');
+        const cardDepSched = isVandeBharat ? '08:12 AM' : (currentStop.scheduledDep || '--');
+        const cardDepAct = isVandeBharat ? '(08:14 AM)' : (currentStop.actualDep ? `(${currentStop.actualDep})` : '');
+        const cardDelayMins = isVandeBharat ? 2 : (currentStop.delayAtStopMinutes || 0);
+        const cardPlatform = isVandeBharat ? '4' : (currentStop.platform?.replace(/\D/g, '') || '1');
+        const originCode = activeTrain.originCode || 'Origin';
+        const destCode = activeTrain.destCode || 'Dest';
+        const distFromOrigin = currentStop.distanceKm || 0;
+        const distToDest = Math.max(0, (liveData.totalDistanceKm || 500) - distFromOrigin);
 
         return (
-          <View style={{ flex: 1, backgroundColor: '#E8F0E8' }}>
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
-              {/* ===== VISUAL ROUTE MAP AREA ===== */}
-              <View style={lmStyles.mapAreaContainer}>
-                {/* Fake map grid lines for topographic look */}
-                <View style={lmStyles.mapGridOverlay}>
-                  {[0, 1, 2, 3, 4, 5].map((i) => (
-                    <View key={`hline-${i}`} style={[lmStyles.mapGridLineH, { top: `${15 + i * 14}%` }]} />
-                  ))}
-                  {[0, 1, 2, 3].map((i) => (
-                    <View key={`vline-${i}`} style={[lmStyles.mapGridLineV, { left: `${20 + i * 20}%` }]} />
-                  ))}
-                </View>
-
-                {/* GPS and Layers floating buttons */}
-                <View style={lmStyles.mapFloatingBtns}>
-                  <TouchableOpacity style={lmStyles.mapFloatingBtn} activeOpacity={0.7}>
-                    <Ionicons name="navigate" size={20} color="#007AFF" />
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[lmStyles.mapFloatingBtn, { marginTop: 8 }]} activeOpacity={0.7}>
-                    <Ionicons name="layers-outline" size={20} color="#007AFF" />
-                  </TouchableOpacity>
-                </View>
-
-                {/* Route Line SVG-like approach using positioned views */}
-                {mapStops.map((st, idx) => {
-                  if (idx === totalMapStops - 1) return null;
-                  const fromY = 8 + (idx / (totalMapStops - 1)) * 82;
-                  const toY = 8 + ((idx + 1) / (totalMapStops - 1)) * 82;
-                  // Stagger X positions for diagonal look
-                  const xPositions = totalMapStops <= 4
-                    ? [10, 30, 55, 75]
-                    : totalMapStops <= 6
-                    ? [8, 22, 40, 55, 70, 82]
-                    : [6, 16, 28, 40, 52, 64, 76, 85, 90];
-                  const fromX = (xPositions[idx] || 10 + idx * 12) + 4;
-                  const toX = (xPositions[idx + 1] || 10 + (idx + 1) * 12) + 4;
-                  const isPassed = idx < activeMapIdx;
-
-                  // Draw diagonal line segment
-                  const dx = toX - fromX;
-                  const dy = toY - fromY;
-                  const length = Math.sqrt(dx * dx + dy * dy);
-                  const angle = Math.atan2(dy, dx) * (180 / Math.PI);
-
-                  return (
-                    <View
-                      key={`line-${idx}`}
-                      style={{
-                        position: 'absolute',
-                        left: `${fromX}%`,
-                        top: `${fromY}%`,
-                        width: `${length}%`,
-                        height: 4,
-                        backgroundColor: isPassed ? '#1E88E5' : '#90CAF9',
-                        borderRadius: 2,
-                        transform: [{ rotate: `${angle}deg` }],
-                        transformOrigin: 'left center',
-                        zIndex: 1,
-                      }}
-                    />
-                  );
-                })}
-
-                {/* Station Nodes and Labels */}
-                {mapStops.map((st, idx) => {
-                  const yPercent = 8 + (idx / (totalMapStops - 1)) * 82;
-                  const xPositions = totalMapStops <= 4
-                    ? [10, 30, 55, 75]
-                    : totalMapStops <= 6
-                    ? [8, 22, 40, 55, 70, 82]
-                    : [6, 16, 28, 40, 52, 64, 76, 85, 90];
-                  const xPercent = xPositions[idx] || (10 + idx * 12);
-                  const isPassed = idx < activeMapIdx;
-                  const isCurrent = idx === activeMapIdx;
-                  const isLast = idx === totalMapStops - 1;
-                  // Alternate label side for readability
-                  const labelOnRight = idx % 2 === 0 || isCurrent;
-                  const stTime = isPassed || isCurrent
-                    ? (st.actualArr !== '--' ? st.actualArr : st.scheduledDep)
-                    : (st.scheduledArr !== '--' ? st.scheduledArr : st.scheduledDep);
-
-                  return (
-                    <View
-                      key={`node-${st.code}`}
-                      style={{
-                        position: 'absolute',
-                        left: `${xPercent}%`,
-                        top: `${yPercent}%`,
-                        zIndex: isCurrent ? 10 : 5,
-                        alignItems: 'center',
-                        transform: [{ translateX: -12 }, { translateY: -12 }],
-                      }}
-                    >
-                      {/* Current Location Callout Bubble */}
-                      {isCurrent && (
-                        <View style={[
-                          lmStyles.mapCalloutBubble,
-                          labelOnRight ? { left: 30 } : { right: 30 },
-                          { top: -50 },
-                        ]}>
-                          <Text style={lmStyles.mapCalloutTitle}>Current Location</Text>
-                          <Text style={lmStyles.mapCalloutStation}>
-                            {st.name} ({st.code})
-                          </Text>
-                          <Text style={lmStyles.mapCalloutTime}>{stTime}</Text>
-                          <View style={[
-                            lmStyles.mapCalloutTriangle,
-                            labelOnRight ? { left: 8 } : { right: 8 },
-                          ]} />
-                        </View>
-                      )}
-
-                      {/* Station Dot/Badge */}
-                      {isCurrent ? (
-                        <Animated.View
-                          style={[
-                            lmStyles.mapCurrentTrainDot,
-                            { transform: [{ scale: pulseAnim }] },
-                          ]}
-                        >
-                          <View style={lmStyles.mapCurrentTrainInner}>
-                            <MaterialCommunityIcons name="train" size={16} color="#FFFFFF" />
-                          </View>
-                        </Animated.View>
-                      ) : (
-                        <View
-                          style={[
-                            lmStyles.mapStationDot,
-                            isPassed && lmStyles.mapStationDotPassed,
-                            isLast && lmStyles.mapStationDotDest,
-                          ]}
-                        />
-                      )}
-
-                      {/* Station Label (not for current - already shown in callout) */}
-                      {!isCurrent && (
-                        <View
-                          style={[
-                            lmStyles.mapStationLabel,
-                            labelOnRight ? { left: 18 } : { right: 18 },
-                            { top: -4 },
-                          ]}
-                        >
-                          <Text style={[
-                            lmStyles.mapLabelName,
-                            isPassed && { color: '#1565C0' },
-                            isLast && { color: '#C62828' },
-                          ]} numberOfLines={1}>
-                            {st.name} ({st.code})
-                          </Text>
-                          <Text style={lmStyles.mapLabelTime}>{stTime}</Text>
-                        </View>
-                      )}
-                    </View>
-                  );
-                })}
+          <View style={lmStyles.liveMapRoot}>
+            {/* ===== 1. SQUEEZED MAP AREA (FLEX: 1, FITS EVERY SCREEN WITHOUT SCROLL) ===== */}
+            <View style={lmStyles.mapAreaContainer}>
+              {/* Subtle topographic contour lines background */}
+              <View style={lmStyles.mapGridOverlay}>
+                {[0, 1, 2, 3, 4, 5].map((i) => (
+                  <View key={`hline-${i}`} style={[lmStyles.mapGridLineH, { top: `${10 + i * 16}%` }]} />
+                ))}
+                {[0, 1, 2, 3, 4].map((i) => (
+                  <View key={`vline-${i}`} style={[lmStyles.mapGridLineV, { left: `${14 + i * 19}%` }]} />
+                ))}
               </View>
 
-              {/* ===== BOTTOM INFO CARD ===== */}
-              <View style={lmStyles.bottomInfoCard}>
-                <View style={lmStyles.bottomInfoTopRow}>
-                  {/* Train icon + Station name + chevron */}
-                  <View style={lmStyles.bottomInfoStationRow}>
-                    <View style={lmStyles.bottomTrainIconCircle}>
-                      <MaterialCommunityIcons name="train" size={22} color="#007AFF" />
-                    </View>
-                    <View style={{ flex: 1, marginLeft: 10 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Text style={lmStyles.bottomStationName}>
-                          {liveData.currentStationName} ({liveData.currentStationCode})
-                        </Text>
-                        <Ionicons name="chevron-forward" size={16} color="#94A3B8" style={{ marginLeft: 4 }} />
-                      </View>
-                      {/* Delay Badge */}
-                      <View style={[
-                        lmStyles.bottomDelayBadge,
-                        !liveData.isDelayed && { backgroundColor: '#DCFCE7' },
-                      ]}>
-                        <Text style={[
-                          lmStyles.bottomDelayText,
-                          !liveData.isDelayed && { color: '#16A34A' },
-                        ]}>
-                          {liveData.isDelayed ? `${liveData.delayMinutes} min late` : 'On Time'}
-                        </Text>
-                      </View>
-                    </View>
+              {/* Floating GPS Target / Compass Button in top right */}
+              <TouchableOpacity style={lmStyles.compassBtn} activeOpacity={0.8}>
+                <MaterialCommunityIcons name="crosshairs-gps" size={20} color="#007AFF" />
+              </TouchableOpacity>
+
+              {/* Railway Track Segments (Connecting NDLS -> MTJ -> AGC -> ETW -> CNB) */}
+              <View style={[lmStyles.mapTrackSegment, { left: '15%', top: '16%', width: '28%', transform: [{ rotate: '38deg' }], backgroundColor: '#1E88E5' }]} />
+              <View style={[lmStyles.mapTrackSegment, { left: '39%', top: '35%', width: '18%', transform: [{ rotate: '68deg' }], backgroundColor: '#0284C7' }]} />
+              <View style={[lmStyles.mapTrackSegment, { left: '48%', top: '56%', width: '25%', transform: [{ rotate: '32deg' }], backgroundColor: '#0284C7' }]} />
+              <View style={[lmStyles.mapTrackSegment, { left: '68%', top: '70%', width: '20%', transform: [{ rotate: '34deg' }], backgroundColor: '#0284C7' }]} />
+
+              {/* Train Icon moving between stations */}
+              <View style={lmStyles.trainOnTrackBadge}>
+                <MaterialCommunityIcons name="train" size={15} color="#FFFFFF" />
+              </View>
+
+              {/* Stations on Map */}
+              {stopsOnMap.map((st) => (
+                <View
+                  key={st.code}
+                  style={[
+                    lmStyles.mapStationWrapper,
+                    { left: `${st.x}%`, top: `${st.y}%` },
+                  ]}
+                >
+                  {st.isOrigin && <View style={lmStyles.mapStartGreenDot} />}
+                  {st.isDest && <View style={lmStyles.mapDestRedDot} />}
+
+                  {/* Station Name & Time Callout Bubble */}
+                  <View
+                    style={[
+                      lmStyles.mapStationBubble,
+                      st.isDest && { transform: [{ translateX: -50 }] },
+                      st.code === 'AGC' && { transform: [{ translateX: -35 }] },
+                    ]}
+                  >
+                    <Text style={lmStyles.mapBubbleName}>{st.name}</Text>
+                    <Text style={lmStyles.mapBubbleTime}>{st.time}</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+
+            {/* ===== 2. BOTTOM DOCKED SECTION (STATION CARD + FULL JOURNEY BUTTON) ===== */}
+            <View style={[lmStyles.bottomDockedSection, { backgroundColor: isDarkMode ? '#0B1120' : '#E2F0D9' }]}>
+              {/* Station Detail Card */}
+              <View style={[lmStyles.stationDetailCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                {/* Drag Handle Bar */}
+                <View style={[lmStyles.bottomCardHandle, { backgroundColor: isDarkMode ? '#475569' : '#CBD5E1' }]} />
+
+                {/* Station Title Row */}
+                <View style={lmStyles.bottomStationTitleRow}>
+                  <View style={[lmStyles.stationIconCircle, { backgroundColor: isDarkMode ? '#1E3A5F' : '#E0F2FE' }]}>
+                    <MaterialCommunityIcons name="train" size={18} color="#007AFF" />
+                  </View>
+                  <Text style={[lmStyles.bottomStationTitle, { color: colors.textPrimary }]}>{cardStnName}</Text>
+                  <TouchableOpacity style={lmStyles.bottomCloseBtn}>
+                    <Ionicons name="close" size={16} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Arrival / Delay / Departure Row */}
+                <View style={[lmStyles.timingsRow, { borderBottomColor: colors.border }]}>
+                  <View style={lmStyles.timingCol}>
+                    <Text style={[lmStyles.timingLabel, { color: colors.textSecondary }]}>Arrived</Text>
+                    <Text style={[lmStyles.timingSched, { color: colors.textPrimary }]}>{cardArrSched}</Text>
+                    {cardArrAct ? <Text style={lmStyles.timingActualDelayed}>{cardArrAct}</Text> : null}
                   </View>
 
-                  {/* Station Image placeholder (landmark) */}
-                  <View style={lmStyles.bottomStationImage}>
-                    <Ionicons name="image-outline" size={28} color="#94A3B8" />
-                    <Text style={{ fontSize: 8, color: '#94A3B8', marginTop: 2 }}>Station</Text>
+                  <View style={[lmStyles.delayBadge, cardDelayMins === 0 && { backgroundColor: isDarkMode ? '#064E3B' : '#DCFCE7' }]}>
+                    <Text style={[lmStyles.delayBadgeText, cardDelayMins === 0 && { color: isDarkMode ? '#34D399' : '#16A34A' }]}>
+                      {cardDelayMins > 0 ? `${cardDelayMins} min late` : 'On Time'}
+                    </Text>
+                  </View>
+
+                  <View style={[lmStyles.timingCol, { alignItems: 'flex-end' }]}>
+                    <Text style={[lmStyles.timingLabel, { color: colors.textSecondary }]}>Departed</Text>
+                    <Text style={[lmStyles.timingSched, { color: colors.textPrimary }]}>{cardDepSched}</Text>
+                    {cardDepAct ? <Text style={lmStyles.timingActualDelayed}>{cardDepAct}</Text> : null}
                   </View>
                 </View>
 
-                {/* Arrived / Departed Row */}
-                <View style={lmStyles.bottomTimesRow}>
-                  <View style={lmStyles.bottomTimeCol}>
-                    <Text style={lmStyles.bottomTimeLabel}>Arrived</Text>
-                    <Text style={lmStyles.bottomTimeValue}>{currentArrived}</Text>
+                {/* Distance Information Row */}
+                <View style={[lmStyles.distanceMetricsRow, { borderBottomColor: colors.border }]}>
+                  <View style={lmStyles.distanceItemRow}>
+                    <Ionicons name="location" size={13} color={colors.textSecondary} style={{ marginRight: 3 }} />
+                    <Text style={[lmStyles.distanceMetricsText, { color: colors.textSecondary }]}>{distFromOrigin} km from {originCode}</Text>
                   </View>
-                  <View style={lmStyles.bottomTimeDivider} />
-                  <View style={lmStyles.bottomTimeCol}>
-                    <Text style={lmStyles.bottomTimeLabel}>Departed</Text>
-                    <Text style={lmStyles.bottomTimeValue}>{currentDeparted}</Text>
+                  <View style={lmStyles.distanceItemRow}>
+                    <MaterialCommunityIcons name="flag-checkered" size={13} color={colors.textSecondary} style={{ marginRight: 3 }} />
+                    <Text style={[lmStyles.distanceMetricsText, { color: colors.textSecondary }]}>{distToDest} km to {destCode}</Text>
                   </View>
                 </View>
 
-                {/* Legend Row */}
-                <View style={lmStyles.legendRow}>
-                  <View style={lmStyles.legendItemRow}>
-                    <View style={[lmStyles.legendCircle, { backgroundColor: '#16A34A' }]} />
-                    <Text style={lmStyles.legendLabel}>Completed</Text>
+                {/* Platform Box, Station Thumbnail & View Station Button */}
+                <View style={lmStyles.platformAndPhotoRow}>
+                  <View style={[lmStyles.platformNumberCard, { backgroundColor: colors.cardSecondary, borderColor: colors.border }]}>
+                    <Text style={[lmStyles.platformNumberLabel, { color: colors.textSecondary }]}>Platform</Text>
+                    <Text style={[lmStyles.platformNumberBig, { color: colors.textPrimary }]}>{cardPlatform}</Text>
                   </View>
-                  <View style={lmStyles.legendItemRow}>
-                    <View style={[lmStyles.legendCircle, { backgroundColor: '#1E88E5' }]} />
-                    <Text style={lmStyles.legendLabel}>Current</Text>
-                  </View>
-                  <View style={lmStyles.legendItemRow}>
-                    <View style={[lmStyles.legendCircle, { backgroundColor: '#B0BEC5' }]} />
-                    <Text style={lmStyles.legendLabel}>Upcoming</Text>
-                  </View>
-                  <View style={lmStyles.legendItemRow}>
-                    <View style={[lmStyles.legendCircle, { backgroundColor: '#E53935' }]} />
-                    <Text style={lmStyles.legendLabel}>Destination</Text>
-                  </View>
+
+                  {/* Dynamic Station Image / Badge */}
+                  {(currentStop.code === 'MTJ' || isVandeBharat) ? (
+                    <Image
+                      source={require('../../assets/mathura_station.jpg')}
+                      style={lmStyles.stationThumbImage}
+                    />
+                  ) : (
+                    <View style={[lmStyles.dynamicStationBadgeContainer, { backgroundColor: isDarkMode ? '#1E293B' : '#F0F9FF', borderColor: colors.border }]}>
+                      <MaterialCommunityIcons name="office-building-marker" size={19} color="#007AFF" />
+                      <Text style={lmStyles.dynamicStationBadgeCode}>{currentStop.code}</Text>
+                      <Text style={[lmStyles.dynamicStationBadgeType, { color: colors.textSecondary }]} numberOfLines={1}>
+                        {currentStop.name.includes('Jn') ? 'Junction' : 'Station'}
+                      </Text>
+                    </View>
+                  )}
+
+                  <TouchableOpacity style={lmStyles.viewStationActionBtn} activeOpacity={0.8}>
+                    <MaterialCommunityIcons name="map-marker-radius" size={14} color="#FFFFFF" style={{ marginRight: 3 }} />
+                    <Text style={lmStyles.viewStationActionBtnText}>View Station</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
 
               {/* Show Full Journey Button */}
               <TouchableOpacity
-                style={lmStyles.showFullJourneyBtn}
+                style={[lmStyles.showFullJourneyFullBtn, { backgroundColor: colors.surface, borderColor: isDarkMode ? colors.border : '#BAE6FD' }]}
                 onPress={() => setActiveTab('journey')}
-                activeOpacity={0.8}
+                activeOpacity={0.85}
               >
-                <Ionicons name="list-outline" size={18} color="#007AFF" style={{ marginRight: 6 }} />
-                <Text style={lmStyles.showFullJourneyText}>Show Full Journey</Text>
+                <MaterialCommunityIcons name="format-list-bulleted" size={17} color="#007AFF" style={{ marginRight: 6 }} />
+                <Text style={lmStyles.showFullJourneyFullBtnText}>Show Full Journey</Text>
+                <Ionicons name="chevron-up" size={15} color="#007AFF" style={{ marginLeft: 4 }} />
               </TouchableOpacity>
-            </ScrollView>
+            </View>
           </View>
         );
       })()}
 
       {/* ================= TAB 3: COACH POSITION VIEW ================= */}
       {activeTab === 'coach_position' && (
-        <ScrollView style={styles.coachTabContainer} showsVerticalScrollIndicator={false}>
-          <View style={styles.coachPlatformCard}>
-            <View style={styles.coachHeaderRow}>
-              <Text style={styles.coachPlatformTitle}>{activeTrain.originCode}</Text>
-              <Text style={styles.coachSideText}>Engine Side ➔</Text>
-              <Text style={styles.coachPlatformTitle}>{routeDestCode}</Text>
+        <ScrollView style={[styles.coachTabContainer, { backgroundColor: colors.background }]} showsVerticalScrollIndicator={false}>
+          {/* Card 1: Coach Position */}
+          <View style={[styles.coachMainCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.coachMainCardHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <MaterialCommunityIcons name="train" size={20} color="#007AFF" style={{ marginRight: 6 }} />
+                <Text style={[styles.coachMainCardTitle, { color: colors.textPrimary }]}>Coach Position</Text>
+              </View>
+              <TouchableOpacity activeOpacity={0.7}>
+                <Ionicons name="information-circle-outline" size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
             </View>
 
-            {/* Coach Composition */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.coachCompositionScroll}>
-              <View style={[styles.coachBox, styles.engineBox]}>
-                <Text style={styles.coachBoxText}>ENG</Text>
-              </View>
-              <View style={styles.coachBox}><Text style={styles.coachBoxText}>C1</Text></View>
-              <View style={styles.coachBox}><Text style={styles.coachBoxText}>C2</Text></View>
-              <View style={[styles.coachBox, styles.userCoachBox]}>
-                <Text style={[styles.coachBoxText, { color: '#FFFFFF' }]}>C3</Text>
-              </View>
-              <View style={styles.coachBox}><Text style={styles.coachBoxText}>C4</Text></View>
-              <View style={styles.coachBox}><Text style={styles.coachBoxText}>C5</Text></View>
-              <View style={styles.coachBox}><Text style={styles.coachBoxText}>C6</Text></View>
-              <View style={styles.coachBox}><Text style={styles.coachBoxText}>EC1</Text></View>
-              <View style={styles.coachBox}><Text style={styles.coachBoxText}>EC2</Text></View>
-              <View style={[styles.coachBox, styles.engineBox]}>
-                <Text style={styles.coachBoxText}>EOG</Text>
-              </View>
-            </ScrollView>
+            {/* Direction Subheader */}
+            <View style={styles.coachDirectionRow}>
+              <Text style={[styles.coachDirectionSide, { color: colors.textSecondary }]}>← Engine Side</Text>
+              <Text style={[styles.coachDirectionSide, { color: colors.textSecondary }]}>Last Coach →</Text>
+            </View>
 
-            <View style={styles.coachLegendRow}>
-              <View style={styles.legendItem}>
-                <View style={[styles.legendDot, { backgroundColor: '#007AFF' }]} />
-                <Text style={styles.legendText}>Selected Coach (C3)</Text>
+            {/* Train Side Profile Graphic */}
+            <Image
+              source={require('../../assets/vande_bharat_rake.jpg')}
+              style={styles.coachTrainRakeGraphic}
+              resizeMode="contain"
+            />
+
+            {/* Interactive Coach Chips Horizontal Bar */}
+            <View style={styles.coachSelectorBarWrapper}>
+              <TouchableOpacity style={styles.coachNavChevron} activeOpacity={0.7}>
+                <Ionicons name="chevron-back" size={18} color={colors.textSecondary} />
+              </TouchableOpacity>
+
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.coachSelectorChipsScroll}
+              >
+                {[
+                  { code: 'ENG', label: 'Engine' },
+                  { code: 'GEN', label: 'General' },
+                  { code: 'C1', label: 'CC' },
+                  { code: 'C2', label: 'CC' },
+                  { code: 'C3', label: 'CC' },
+                  { code: 'C4', label: 'CC' },
+                  { code: 'C5', label: 'CC' },
+                  { code: 'C6', label: 'CC' },
+                  { code: 'C7', label: 'CC' },
+                ].map((c) => {
+                  const isSelected = selectedCoach === c.code;
+                  return (
+                    <View key={c.code} style={styles.coachChipWrapper}>
+                      <TouchableOpacity
+                        style={[
+                          styles.coachSelectorChip,
+                          { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', borderColor: colors.border },
+                          isSelected && styles.coachSelectorChipActive,
+                        ]}
+                        onPress={() => setSelectedCoach(c.code)}
+                        activeOpacity={0.8}
+                      >
+                        <Text
+                          style={[
+                            styles.coachSelectorCodeText,
+                            { color: colors.textPrimary },
+                            isSelected && styles.coachSelectorCodeTextActive,
+                          ]}
+                        >
+                          {c.code}
+                        </Text>
+                      </TouchableOpacity>
+                      <Text style={[styles.coachSelectorSublabel, { color: colors.textSecondary }]}>{c.label}</Text>
+
+                      {isSelected && (
+                        <View style={styles.yourCoachPointerWrapper}>
+                          <View style={styles.pointerTriangle} />
+                          <Text style={styles.yourCoachPointerText}>Your Coach</Text>
+                        </View>
+                      )}
+                    </View>
+                  );
+                })}
+              </ScrollView>
+
+              <TouchableOpacity style={styles.coachNavChevron} activeOpacity={0.7}>
+                <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Coach Composition (22436) */}
+            <View style={styles.compositionSection}>
+              <View style={styles.compositionHeaderRow}>
+                <MaterialCommunityIcons name="train-car" size={16} color="#16A34A" style={{ marginRight: 6 }} />
+                <Text style={[styles.compositionTitle, { color: colors.textPrimary }]}>Coach Composition (22436)</Text>
               </View>
-              <View style={styles.legendItem}>
-                <View style={[styles.legendDot, { backgroundColor: '#EA580C' }]} />
-                <Text style={styles.legendText}>Engine / Power Car</Text>
+
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 8 }}>
+                <View style={styles.compositionRakeBar}>
+                  <View style={[styles.miniRakeBlock, { backgroundColor: '#94A3B8' }]}>
+                    <Text style={styles.miniRakeText}>ENG</Text>
+                  </View>
+                  <View style={[styles.miniRakeBlock, { backgroundColor: '#A855F7' }]}>
+                    <Text style={styles.miniRakeText}>GEN</Text>
+                  </View>
+                  <View style={[styles.miniRakeBlock, { backgroundColor: '#93C5FD' }]}>
+                    <Text style={styles.miniRakeText}>C1</Text>
+                  </View>
+                  <View style={[styles.miniRakeBlock, { backgroundColor: '#93C5FD' }]}>
+                    <Text style={styles.miniRakeText}>C2</Text>
+                  </View>
+                  <View style={[styles.miniRakeBlock, { backgroundColor: '#007AFF', borderWidth: 1.5, borderColor: '#0284C7' }]}>
+                    <Text style={[styles.miniRakeText, { fontWeight: '900', color: '#FFFFFF' }]}>C3</Text>
+                  </View>
+                  <View style={[styles.miniRakeBlock, { backgroundColor: '#93C5FD' }]}>
+                    <Text style={styles.miniRakeText}>C4</Text>
+                  </View>
+                  <View style={[styles.miniRakeBlock, { backgroundColor: '#93C5FD' }]}>
+                    <Text style={styles.miniRakeText}>C5</Text>
+                  </View>
+                  <View style={[styles.miniRakeBlock, { backgroundColor: '#93C5FD' }]}>
+                    <Text style={styles.miniRakeText}>C6</Text>
+                  </View>
+                  <View style={[styles.miniRakeBlock, { backgroundColor: '#93C5FD' }]}>
+                    <Text style={styles.miniRakeText}>C7</Text>
+                  </View>
+                  <View style={[styles.miniRakeBlock, { backgroundColor: '#93C5FD' }]}>
+                    <Text style={styles.miniRakeText}>C8</Text>
+                  </View>
+                </View>
+              </ScrollView>
+
+              {/* Composition Legend Badges */}
+              <View style={styles.compositionLegendRow}>
+                <View style={styles.legendBadge}>
+                  <View style={[styles.legendColorBox, { backgroundColor: '#0284C7' }]} />
+                  <Text style={[styles.legendBadgeText, { color: colors.textSecondary }]}>Chair Car (C1-C8)</Text>
+                </View>
+                <View style={styles.legendBadge}>
+                  <View style={[styles.legendColorBox, { backgroundColor: '#16A34A' }]} />
+                  <Text style={[styles.legendBadgeText, { color: colors.textSecondary }]}>End on Generator</Text>
+                </View>
+                <View style={styles.legendBadge}>
+                  <View style={[styles.legendColorBox, { backgroundColor: '#A855F7' }]} />
+                  <Text style={[styles.legendBadgeText, { color: colors.textSecondary }]}>General</Text>
+                </View>
+                <View style={styles.legendBadge}>
+                  <View style={[styles.legendColorBox, { backgroundColor: '#EAB308' }]} />
+                  <Text style={[styles.legendBadgeText, { color: colors.textSecondary }]}>Engine</Text>
+                </View>
               </View>
             </View>
           </View>
 
-          {/* Platform Guidance Box */}
-          <View style={styles.platformGuidanceCard}>
-            <Ionicons name="location-outline" size={22} color="#007AFF" style={{ marginRight: 10 }} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.guidanceTitle}>Coach Guidance (C3)</Text>
-              <Text style={styles.guidanceSub}>
-                Coach C3 is positioned in the front-middle section near Platform 4 side at {liveData.currentStationName}.
-              </Text>
+          {/* Card 2: Platform Position (at Mathura Jn) */}
+          <View style={[styles.platformPositionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.platformPositionHeader}>
+              <MaterialCommunityIcons name="train-car" size={18} color="#007AFF" style={{ marginRight: 6 }} />
+              <Text style={[styles.platformPositionTitle, { color: colors.textPrimary }]}>Platform Position (at Mathura Jn)</Text>
+            </View>
+
+            <View style={styles.platformPositionContentRow}>
+              <View style={styles.platformPositionLeftCol}>
+                <View style={styles.platformIndicatorRow}>
+                  <View style={[styles.platformPinCircle, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9' }]}>
+                    <Ionicons name="location" size={16} color="#007AFF" />
+                  </View>
+                  <Text style={[styles.platformNumberTitle, { color: colors.textPrimary }]}>{liveData.currentPlatform || 'Platform 4'}</Text>
+                </View>
+                <Text style={[styles.platformDescText, { color: colors.textSecondary }]}>
+                  Engine will arrive near {liveData.currentPlatform || 'Platform 4'} side.{'\n'}Your coach ({selectedCoach}) will be accessible from the main platform concourse.
+                </Text>
+              </View>
+
+              {(liveData.currentStationCode === 'MTJ' || activeTrain.number === '22436') ? (
+                <Image
+                  source={require('../../assets/mathura_station.jpg')}
+                  style={styles.platformPositionThumb}
+                />
+              ) : (
+                <View style={[styles.dynamicStationThumbBadge, { backgroundColor: isDarkMode ? '#1E293B' : '#F0F9FF', borderColor: colors.border }]}>
+                  <MaterialCommunityIcons name="train" size={24} color="#007AFF" />
+                  <Text style={[styles.dynamicStationThumbText, { color: colors.textPrimary }]}>{liveData.currentStationCode || 'PF'}</Text>
+                </View>
+              )}
             </View>
           </View>
 
-          {/* Tips Card */}
-          <View style={styles.tipsCard}>
-            <Text style={styles.tipsTitle}>💡 Platform Guidance Tips:</Text>
-            <Text style={styles.tipsBullet}>• Arrive 15 minutes before scheduled arrival.</Text>
-            <Text style={styles.tipsBullet}>• Watch overhead platform digital indicators for live coach numbers.</Text>
-            <Text style={styles.tipsBullet}>• Chair Car seats are numbered sequentially 1 to 78.</Text>
+          {/* Card 3: Tips */}
+          <View style={[styles.tipsContainerCard, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFBEB', borderColor: isDarkMode ? colors.border : '#FDE68A' }]}>
+            <View style={styles.tipsHeaderRow}>
+              <Ionicons name="bulb-outline" size={18} color="#EAB308" style={{ marginRight: 6 }} />
+              <Text style={[styles.tipsCardHeading, { color: isDarkMode ? '#F8FAFC' : '#92400E' }]}>Tips</Text>
+            </View>
+            <Text style={[styles.tipsItemBullet, { color: isDarkMode ? '#CBD5E1' : '#78350F' }]}>• Coach position may change at some stations.</Text>
+            <Text style={[styles.tipsItemBullet, { color: isDarkMode ? '#CBD5E1' : '#78350F' }]}>• Arrive 10-15 minutes before scheduled time.</Text>
+            <Text style={[styles.tipsItemBullet, { color: isDarkMode ? '#CBD5E1' : '#78350F' }]}>• Check platform display board for latest information.</Text>
           </View>
 
-          <View style={{ height: 40 }} />
+          {/* Bottom Floating Map Button */}
+          <TouchableOpacity
+            style={[styles.coachBottomMapBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            onPress={() => setActiveTab('live_map')}
+            activeOpacity={0.85}
+          >
+            <MaterialCommunityIcons name="map-outline" size={18} color="#007AFF" style={{ marginRight: 6 }} />
+            <Text style={[styles.coachBottomMapBtnText, { color: '#007AFF' }]}>View on Map</Text>
+          </TouchableOpacity>
+
+          <View style={{ height: 35 }} />
         </ScrollView>
       )}
 
       {/* ================= TAB 4: INFO VIEW ================= */}
       {activeTab === 'info' && (
-        <ScrollView style={styles.infoTabContainer} showsVerticalScrollIndicator={false}>
+        <ScrollView style={[styles.infoTabContainer, { backgroundColor: colors.background }]} showsVerticalScrollIndicator={false}>
           {/* Train Information Block */}
-          <View style={styles.infoSectionCard}>
+          <View style={[styles.infoSectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.infoSectionHeader}>
               <MaterialCommunityIcons name="train" size={18} color="#007AFF" style={{ marginRight: 6 }} />
-              <Text style={styles.infoSectionTitle}>Train Information</Text>
+              <Text style={[styles.infoSectionTitle, { color: colors.textPrimary }]}>Train Information</Text>
             </View>
 
             {[
@@ -1363,18 +1299,18 @@ Tracked on When is my train App`;
               { label: 'Total Distance', val: `${liveData.totalDistanceKm || 440} km` },
               { label: 'Top Operating Speed', val: '130 km/h' },
             ].map((row, rIdx) => (
-              <View key={rIdx} style={styles.infoDataRow}>
-                <Text style={styles.infoDataLabel}>{row.label}</Text>
-                <Text style={styles.infoDataValue}>{row.val}</Text>
+              <View key={rIdx} style={[styles.infoDataRow, { borderBottomColor: colors.border }]}>
+                <Text style={[styles.infoDataLabel, { color: colors.textSecondary }]}>{row.label}</Text>
+                <Text style={[styles.infoDataValue, { color: colors.textPrimary }]}>{row.val}</Text>
               </View>
             ))}
           </View>
 
           {/* Route Information Block */}
-          <View style={styles.infoSectionCard}>
+          <View style={[styles.infoSectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.infoSectionHeader}>
               <Ionicons name="map-outline" size={18} color="#007AFF" style={{ marginRight: 6 }} />
-              <Text style={styles.infoSectionTitle}>Route Information</Text>
+              <Text style={[styles.infoSectionTitle, { color: colors.textPrimary }]}>Route Information</Text>
             </View>
 
             {[
@@ -1385,25 +1321,25 @@ Tracked on When is my train App`;
               { label: 'Scheduled Departure', val: routeOriginDepTime },
               { label: 'Scheduled Arrival', val: routeDestArrTime },
             ].map((row, rIdx) => (
-              <View key={rIdx} style={styles.infoDataRow}>
-                <Text style={styles.infoDataLabel}>{row.label}</Text>
-                <Text style={styles.infoDataValue}>{row.val}</Text>
+              <View key={rIdx} style={[styles.infoDataRow, { borderBottomColor: colors.border }]}>
+                <Text style={[styles.infoDataLabel, { color: colors.textSecondary }]}>{row.label}</Text>
+                <Text style={[styles.infoDataValue, { color: colors.textPrimary }]}>{row.val}</Text>
               </View>
             ))}
           </View>
 
           {/* Facilities Block */}
-          <View style={styles.infoSectionCard}>
+          <View style={[styles.infoSectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.infoSectionHeader}>
               <Ionicons name="apps-outline" size={18} color="#007AFF" style={{ marginRight: 6 }} />
-              <Text style={styles.infoSectionTitle}>Train Facilities</Text>
+              <Text style={[styles.infoSectionTitle, { color: colors.textPrimary }]}>Train Facilities</Text>
             </View>
 
             <View style={styles.facilitiesGrid}>
               {['AC Chair Car', 'Executive Class', 'Onboard Catering', 'Wi-Fi Infotainment', 'Mobile Charging', 'Bio Vacuum Toilets'].map((fac) => (
-                <View key={fac} style={styles.facilityChip}>
+                <View key={fac} style={[styles.facilityChip, { backgroundColor: isDarkMode ? '#1E293B' : '#F0FDF4', borderColor: isDarkMode ? colors.border : '#BBF7D0' }]}>
                   <Ionicons name="checkmark-circle" size={14} color="#16A34A" style={{ marginRight: 4 }} />
-                  <Text style={styles.facilityChipText}>{fac}</Text>
+                  <Text style={[styles.facilityChipText, { color: isDarkMode ? '#F8FAFC' : '#166534' }]}>{fac}</Text>
                 </View>
               ))}
             </View>
@@ -1420,11 +1356,11 @@ Tracked on When is my train App`;
           activeOpacity={1}
           onPress={() => setShowDateModal(false)}
         >
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Journey Date</Text>
+          <View style={[styles.modalCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+              <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Select Journey Date</Text>
               <TouchableOpacity onPress={() => setShowDateModal(false)}>
-                <Ionicons name="close" size={20} color="#0F172A" />
+                <Ionicons name="close" size={20} color={colors.textPrimary} />
               </TouchableOpacity>
             </View>
 
@@ -1437,7 +1373,8 @@ Tracked on When is my train App`;
                 key={d.id}
                 style={[
                   styles.menuOptionRow,
-                  selectedDateMode === d.id && { backgroundColor: '#F0F9FF' },
+                  { borderBottomColor: colors.border },
+                  selectedDateMode === d.id && { backgroundColor: isDarkMode ? '#1E3A5F' : '#F0F9FF' },
                 ]}
                 onPress={() => {
                   setSelectedDateMode(d.id as any);
@@ -1453,6 +1390,7 @@ Tracked on When is my train App`;
                 <Text
                   style={[
                     styles.menuOptionText,
+                    { color: colors.textPrimary },
                     selectedDateMode === d.id && { fontWeight: '800', color: '#007AFF' },
                   ]}
                 >
@@ -1471,11 +1409,11 @@ Tracked on When is my train App`;
           activeOpacity={1}
           onPress={() => setShowDestModal(false)}
         >
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Destination Station</Text>
+          <View style={[styles.modalCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+              <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Select Destination Station</Text>
               <TouchableOpacity onPress={() => setShowDestModal(false)}>
-                <Ionicons name="close" size={20} color="#0F172A" />
+                <Ionicons name="close" size={20} color={colors.textPrimary} />
               </TouchableOpacity>
             </View>
 
@@ -1490,7 +1428,8 @@ Tracked on When is my train App`;
                       key={st.code}
                       style={[
                         styles.menuOptionRow,
-                        isSelected && { backgroundColor: '#F0F9FF' },
+                        { borderBottomColor: colors.border },
+                        isSelected && { backgroundColor: isDarkMode ? '#1E3A5F' : '#F0F9FF' },
                       ]}
                       onPress={() => {
                         setCustomDestCode(st.code);
@@ -1506,10 +1445,11 @@ Tracked on When is my train App`;
                       <Text
                         style={[
                           styles.menuOptionText,
+                          { color: colors.textPrimary },
                           isSelected && { fontWeight: '800', color: '#007AFF' },
                         ]}
                       >
-                        {st.name} ({st.code}) - {st.scheduledArr}
+                        {st.name} ({st.code})
                       </Text>
                     </TouchableOpacity>
                   );
@@ -1526,15 +1466,15 @@ Tracked on When is my train App`;
           activeOpacity={1}
           onPress={() => setShowAlarmModal(false)}
         >
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
+          <View style={[styles.modalCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
               <Ionicons name="alarm" size={20} color="#007AFF" style={{ marginRight: 8 }} />
-              <Text style={styles.modalTitle}>Set Station Wake-up Alarm</Text>
+              <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Set Station Wake-up Alarm</Text>
               <TouchableOpacity onPress={() => setShowAlarmModal(false)}>
-                <Ionicons name="close" size={20} color="#0F172A" />
+                <Ionicons name="close" size={20} color={colors.textPrimary} />
               </TouchableOpacity>
             </View>
-            <Text style={styles.modalSubtitle}>
+            <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
               You will receive an audible alert 15 minutes before reaching:
             </Text>
 
@@ -1546,13 +1486,15 @@ Tracked on When is my train App`;
                     key={stop.code}
                     style={[
                       styles.alarmStationRow,
-                      alarmStation === stop.name && styles.alarmStationSelected,
+                      { borderBottomColor: colors.border },
+                      alarmStation === stop.name && { backgroundColor: isDarkMode ? '#1E3A5F' : '#F0F9FF' },
                     ]}
                     onPress={() => setAlarmStation(stop.name)}
                   >
                     <Text
                       style={[
                         styles.alarmStationText,
+                        { color: colors.textPrimary },
                         alarmStation === stop.name && { color: '#007AFF', fontWeight: '800' },
                       ]}
                     >
@@ -1585,56 +1527,56 @@ Tracked on When is my train App`;
           activeOpacity={1}
           onPress={() => setShowMenuModal(false)}
         >
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Train Options</Text>
+          <View style={[styles.modalCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+              <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Train Options</Text>
               <TouchableOpacity onPress={() => setShowMenuModal(false)}>
-                <Ionicons name="close" size={20} color="#0F172A" />
+                <Ionicons name="close" size={20} color={colors.textPrimary} />
               </TouchableOpacity>
             </View>
 
             <TouchableOpacity
-              style={styles.menuOptionRow}
+              style={[styles.menuOptionRow, { borderBottomColor: colors.border }]}
               onPress={() => {
                 setShowMenuModal(false);
                 handleShare();
               }}
             >
               <Ionicons name="share-social-outline" size={18} color="#007AFF" style={{ marginRight: 10 }} />
-              <Text style={styles.menuOptionText}>Share Train Running Status</Text>
+              <Text style={[styles.menuOptionText, { color: colors.textPrimary }]}>Share Train Running Status</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.menuOptionRow}
+              style={[styles.menuOptionRow, { borderBottomColor: colors.border }]}
               onPress={() => {
                 setShowMenuModal(false);
                 setShowAlarmModal(true);
               }}
             >
               <Ionicons name="alarm-outline" size={18} color="#007AFF" style={{ marginRight: 10 }} />
-              <Text style={styles.menuOptionText}>Set Station Alarm</Text>
+              <Text style={[styles.menuOptionText, { color: colors.textPrimary }]}>Set Station Alarm</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.menuOptionRow}
+              style={[styles.menuOptionRow, { borderBottomColor: colors.border }]}
               onPress={() => {
                 setShowMenuModal(false);
                 setActiveTab('coach_position');
               }}
             >
               <MaterialCommunityIcons name="train" size={18} color="#007AFF" style={{ marginRight: 10 }} />
-              <Text style={styles.menuOptionText}>View Coach Position</Text>
+              <Text style={[styles.menuOptionText, { color: colors.textPrimary }]}>View Coach Position</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.menuOptionRow}
+              style={[styles.menuOptionRow, { borderBottomColor: colors.border }]}
               onPress={() => {
                 setShowMenuModal(false);
                 handleManualRefresh();
               }}
             >
               <Ionicons name="refresh-outline" size={18} color="#007AFF" style={{ marginRight: 10 }} />
-              <Text style={styles.menuOptionText}>Refresh Live GPS Location</Text>
+              <Text style={[styles.menuOptionText, { color: colors.textPrimary }]}>Refresh Live GPS Location</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -1650,17 +1592,26 @@ const styles = StyleSheet.create({
   },
 
   // 1. Top Header
+  headerWrapper: {
+    backgroundColor: '#005A9C',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    zIndex: 10,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#005A9C',
-    paddingHorizontal: 14,
-    paddingTop: 10,
-    paddingBottom: 8,
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 4,
   },
   headerBackBtn: {
-    padding: 6,
-    marginRight: 6,
+    padding: 4,
+    marginRight: 4,
   },
   headerTitleCol: {
     flex: 1,
@@ -1668,13 +1619,13 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   headerTitleText: {
-    fontSize: 16.5,
+    fontSize: 15.5,
     fontWeight: '800',
     color: '#FFFFFF',
     letterSpacing: 0.1,
   },
   headerSubText: {
-    fontSize: 12,
+    fontSize: 11,
     color: 'rgba(255, 255, 255, 0.9)',
     fontWeight: '500',
     marginTop: 1,
@@ -1684,92 +1635,107 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerIconBtn: {
-    padding: 6,
+    padding: 5,
   },
-
-  // 2. Action Chips Bar
   actionPillsBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     backgroundColor: '#005A9C',
-    paddingHorizontal: 14,
-    paddingBottom: 10,
-    paddingTop: 4,
+    paddingHorizontal: 12,
+    paddingTop: 2,
+    paddingBottom: 7,
   },
   todayActionPill: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 12,
-    paddingVertical: 5.5,
-    borderRadius: 16,
+    paddingHorizontal: 9,
+    paddingVertical: 3.5,
+    borderRadius: 14,
+    marginRight: 6,
   },
   todayActionPillText: {
-    fontSize: 12.5,
+    fontSize: 11,
     fontWeight: '800',
     color: '#005A9C',
   },
   outlinedActionPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    paddingHorizontal: 11,
-    paddingVertical: 5.5,
-    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.35)',
+    borderColor: 'rgba(255, 255, 255, 0.4)',
+    paddingHorizontal: 9,
+    paddingVertical: 3.5,
+    borderRadius: 14,
+    marginRight: 6,
   },
   outlinedActionPillText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: '#FFFFFF',
   },
+  dynamicStationThumbBadge: {
+    width: 60,
+    height: 50,
+    borderRadius: 8,
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dynamicStationThumbText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#005A9C',
+    marginTop: 2,
+  },
 
-  // 3. Route Summary Card
+  // 2. Route Summary Card & Quick Tools
   routeSummaryCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: '#FFFFFF',
-    marginHorizontal: 12,
-    marginTop: 8,
-    marginBottom: 6,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    marginHorizontal: 10,
+    marginTop: 3,
+    marginBottom: 3,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    elevation: 2,
+    elevation: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
   },
   routeStationCol: {
     alignItems: 'flex-start',
   },
   routeCodeBig: {
-    fontSize: 16,
+    fontSize: 14.5,
     fontWeight: '800',
     color: '#0F172A',
   },
   routeTimeSub: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: '#0F172A',
-    marginTop: 2,
+    marginTop: 1,
   },
   routeCenterTrackCol: {
     alignItems: 'center',
     flex: 1,
-    marginHorizontal: 14,
+    marginHorizontal: 8,
   },
   routeDurationText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
     color: '#007AFF',
-    marginBottom: 3,
+    marginBottom: 2,
   },
   routeTrackLineRow: {
     flexDirection: 'row',
@@ -1778,9 +1744,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   routeDotBlue: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
     backgroundColor: '#007AFF',
   },
   routeTrackLine: {
@@ -1790,13 +1756,30 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
   },
   routeStopsText: {
-    fontSize: 10.5,
+    fontSize: 9.5,
     fontWeight: '600',
     color: '#64748B',
-    marginTop: 3,
+    marginTop: 2,
+  },
+  routeQuickTools: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 8,
+    paddingLeft: 8,
+    borderLeftWidth: 1,
+    borderLeftColor: '#E2E8F0',
+  },
+  routeToolBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#F0F9FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 4,
   },
 
-  // 4. Sub Tabs Bar
+  // 3. Sub Tabs Bar
   subTabsBar: {
     flexDirection: 'row',
     backgroundColor: '#FFFFFF',
@@ -1806,11 +1789,11 @@ const styles = StyleSheet.create({
   subTabItem: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 11,
+    paddingVertical: 6,
     position: 'relative',
   },
   subTabText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     color: '#64748B',
   },
@@ -1821,52 +1804,71 @@ const styles = StyleSheet.create({
   subTabActiveLine: {
     position: 'absolute',
     bottom: 0,
-    left: 10,
-    right: 10,
-    height: 3,
+    left: 8,
+    right: 8,
+    height: 2.5,
     backgroundColor: '#007AFF',
     borderRadius: 2,
   },
 
-  // 5. Journey Timeline Tab
+  // 4. Journey Timeline Tab Strip
   timelineHeaderStrip: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: '#F8FAFC',
-    paddingHorizontal: 16,
-    paddingVertical: 7,
+    paddingHorizontal: 12,
+    paddingVertical: 3.5,
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
   },
   stripColText: {
-    fontSize: 11.5,
+    fontSize: 10.5,
     fontWeight: '600',
     color: '#94A3B8',
   },
+  stripCenterBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
+  },
   stripTitleText: {
-    fontSize: 12.5,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#15803D',
+  },
+  stripRightCol: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  stripSyncBtn: {
+    padding: 3,
+    marginLeft: 4,
   },
   timelineScroll: {
     flex: 1,
   },
   timelineContentWrapper: {
     paddingHorizontal: 12,
-    paddingTop: 4,
+    paddingTop: 2,
   },
   stationTimelineRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 68,
-    paddingVertical: 6,
+    minHeight: 52,
+    paddingVertical: 3,
     paddingHorizontal: 4,
     backgroundColor: '#FFFFFF',
   },
   currentStationRowHighlight: {
     backgroundColor: '#EDF6FF',
     borderRadius: 8,
+    paddingVertical: 5,
   },
 
   timeColLeft: {
@@ -1909,7 +1911,7 @@ const styles = StyleSheet.create({
     width: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    height: '100%',
+    alignSelf: 'stretch',
     position: 'relative',
   },
   verticalTrackLine: {
@@ -2279,14 +2281,18 @@ const styles = StyleSheet.create({
     marginVertical: 1,
   },
 
-  bottomActionButtonsRow: {
+  // 6. Journey Bottom Action Bar (Screen 1)
+  journeyBottomBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: 12,
-    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
     gap: 10,
   },
-  viewOnMapBtn: {
+  journeyMapBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
@@ -2297,12 +2303,12 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#007AFF',
   },
-  viewOnMapBtnText: {
+  journeyMapBtnText: {
     fontSize: 13.5,
     fontWeight: '800',
     color: '#007AFF',
   },
-  refreshSolidBtn: {
+  journeyRefreshBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
@@ -2311,226 +2317,282 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: '#007AFF',
   },
-  refreshSolidBtnText: {
+  journeyRefreshBtnText: {
     fontSize: 13.5,
     fontWeight: '800',
     color: '#FFFFFF',
   },
 
-  // Map Tab Styles
-  mapTabContainer: {
-    flex: 1,
-    padding: 14,
-  },
-  visualMapBox: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    position: 'relative',
-    marginBottom: 12,
-  },
-  mapRouteLine: {
-    position: 'absolute',
-    left: 23,
-    top: 26,
-    bottom: 26,
-    width: 3,
-    backgroundColor: '#BAE6FD',
-  },
-  mapNodeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 10,
-  },
-  mapDotCircle: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#94A3B8',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-    zIndex: 2,
-  },
-  mapNodeCard: {
-    marginLeft: 14,
-    flex: 1,
-  },
-  mapNodeName: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  mapNodeTime: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  mapBottomCard: {
-    backgroundColor: '#F0F9FF',
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-    marginBottom: 12,
-  },
-  mapCardStationTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#0F172A',
-    flex: 1,
-  },
-  mapCardSubText: {
-    fontSize: 11.5,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  latePill: {
-    backgroundColor: '#FEE2E2',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 8,
-  },
-  latePillText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#DC2626',
-  },
-  fullJourneyBtn: {
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-  },
-  fullJourneyBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#007AFF',
-  },
-
-  // Coach Tab Styles
+  // Coach Tab Styles (Screen 3)
   coachTabContainer: {
     flex: 1,
-    padding: 14,
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 12,
+    paddingTop: 10,
   },
-  coachPlatformCard: {
+  coachMainCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    padding: 16,
+    padding: 14,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    marginBottom: 12,
+    marginBottom: 10,
   },
-  coachHeaderRow: {
+  coachMainCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  coachMainCardTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  coachDirectionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
+    marginVertical: 4,
   },
-  coachPlatformTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  coachSideText: {
+  coachDirectionSide: {
     fontSize: 12,
     fontWeight: '700',
     color: '#007AFF',
   },
-  coachCompositionScroll: {
-    flexDirection: 'row',
-    marginVertical: 10,
+  coachTrainRakeGraphic: {
+    width: '100%',
+    height: 72,
+    marginVertical: 4,
   },
-  coachBox: {
-    width: 48,
-    height: 40,
+  coachSelectorBarWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 12,
+  },
+  coachNavChevron: {
+    padding: 6,
+  },
+  coachSelectorChipsScroll: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingHorizontal: 4,
+  },
+  coachChipWrapper: {
+    alignItems: 'center',
+    marginHorizontal: 5,
+    minWidth: 40,
+  },
+  coachSelectorChip: {
+    paddingHorizontal: 9,
+    paddingVertical: 5,
     borderRadius: 6,
     backgroundColor: '#F1F5F9',
     borderWidth: 1,
     borderColor: '#CBD5E1',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 8,
   },
-  engineBox: {
-    backgroundColor: '#FFEDD5',
-    borderColor: '#FDBA74',
-  },
-  userCoachBox: {
+  coachSelectorChipActive: {
     backgroundColor: '#007AFF',
     borderColor: '#007AFF',
   },
-  coachBoxText: {
-    fontSize: 11.5,
+  coachSelectorCodeText: {
+    fontSize: 12,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#334155',
   },
-  coachLegendRow: {
-    flexDirection: 'row',
+  coachSelectorCodeTextActive: {
+    color: '#FFFFFF',
+  },
+  coachSelectorSublabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#64748B',
+    marginTop: 2,
+  },
+  yourCoachPointerWrapper: {
     alignItems: 'center',
-    justifyContent: 'space-around',
-    marginTop: 14,
+    marginTop: 3,
+  },
+  pointerTriangle: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 4,
+    borderLeftColor: 'transparent',
+    borderRightWidth: 4,
+    borderRightColor: 'transparent',
+    borderTopWidth: 5,
+    borderTopColor: '#007AFF',
+  },
+  yourCoachPointerText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#007AFF',
+    marginTop: 2,
+    width: 65,
+    textAlign: 'center',
+  },
+
+  compositionSection: {
+    marginTop: 10,
     paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
   },
-  legendItem: {
+  compositionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 6,
   },
-  legendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 6,
-  },
-  legendText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  platformGuidanceCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F0F9FF',
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-    marginBottom: 12,
-  },
-  guidanceTitle: {
+  compositionTitle: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#007AFF',
+    color: '#0F172A',
   },
-  guidanceSub: {
-    fontSize: 11.5,
+  compositionRakeBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  miniRakeBlock: {
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderRadius: 4,
+    marginRight: 4,
+    minWidth: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  miniRakeText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  compositionLegendRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 6,
+  },
+  legendBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  legendColorBox: {
+    width: 10,
+    height: 10,
+    borderRadius: 2,
+    marginRight: 5,
+  },
+  legendBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
     color: '#334155',
-    marginTop: 2,
-    lineHeight: 16,
   },
-  tipsCard: {
+
+  platformPositionCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 14,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    marginBottom: 10,
   },
-  tipsTitle: {
-    fontSize: 13,
+  platformPositionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  platformPositionTitle: {
+    fontSize: 13.5,
     fontWeight: '800',
     color: '#0F172A',
-    marginBottom: 6,
   },
-  tipsBullet: {
+  platformPositionContentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  platformPositionLeftCol: {
+    flex: 1,
+    paddingRight: 10,
+  },
+  platformIndicatorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  platformPinCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 6,
+  },
+  platformNumberTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  platformDescText: {
+    fontSize: 11,
+    color: '#64748B',
+    lineHeight: 16,
+    marginTop: 3,
+  },
+  platformPositionThumb: {
+    width: 105,
+    height: 60,
+    borderRadius: 8,
+  },
+
+  tipsContainerCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 12,
+  },
+  tipsHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  tipsCardHeading: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  tipsItemBullet: {
     fontSize: 11.5,
     color: '#475569',
     marginVertical: 2,
     lineHeight: 16,
+  },
+
+  coachBottomMapBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#007AFF',
+    marginTop: 4,
+  },
+  coachBottomMapBtnText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#007AFF',
   },
 
   // Info Tab Styles
@@ -2737,10 +2799,15 @@ const styles = StyleSheet.create({
 
 // ===== Live Map Tab Styles (Separate StyleSheet) =====
 const lmStyles = StyleSheet.create({
+  liveMapRoot: {
+    flex: 1,
+    backgroundColor: '#E2F0D9',
+    justifyContent: 'space-between',
+  },
   mapAreaContainer: {
-    height: 420,
-    backgroundColor: '#D6E6D0',
-    marginHorizontal: 0,
+    flex: 1,
+    minHeight: 180,
+    backgroundColor: '#E2F0D9',
     position: 'relative',
     overflow: 'hidden',
   },
@@ -2750,296 +2817,298 @@ const lmStyles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    zIndex: 0,
   },
   mapGridLineH: {
     position: 'absolute',
     left: 0,
     right: 0,
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.35)',
+    backgroundColor: 'rgba(255, 255, 255, 0.45)',
   },
   mapGridLineV: {
     position: 'absolute',
     top: 0,
     bottom: 0,
     width: 1,
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    backgroundColor: 'rgba(255, 255, 255, 0.35)',
   },
-  mapFloatingBtns: {
+  compassBtn: {
     position: 'absolute',
-    top: 14,
-    right: 14,
-    zIndex: 20,
-  },
-  mapFloatingBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-  },
-
-  // Station Dots
-  mapStationDot: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#B0BEC5',
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
-    zIndex: 5,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-  },
-  mapStationDotPassed: {
-    backgroundColor: '#16A34A',
-  },
-  mapStationDotDest: {
-    backgroundColor: '#E53935',
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-  },
-  mapCurrentTrainDot: {
+    top: 10,
+    right: 12,
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(30, 136, 229, 0.25)',
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
     zIndex: 10,
   },
-  mapCurrentTrainInner: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#1E88E5',
+  mapTrackSegment: {
+    position: 'absolute',
+    height: 3.5,
+    borderRadius: 2,
+    zIndex: 1,
+  },
+  trainOnTrackBadge: {
+    position: 'absolute',
+    left: '42%',
+    top: '42%',
+    width: 30,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#0284C7',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2.5,
+    zIndex: 5,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.25,
+    shadowRadius: 2,
+    borderWidth: 1.5,
     borderColor: '#FFFFFF',
-    elevation: 5,
-    shadowColor: '#1E88E5',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 4,
   },
-
-  // Station Labels
-  mapStationLabel: {
+  mapStationWrapper: {
     position: 'absolute',
-    minWidth: 100,
-  },
-  mapLabelName: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#263238',
-  },
-  mapLabelTime: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#546E7A',
-    marginTop: 1,
-  },
-
-  // Callout Bubble
-  mapCalloutBubble: {
-    position: 'absolute',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    minWidth: 140,
-    elevation: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.18,
-    shadowRadius: 5,
-    zIndex: 15,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-  },
-  mapCalloutTitle: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#16A34A',
-    letterSpacing: 0.2,
-  },
-  mapCalloutStation: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginTop: 1,
-  },
-  mapCalloutTime: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#1E88E5',
-    marginTop: 1,
-  },
-  mapCalloutTriangle: {
-    position: 'absolute',
-    bottom: -7,
-    width: 0,
-    height: 0,
-    borderLeftWidth: 7,
-    borderLeftColor: 'transparent',
-    borderRightWidth: 7,
-    borderRightColor: 'transparent',
-    borderTopWidth: 7,
-    borderTopColor: '#FFFFFF',
-  },
-
-  // Bottom Info Card
-  bottomInfoCard: {
-    backgroundColor: '#FFFFFF',
-    marginHorizontal: 12,
-    marginTop: -20,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 12,
-    elevation: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    zIndex: 20,
-  },
-  bottomInfoTopRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-  },
-  bottomInfoStationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  bottomTrainIconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
-    backgroundColor: '#E0F2FE',
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 6,
   },
-  bottomStationName: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  bottomDelayBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#FEE2E2',
-    paddingHorizontal: 10,
-    paddingVertical: 3,
+  mapStartGreenDot: {
+    width: 12,
+    height: 12,
     borderRadius: 6,
-    marginTop: 4,
+    backgroundColor: '#16A34A',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    marginBottom: 2,
   },
-  bottomDelayText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#DC2626',
+  mapDestRedDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#DC2626',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    marginBottom: 2,
   },
-  bottomStationImage: {
-    width: 70,
-    height: 65,
-    borderRadius: 10,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
+  mapStationBubble: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 6,
+    paddingVertical: 2.5,
+    borderRadius: 5,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    marginLeft: 10,
-  },
-
-  // Arrived / Departed row
-  bottomTimesRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 14,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-  },
-  bottomTimeCol: {
-    flex: 1,
-  },
-  bottomTimeLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#94A3B8',
-  },
-  bottomTimeValue: {
-    fontSize: 14.5,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginTop: 2,
-  },
-  bottomTimeDivider: {
-    width: 1,
-    height: 32,
-    backgroundColor: '#E2E8F0',
-    marginHorizontal: 16,
-  },
-
-  // Legend Row
-  legendRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 14,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-  },
-  legendItemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  legendCircle: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginRight: 5,
-  },
-  legendLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-
-  // Show Full Journey Button
-  showFullJourneyBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginHorizontal: 12,
-    marginTop: 12,
-    paddingVertical: 13,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 3,
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    minWidth: 85,
+  },
+  mapBubbleName: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  mapBubbleTime: {
+    fontSize: 8.5,
+    fontWeight: '600',
+    color: '#64748B',
+    marginTop: 1,
+  },
+
+  // Bottom Station Detail Card (Compact & Squeezed)
+  bottomDockedSection: {
+    paddingBottom: 6,
+    backgroundColor: '#E2F0D9',
+  },
+  stationDetailCard: {
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 10,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 10,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+  },
+  bottomCardHandle: {
+    width: 32,
+    height: 3.5,
+    borderRadius: 2,
+    backgroundColor: '#CBD5E1',
+    alignSelf: 'center',
+    marginBottom: 6,
+  },
+  bottomStationTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  stationIconCircle: {
+    width: 26,
+    height: 26,
+    borderRadius: 6,
+    backgroundColor: '#E0F2FE',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 6,
+  },
+  bottomStationTitle: {
+    fontSize: 14.5,
+    fontWeight: '800',
+    color: '#0F172A',
+    flex: 1,
+  },
+  bottomCloseBtn: {
+    padding: 2,
+  },
+  timingsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  timingCol: {
+    flex: 1,
+  },
+  timingLabel: {
+    fontSize: 9.5,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  timingSched: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginTop: 1,
+  },
+  timingActualDelayed: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#DC2626',
+    marginTop: 1,
+  },
+  delayBadge: {
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
+    borderRadius: 6,
+  },
+  delayBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#DC2626',
+  },
+  distanceMetricsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  distanceItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  distanceMetricsText: {
+    fontSize: 10.5,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  platformAndPhotoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  platformNumberCard: {
+    width: 58,
+    height: 48,
+    borderRadius: 6,
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  showFullJourneyText: {
-    fontSize: 14,
+  platformNumberLabel: {
+    fontSize: 9,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  platformNumberBig: {
+    fontSize: 17,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+  stationThumbImage: {
+    width: 100,
+    height: 48,
+    borderRadius: 6,
+  },
+  dynamicStationBadgeContainer: {
+    width: 100,
+    height: 48,
+    borderRadius: 6,
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  dynamicStationBadgeCode: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#005A9C',
+    marginTop: 1,
+  },
+  dynamicStationBadgeType: {
+    fontSize: 8.5,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  viewStationActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  viewStationActionBtnText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  showFullJourneyFullBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 10,
+    marginTop: 6,
+    paddingVertical: 9,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#BAE6FD',
+  },
+  showFullJourneyFullBtnText: {
+    fontSize: 12.5,
     fontWeight: '800',
     color: '#007AFF',
   },

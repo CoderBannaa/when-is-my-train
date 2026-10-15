@@ -1,3 +1,5 @@
+import { STATIONS_DATABASE } from './stations';
+
 export interface RouteStop {
   code: string;
   name: string;
@@ -1328,6 +1330,678 @@ function getTrainStopMap(train: CorridorTrain): Map<string, number> {
 const routeMatchesCache = new Map<string, TrainBetweenStation[]>();
 const MAX_ROUTE_CACHE_SIZE = 150;
 
+// Helper: parse HH:MM AM/PM to calculate duration
+function calculateDuration(depStr: string, arrStr: string): string {
+  try {
+    const parseTime = (tStr: string) => {
+      const parts = tStr.trim().split(' ');
+      const timeParts = parts[0].split(':');
+      let hours = parseInt(timeParts[0], 10);
+      const minutes = parseInt(timeParts[1], 10);
+      const meridiem = parts[1]?.toUpperCase();
+
+      if (meridiem === 'PM' && hours !== 12) hours += 12;
+      if (meridiem === 'AM' && hours === 12) hours = 0;
+      return hours * 60 + minutes;
+    };
+
+    const depMins = parseTime(depStr);
+    let arrMins = parseTime(arrStr);
+    if (arrMins < depMins) arrMins += 24 * 60; // Next day arrival
+
+    const diffMins = arrMins - depMins;
+    const h = Math.floor(diffMins / 60);
+    const m = diffMins % 60;
+    return `${h.toString().padStart(2, '0')}h ${m.toString().padStart(2, '0')}m`;
+  } catch {
+    return '04h 30m';
+  }
+}
+
+// Convert minutes from midnight to HH:MM AM/PM
+function formatMinsTo12h(totalMins: number): string {
+  let norm = Math.floor(totalMins) % 1440;
+  if (norm < 0) norm += 1440;
+  let h = Math.floor(norm / 60);
+  const m = norm % 60;
+  const mer = h >= 12 ? 'PM' : 'AM';
+  if (h > 12) h -= 12;
+  if (h === 0) h = 12;
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')} ${mer}`;
+}
+
+// Lookup station metadata from STATIONS_DATABASE
+function findStationMeta(code: string): { code: string; name: string; city: string; state: string } {
+  const norm = (code || '').trim().toUpperCase();
+  const found = STATIONS_DATABASE.find((s) => s.code.toUpperCase() === norm);
+  if (found) return found;
+  return {
+    code: norm,
+    name: norm.length <= 4 ? `${norm} Junction` : norm,
+    city: norm,
+    state: 'India',
+  };
+}
+
+interface IntermediateStopSeed {
+  code: string;
+  name: string;
+  fraction: number; // 0.0 to 1.0 along the route
+  platform?: string;
+}
+
+function getRouteProfile(fromCode: string, toCode: string): {
+  distanceKm: number;
+  intermediates: IntermediateStopSeed[];
+  isLocalEmuPossible: boolean;
+} {
+  const f = fromCode.toUpperCase();
+  const t = toCode.toUpperCase();
+  const key = `${f}__${t}`;
+  const revKey = `${t}__${f}`;
+
+  const KNOWN_ROUTES: Record<string, { distanceKm: number; stops: IntermediateStopSeed[] }> = {
+    // Delhi - Kanpur
+    'NDLS__CNB': {
+      distanceKm: 440,
+      stops: [
+        { code: 'GZB', name: 'Ghaziabad Jn', fraction: 0.06, platform: 'PF 2' },
+        { code: 'ALJN', name: 'Aligarh Jn', fraction: 0.30, platform: 'PF 3' },
+        { code: 'TDL', name: 'Tundla Jn', fraction: 0.48, platform: 'PF 4' },
+        { code: 'ETW', name: 'Etawah Jn', fraction: 0.68, platform: 'PF 2' },
+        { code: 'PHD', name: 'Phaphund', fraction: 0.82, platform: 'PF 1' },
+      ],
+    },
+    // Delhi - Prayagraj
+    'NDLS__PRYJ': {
+      distanceKm: 635,
+      stops: [
+        { code: 'ALJN', name: 'Aligarh Jn', fraction: 0.21, platform: 'PF 3' },
+        { code: 'TDL', name: 'Tundla Jn', fraction: 0.33, platform: 'PF 4' },
+        { code: 'CNB', name: 'Kanpur Central', fraction: 0.69, platform: 'PF 5' },
+        { code: 'FTP', name: 'Fatehpur', fraction: 0.82, platform: 'PF 2' },
+      ],
+    },
+    // Delhi - Varanasi
+    'NDLS__BSB': {
+      distanceKm: 755,
+      stops: [
+        { code: 'CNB', name: 'Kanpur Central', fraction: 0.58, platform: 'PF 6' },
+        { code: 'PRYJ', name: 'Prayagraj Jn', fraction: 0.84, platform: 'PF 1' },
+        { code: 'MZP', name: 'Mirzapur', fraction: 0.92, platform: 'PF 2' },
+      ],
+    },
+    // Delhi - Lucknow
+    'NDLS__LKO': {
+      distanceKm: 490,
+      stops: [
+        { code: 'GZB', name: 'Ghaziabad Jn', fraction: 0.06, platform: 'PF 3' },
+        { code: 'MB', name: 'Moradabad Jn', fraction: 0.34, platform: 'PF 4' },
+        { code: 'BE', name: 'Bareilly Jn', fraction: 0.51, platform: 'PF 2' },
+        { code: 'SPN', name: 'Shahjahanpur', fraction: 0.66, platform: 'PF 1' },
+        { code: 'HRI', name: 'Hardoi', fraction: 0.79, platform: 'PF 3' },
+      ],
+    },
+    // Delhi - Agra
+    'NDLS__AGC': {
+      distanceKm: 195,
+      stops: [
+        { code: 'NZM', name: 'Hazrat Nizamuddin', fraction: 0.08, platform: 'PF 2' },
+        { code: 'FDB', name: 'Faridabad', fraction: 0.16, platform: 'PF 3' },
+        { code: 'PWL', name: 'Palwal', fraction: 0.31, platform: 'PF 2' },
+        { code: 'KSV', name: 'Kosi Kalan', fraction: 0.52, platform: 'PF 1' },
+        { code: 'MTJ', name: 'Mathura Jn', fraction: 0.72, platform: 'PF 4' },
+      ],
+    },
+    // Delhi - Mathura
+    'NDLS__MTJ': {
+      distanceKm: 140,
+      stops: [
+        { code: 'NZM', name: 'Hazrat Nizamuddin', fraction: 0.11, platform: 'PF 2' },
+        { code: 'FDB', name: 'Faridabad', fraction: 0.22, platform: 'PF 3' },
+        { code: 'BVH', name: 'Ballabhgarh', fraction: 0.32, platform: 'PF 4' },
+        { code: 'PWL', name: 'Palwal', fraction: 0.44, platform: 'PF 2' },
+        { code: 'KSV', name: 'Kosi Kalan', fraction: 0.72, platform: 'PF 1' },
+      ],
+    },
+    // Mumbai - Pune
+    'MMCT__PUNE': {
+      distanceKm: 192,
+      stops: [
+        { code: 'DR', name: 'Dadar', fraction: 0.05, platform: 'PF 4' },
+        { code: 'TNA', name: 'Thane', fraction: 0.18, platform: 'PF 5' },
+        { code: 'KYN', name: 'Kalyan Jn', fraction: 0.28, platform: 'PF 6' },
+        { code: 'KJT', name: 'Karjat', fraction: 0.52, platform: 'PF 1' },
+        { code: 'LNL', name: 'Lonavala', fraction: 0.67, platform: 'PF 2' },
+        { code: 'SVJR', name: 'Shivajinagar', fraction: 0.96, platform: 'PF 1' },
+      ],
+    },
+    'CSMT__PUNE': {
+      distanceKm: 192,
+      stops: [
+        { code: 'DR', name: 'Dadar', fraction: 0.05, platform: 'PF 4' },
+        { code: 'TNA', name: 'Thane', fraction: 0.18, platform: 'PF 5' },
+        { code: 'KYN', name: 'Kalyan Jn', fraction: 0.28, platform: 'PF 6' },
+        { code: 'KJT', name: 'Karjat', fraction: 0.52, platform: 'PF 1' },
+        { code: 'LNL', name: 'Lonavala', fraction: 0.67, platform: 'PF 2' },
+        { code: 'SVJR', name: 'Shivajinagar', fraction: 0.96, platform: 'PF 1' },
+      ],
+    },
+    // Mumbai - Ahmedabad
+    'MMCT__ADI': {
+      distanceKm: 490,
+      stops: [
+        { code: 'BVI', name: 'Borivali', fraction: 0.06, platform: 'PF 6' },
+        { code: 'VAPI', name: 'Vapi', fraction: 0.34, platform: 'PF 1' },
+        { code: 'ST', name: 'Surat', fraction: 0.54, platform: 'PF 1' },
+        { code: 'BH', name: 'Bharuch Jn', fraction: 0.66, platform: 'PF 2' },
+        { code: 'BRC', name: 'Vadodara Jn', fraction: 0.80, platform: 'PF 3' },
+        { code: 'ANND', name: 'Anand Jn', fraction: 0.88, platform: 'PF 2' },
+      ],
+    },
+    // Howrah - Patna
+    'HWH__PNBE': {
+      distanceKm: 530,
+      stops: [
+        { code: 'BWN', name: 'Barddhaman Jn', fraction: 0.19, platform: 'PF 2' },
+        { code: 'ASN', name: 'Asansol Jn', fraction: 0.39, platform: 'PF 3' },
+        { code: 'CRJ', name: 'Chittaranjan', fraction: 0.44, platform: 'PF 1' },
+        { code: 'MDP', name: 'Madhupur Jn', fraction: 0.56, platform: 'PF 2' },
+        { code: 'JSME', name: 'Jasidih Jn', fraction: 0.62, platform: 'PF 1' },
+        { code: 'JAJ', name: 'Jhajha', fraction: 0.70, platform: 'PF 2' },
+        { code: 'KIUL', name: 'Kiul Jn', fraction: 0.80, platform: 'PF 1' },
+        { code: 'MKA', name: 'Mokama', fraction: 0.87, platform: 'PF 3' },
+      ],
+    },
+    // Chennai - Bengaluru
+    'MAS__SBC': {
+      distanceKm: 360,
+      stops: [
+        { code: 'AJJ', name: 'Arakkonam Jn', fraction: 0.19, platform: 'PF 3' },
+        { code: 'KPD', name: 'Katpadi Jn', fraction: 0.36, platform: 'PF 1' },
+        { code: 'JTJ', name: 'Jolarpettai Jn', fraction: 0.59, platform: 'PF 2' },
+        { code: 'BWT', name: 'Bangarapet', fraction: 0.79, platform: 'PF 1' },
+        { code: 'KJM', name: 'Krishnarajapuram', fraction: 0.95, platform: 'PF 4' },
+      ],
+    },
+    // Delhi - Jaipur
+    'NDLS__JP': {
+      distanceKm: 305,
+      stops: [
+        { code: 'DEC', name: 'Delhi Cantt', fraction: 0.05, platform: 'PF 2' },
+        { code: 'GGN', name: 'Gurgaon', fraction: 0.10, platform: 'PF 1' },
+        { code: 'RE', name: 'Rewari Jn', fraction: 0.27, platform: 'PF 3' },
+        { code: 'AWR', name: 'Alwar Jn', fraction: 0.51, platform: 'PF 2' },
+        { code: 'BKI', name: 'Bandikui Jn', fraction: 0.70, platform: 'PF 1' },
+        { code: 'DO', name: 'Dausa', fraction: 0.80, platform: 'PF 2' },
+        { code: 'GADJ', name: 'Gandhinagar Jaipur', fraction: 0.97, platform: 'PF 2' },
+      ],
+    },
+    // Delhi - Chandigarh
+    'NDLS__CDG': {
+      distanceKm: 245,
+      stops: [
+        { code: 'SNP', name: 'Sonipat', fraction: 0.18, platform: 'PF 1' },
+        { code: 'PNP', name: 'Panipat Jn', fraction: 0.36, platform: 'PF 3' },
+        { code: 'KUN', name: 'Karnal', fraction: 0.50, platform: 'PF 2' },
+        { code: 'KKDE', name: 'Kurukshetra Jn', fraction: 0.64, platform: 'PF 1' },
+        { code: 'UMB', name: 'Ambala Cantt', fraction: 0.82, platform: 'PF 4' },
+      ],
+    },
+    // Delhi - Amritsar
+    'NDLS__ASR': {
+      distanceKm: 450,
+      stops: [
+        { code: 'PNP', name: 'Panipat Jn', fraction: 0.20, platform: 'PF 3' },
+        { code: 'UMB', name: 'Ambala Cantt', fraction: 0.45, platform: 'PF 4' },
+        { code: 'LDH', name: 'Ludhiana Jn', fraction: 0.70, platform: 'PF 2' },
+        { code: 'PGW', name: 'Phagwara Jn', fraction: 0.78, platform: 'PF 1' },
+        { code: 'JUC', name: 'Jalandhar City', fraction: 0.83, platform: 'PF 2' },
+        { code: 'BEAS', name: 'Beas Jn', fraction: 0.91, platform: 'PF 1' },
+      ],
+    },
+    // Delhi - Katra
+    'NDLS__SVDK': {
+      distanceKm: 650,
+      stops: [
+        { code: 'PNP', name: 'Panipat Jn', fraction: 0.14, platform: 'PF 3' },
+        { code: 'UMB', name: 'Ambala Cantt', fraction: 0.31, platform: 'PF 4' },
+        { code: 'LDH', name: 'Ludhiana Jn', fraction: 0.48, platform: 'PF 2' },
+        { code: 'JAT', name: 'Jammu Tawi', fraction: 0.88, platform: 'PF 1' },
+        { code: 'UHP', name: 'Udhampur', fraction: 0.95, platform: 'PF 2' },
+      ],
+    },
+  };
+
+  if (KNOWN_ROUTES[key]) {
+    return {
+      distanceKm: KNOWN_ROUTES[key].distanceKm,
+      intermediates: KNOWN_ROUTES[key].stops,
+      isLocalEmuPossible: KNOWN_ROUTES[key].distanceKm <= 180,
+    };
+  }
+
+  // Reverse route check
+  if (KNOWN_ROUTES[revKey]) {
+    const rev = KNOWN_ROUTES[revKey];
+    const reversedStops = rev.stops
+      .map((s) => ({
+        code: s.code,
+        name: s.name,
+        fraction: Math.round((1 - s.fraction) * 100) / 100,
+        platform: s.platform,
+      }))
+      .sort((a, b) => a.fraction - b.fraction);
+
+    return {
+      distanceKm: rev.distanceKm,
+      intermediates: reversedStops,
+      isLocalEmuPossible: rev.distanceKm <= 180,
+    };
+  }
+
+  // Generic fallback route
+  let charSum = 0;
+  for (let i = 0; i < f.length; i++) charSum += f.charCodeAt(i);
+  for (let i = 0; i < t.length; i++) charSum += t.charCodeAt(i);
+  const dist = (charSum * 37) % 550 + 220; // 220 - 770 km
+
+  const fromMeta = findStationMeta(fromCode);
+  const toMeta = findStationMeta(toCode);
+
+  return {
+    distanceKm: dist,
+    intermediates: [
+      { code: `${f.slice(0, 3)}O`, name: `${fromMeta.city} Outer`, fraction: 0.28, platform: 'PF 2' },
+      { code: 'JNC', name: 'Junction Cabin', fraction: 0.55, platform: 'PF 1' },
+      { code: `${t.slice(0, 3)}C`, name: `${toMeta.city} Cantt`, fraction: 0.82, platform: 'PF 3' },
+    ],
+    isLocalEmuPossible: dist <= 160,
+  };
+}
+
+export function generateDynamicTrainsForRoute(fromCode: string, toCode: string): TrainBetweenStation[] {
+  const normFrom = (fromCode || '').trim().toUpperCase();
+  const normTo = (toCode || '').trim().toUpperCase();
+  const fromMeta = findStationMeta(normFrom);
+  const toMeta = findStationMeta(normTo);
+  const profile = getRouteProfile(normFrom, normTo);
+  const dist = profile.distanceKm;
+
+  const blueprints = [
+    {
+      num: '22436',
+      name: `${fromMeta.city} - ${toMeta.city} Vande Bharat Express`,
+      type: 'Superfast' as const,
+      depHour: 6,
+      depMin: 0,
+      speedKmh: 95,
+      skipIntermediates: 2,
+      classes: [
+        { type: 'CC', price: Math.round(dist * 1.15 + 320), status: 'AVL 42', statusType: 'available' as const, updatedText: 'Live' },
+        { type: 'EC', price: Math.round(dist * 2.15 + 650), status: 'AVL 08', statusType: 'available' as const, updatedText: 'Live' },
+      ],
+      runsOn: [true, true, true, false, true, true, true],
+    },
+    {
+      num: '12004',
+      name: `${fromMeta.city} Swarna Shatabdi Express`,
+      type: 'Shatabdi' as const,
+      depHour: 6,
+      depMin: 40,
+      speedKmh: 85,
+      skipIntermediates: 1,
+      classes: [
+        { type: 'CC', price: Math.round(dist * 1.05 + 280), status: 'AVL 114', statusType: 'available' as const, updatedText: 'Live' },
+        { type: 'EC', price: Math.round(dist * 1.95 + 550), status: 'AVL 16', statusType: 'available' as const, updatedText: 'Live' },
+      ],
+      runsOn: [true, true, true, true, true, true, true],
+    },
+    {
+      num: '12452',
+      name: 'Shram Shakti Superfast Express',
+      type: 'Superfast' as const,
+      depHour: 7,
+      depMin: 15,
+      speedKmh: 75,
+      skipIntermediates: 0,
+      classes: [
+        { type: '2S', price: Math.round(dist * 0.22 + 65), status: 'AVL 76', statusType: 'available' as const, updatedText: 'Live' },
+        { type: 'SL', price: Math.round(dist * 0.42 + 130), status: 'AVL 34', statusType: 'available' as const, updatedText: 'Live' },
+        { type: '3A', price: Math.round(dist * 1.10 + 340), status: 'AVL 15', statusType: 'available' as const, updatedText: 'Live' },
+        { type: '2A', price: Math.round(dist * 1.60 + 520), status: 'AVL 08', statusType: 'available' as const, updatedText: 'Live' },
+      ],
+      runsOn: [true, true, true, true, true, true, true],
+    },
+    {
+      num: '12034',
+      name: `${fromMeta.city} - ${toMeta.city} Jan Shatabdi`,
+      type: 'Intercity' as const,
+      depHour: 8,
+      depMin: 0,
+      speedKmh: 72,
+      skipIntermediates: 0,
+      classes: [
+        { type: '2S', price: Math.round(dist * 0.20 + 60), status: 'AVL 190', statusType: 'available' as const, updatedText: 'Live' },
+        { type: 'CC', price: Math.round(dist * 0.85 + 220), status: 'AVL 48', statusType: 'available' as const, updatedText: 'Live' },
+      ],
+      runsOn: [true, true, true, true, true, true, true],
+    },
+    {
+      num: '12402',
+      name: 'Magadh Superfast Express',
+      type: 'Superfast' as const,
+      depHour: 9,
+      depMin: 15,
+      speedKmh: 74,
+      skipIntermediates: 1,
+      classes: [
+        { type: 'SL', price: Math.round(dist * 0.43 + 135), status: 'AVL 52', statusType: 'available' as const, updatedText: 'Live' },
+        { type: '3A', price: Math.round(dist * 1.12 + 350), status: 'AVL 18', statusType: 'available' as const, updatedText: 'Live' },
+        { type: '2A', price: Math.round(dist * 1.62 + 530), status: 'RAC 04', statusType: 'rac' as const, updatedText: 'Live' },
+      ],
+      runsOn: [true, true, true, true, true, true, true],
+    },
+    {
+      num: '12276',
+      name: `${fromMeta.city} Humsafar Express`,
+      type: 'Superfast' as const,
+      depHour: 10,
+      depMin: 30,
+      speedKmh: 78,
+      skipIntermediates: 2,
+      classes: [
+        { type: '3A', price: Math.round(dist * 1.18 + 360), status: 'AVL 58', statusType: 'available' as const, updatedText: 'Live' },
+      ],
+      runsOn: [true, true, false, true, true, false, true],
+    },
+    {
+      num: '12878',
+      name: 'Garib Rath Express',
+      type: 'Superfast' as const,
+      depHour: 11,
+      depMin: 45,
+      speedKmh: 76,
+      skipIntermediates: 2,
+      classes: [
+        { type: '3A', price: Math.round(dist * 0.85 + 280), status: 'AVL 110', statusType: 'available' as const, updatedText: 'Live' },
+      ],
+      runsOn: [true, false, true, false, true, false, true],
+    },
+    {
+      num: '12420',
+      name: 'Gomti Superfast Express',
+      type: 'Express' as const,
+      depHour: 12,
+      depMin: 20,
+      speedKmh: 65,
+      skipIntermediates: 0,
+      classes: [
+        { type: '2S', price: Math.round(dist * 0.19 + 55), status: 'AVL 240', statusType: 'available' as const, updatedText: 'Live' },
+        { type: 'CC', price: Math.round(dist * 0.80 + 210), status: 'AVL 38', statusType: 'available' as const, updatedText: 'Live' },
+        { type: '2A', price: Math.round(dist * 1.50 + 490), status: 'AVL 10', statusType: 'available' as const, updatedText: 'Live' },
+      ],
+      runsOn: [true, true, true, true, true, true, true],
+    },
+    {
+      num: '12398',
+      name: 'Mahabodhi Express',
+      type: 'Superfast' as const,
+      depHour: 13,
+      depMin: 50,
+      speedKmh: 74,
+      skipIntermediates: 1,
+      classes: [
+        { type: '2S', price: Math.round(dist * 0.22 + 65), status: 'AVL 94', statusType: 'available' as const, updatedText: 'Live' },
+        { type: 'SL', price: Math.round(dist * 0.42 + 130), status: 'RAC 12', statusType: 'rac' as const, updatedText: 'Live' },
+        { type: '3A', price: Math.round(dist * 1.10 + 340), status: 'AVL 22', statusType: 'available' as const, updatedText: 'Live' },
+      ],
+      runsOn: [true, true, true, true, true, true, true],
+    },
+    {
+      num: '20802',
+      name: `${fromMeta.city} Intercity SF`,
+      type: 'Superfast' as const,
+      depHour: 15,
+      depMin: 10,
+      speedKmh: 76,
+      skipIntermediates: 0,
+      classes: [
+        { type: 'SL', price: Math.round(dist * 0.43 + 135), status: 'AVL 92', statusType: 'available' as const, updatedText: 'Live' },
+        { type: '3A', price: Math.round(dist * 1.12 + 350), status: 'AVL 24', statusType: 'available' as const, updatedText: 'Live' },
+        { type: '2A', price: Math.round(dist * 1.62 + 530), status: 'AVL 07', statusType: 'available' as const, updatedText: 'Live' },
+      ],
+      runsOn: [true, true, true, true, true, true, true],
+    },
+    {
+      num: '12424',
+      name: `${toMeta.city} Rajdhani Express`,
+      type: 'Rajdhani' as const,
+      depHour: 16,
+      depMin: 30,
+      speedKmh: 88,
+      skipIntermediates: 2,
+      classes: [
+        { type: '3A', price: Math.round(dist * 1.45 + 550), status: 'AVL 64', statusType: 'available' as const, updatedText: 'Live' },
+        { type: '2A', price: Math.round(dist * 2.10 + 850), status: 'AVL 12', statusType: 'available' as const, updatedText: 'Live' },
+        { type: '1A', price: Math.round(dist * 3.10 + 1350), status: 'WL 02', statusType: 'waiting' as const, updatedText: 'Live' },
+      ],
+      runsOn: [true, true, true, true, true, true, true],
+    },
+    {
+      num: '12259',
+      name: `${toMeta.city} Duronto Express`,
+      type: 'Superfast' as const,
+      depHour: 17,
+      depMin: 40,
+      speedKmh: 85,
+      skipIntermediates: 3,
+      classes: [
+        { type: '3A', price: Math.round(dist * 1.30 + 480), status: 'AVL 50', statusType: 'available' as const, updatedText: 'Live' },
+        { type: '2A', price: Math.round(dist * 1.90 + 720), status: 'AVL 15', statusType: 'available' as const, updatedText: 'Live' },
+        { type: '1A', price: Math.round(dist * 2.90 + 1200), status: 'AVL 05', statusType: 'available' as const, updatedText: 'Live' },
+      ],
+      runsOn: [false, true, true, false, true, true, false],
+    },
+    {
+      num: '12582',
+      name: `${toMeta.city} SF Express`,
+      type: 'Superfast' as const,
+      depHour: 19,
+      depMin: 15,
+      speedKmh: 73,
+      skipIntermediates: 0,
+      classes: [
+        { type: '2S', price: Math.round(dist * 0.23 + 68), status: 'AVL 130', statusType: 'available' as const, updatedText: 'Live' },
+        { type: 'SL', price: Math.round(dist * 0.42 + 130), status: 'AVL 52', statusType: 'available' as const, updatedText: 'Live' },
+        { type: '3A', price: Math.round(dist * 1.10 + 340), status: 'WL 09', statusType: 'waiting' as const, updatedText: 'Live' },
+      ],
+      runsOn: [true, true, true, true, true, true, true],
+    },
+    {
+      num: '12560',
+      name: 'Shiv Ganga Superfast Express',
+      type: 'Superfast' as const,
+      depHour: 20,
+      depMin: 5,
+      speedKmh: 78,
+      skipIntermediates: 1,
+      classes: [
+        { type: 'SL', price: Math.round(dist * 0.41 + 125), status: 'AVL 45', statusType: 'available' as const, updatedText: 'Live' },
+        { type: '3A', price: Math.round(dist * 1.08 + 330), status: 'AVL 18', statusType: 'available' as const, updatedText: 'Live' },
+        { type: '2A', price: Math.round(dist * 1.58 + 510), status: 'AVL 06', statusType: 'available' as const, updatedText: 'Live' },
+      ],
+      runsOn: [true, true, true, true, true, true, true],
+    },
+    {
+      num: '14218',
+      name: 'Unchahar Mail Express',
+      type: 'Express' as const,
+      depHour: 21,
+      depMin: 10,
+      speedKmh: 60,
+      skipIntermediates: 0,
+      classes: [
+        { type: '2S', price: Math.round(dist * 0.18 + 50), status: 'AVL 180', statusType: 'available' as const, updatedText: 'Live' },
+        { type: 'SL', price: Math.round(dist * 0.38 + 110), status: 'AVL 65', statusType: 'available' as const, updatedText: 'Live' },
+        { type: '3A', price: Math.round(dist * 1.02 + 300), status: 'WL 08', statusType: 'waiting' as const, updatedText: 'Live' },
+      ],
+      runsOn: [true, true, true, true, true, true, true],
+    },
+    {
+      num: '12418',
+      name: 'Prayagraj Superfast Express',
+      type: 'Superfast' as const,
+      depHour: 22,
+      depMin: 10,
+      speedKmh: 77,
+      skipIntermediates: 1,
+      classes: [
+        { type: 'SL', price: Math.round(dist * 0.43 + 135), status: 'AVL 88', statusType: 'available' as const, updatedText: 'Live' },
+        { type: '3A', price: Math.round(dist * 1.12 + 350), status: 'WL 14', statusType: 'waiting' as const, updatedText: 'Live' },
+        { type: '2A', price: Math.round(dist * 1.62 + 530), status: 'RAC 04', statusType: 'rac' as const, updatedText: 'Live' },
+        { type: '1A', price: Math.round(dist * 2.70 + 1050), status: 'AVL 02', statusType: 'available' as const, updatedText: 'Live' },
+      ],
+      runsOn: [true, true, true, true, true, true, true],
+    },
+    {
+      num: '12952',
+      name: 'Tejas Rajdhani Express',
+      type: 'Rajdhani' as const,
+      depHour: 22,
+      depMin: 50,
+      speedKmh: 86,
+      skipIntermediates: 2,
+      classes: [
+        { type: '3A', price: Math.round(dist * 1.50 + 580), status: 'AVL 80', statusType: 'available' as const, updatedText: 'Live' },
+        { type: '2A', price: Math.round(dist * 2.15 + 880), status: 'AVL 25', statusType: 'available' as const, updatedText: 'Live' },
+      ],
+      runsOn: [true, true, true, true, true, true, true],
+    },
+    {
+      num: '12229',
+      name: 'Overnight Superfast Express',
+      type: 'Superfast' as const,
+      depHour: 23,
+      depMin: 45,
+      speedKmh: 72,
+      skipIntermediates: 0,
+      classes: [
+        { type: 'SL', price: Math.round(dist * 0.42 + 130), status: 'AVL 90', statusType: 'available' as const, updatedText: 'Live' },
+        { type: '3A', price: Math.round(dist * 1.10 + 340), status: 'AVL 35', statusType: 'available' as const, updatedText: 'Live' },
+        { type: '2A', price: Math.round(dist * 1.60 + 520), status: 'AVL 12', statusType: 'available' as const, updatedText: 'Live' },
+      ],
+      runsOn: [true, true, true, true, true, true, true],
+    },
+  ];
+
+  const generatedList: TrainBetweenStation[] = [];
+
+  for (let i = 0; i < blueprints.length; i++) {
+    const bp = blueprints[i];
+    const depTotalMins = bp.depHour * 60 + bp.depMin;
+    const depTimeStr = formatMinsTo12h(depTotalMins);
+
+    const durationMins = Math.max(75, Math.round((dist / bp.speedKmh) * 60));
+    const arrTotalMins = depTotalMins + durationMins;
+    const arrTimeStr = formatMinsTo12h(arrTotalMins);
+    const durationStr = `${Math.floor(durationMins / 60).toString().padStart(2, '0')}h ${(durationMins % 60).toString().padStart(2, '0')}m`;
+
+    // Filter intermediate stops based on train type
+    let chosenIntermediates = profile.intermediates;
+    if (bp.skipIntermediates > 0 && profile.intermediates.length > 2) {
+      chosenIntermediates = profile.intermediates.filter((_, idx) => idx % (bp.skipIntermediates + 1) === 0);
+    }
+    if (chosenIntermediates.length === 0 && profile.intermediates.length > 0) {
+      chosenIntermediates = [profile.intermediates[Math.floor(profile.intermediates.length / 2)]];
+    }
+
+    // Build RouteStop[] for this specific train
+    const stops: RouteStop[] = [
+      {
+        code: normFrom,
+        name: fromMeta.name,
+        arr: '--',
+        dep: depTimeStr,
+        distanceKm: 0,
+        platform: `PF ${(parseInt(bp.num.slice(-1), 10) % 5) + 1}`,
+      },
+    ];
+
+    for (let sIdx = 0; sIdx < chosenIntermediates.length; sIdx++) {
+      const stSeed = chosenIntermediates[sIdx];
+      const stopDist = Math.max(15, Math.round(dist * stSeed.fraction));
+      const stopArriveMin = depTotalMins + Math.round(durationMins * stSeed.fraction);
+      const stopDepMin = stopArriveMin + 2;
+
+      stops.push({
+        code: stSeed.code,
+        name: stSeed.name,
+        arr: formatMinsTo12h(stopArriveMin),
+        dep: formatMinsTo12h(stopDepMin),
+        distanceKm: stopDist,
+        halt: '2m',
+        platform: stSeed.platform || `PF ${(sIdx % 3) + 1}`,
+      });
+    }
+
+    stops.push({
+      code: normTo,
+      name: toMeta.name,
+      arr: arrTimeStr,
+      dep: '--',
+      distanceKm: dist,
+      platform: `PF ${(parseInt(bp.num.slice(-2), 10) % 6) + 1}`,
+    });
+
+    const corridorTrain: CorridorTrain = {
+      id: `dyn-${bp.num}-${normFrom}-${normTo}`,
+      number: bp.num,
+      name: bp.name,
+      type: bp.type,
+      isLocalEmu: false,
+      originCode: normFrom,
+      originName: fromMeta.name,
+      destCode: normTo,
+      destName: toMeta.name,
+      depTime: depTimeStr,
+      arrTime: arrTimeStr,
+      duration: durationStr,
+      totalHaults: chosenIntermediates.length,
+      totalDistanceKm: dist,
+      runsOn: bp.runsOn,
+      classes: bp.classes,
+      stops,
+    };
+
+    // Register into catalogs so clicking ANY card opens the exact train with this route!
+    trainByNumberMap.set(bp.num, corridorTrain);
+    dynamicTrainCache.set(bp.num, corridorTrain);
+    dynamicTrainCache.set(`${bp.num}-${normFrom}-${normTo}`, corridorTrain);
+    dynamicTrainCache.set(bp.name.toUpperCase(), corridorTrain);
+
+    generatedList.push({
+      id: `${bp.num}-${normFrom}-${normTo}`,
+      number: bp.num,
+      name: bp.name,
+      type: bp.type,
+      isLocalEmu: false,
+      fromStationCode: normFrom,
+      fromStationName: fromMeta.name,
+      toStationCode: normTo,
+      toStationName: toMeta.name,
+      depTime: depTimeStr,
+      arrTime: arrTimeStr,
+      duration: durationStr,
+      runsOn: bp.runsOn,
+      classes: bp.classes,
+      totalHaults: chosenIntermediates.length,
+    });
+  }
+
+  return generatedList;
+}
+
 // Dynamic Corridor Route Matching Engine with caching
 export function getTrainsBetweenStations(fromCode: string, toCode: string): TrainBetweenStation[] {
   const normFrom = (fromCode || '').trim().toUpperCase();
@@ -1379,49 +2053,23 @@ export function getTrainsBetweenStations(fromCode: string, toCode: string): Trai
     }
   }
 
-  // If no direct corridor train matched (e.g. general non-corridor stations), return default sample trains
-  const result = matchingTrains.length > 0 ? matchingTrains : [
-    {
-      id: `22436-${normFrom}-${normTo}`,
-      number: '22436',
-      name: 'Vande Bharat Express',
-      type: 'Superfast' as const,
-      isLocalEmu: false,
-      fromStationCode: normFrom || 'SRC',
-      fromStationName: 'Source Station',
-      toStationCode: normTo || 'DST',
-      toStationName: 'Destination Station',
-      depTime: '06:00 AM',
-      arrTime: '10:08 AM',
-      duration: '04h 08m',
-      runsOn: [true, true, true, false, true, true, true],
-      classes: [
-        { type: 'CC', price: 1185, status: 'AVAILABLE-42', statusType: 'available' as const, updatedText: 'Live' },
-        { type: 'EC', price: 2115, status: 'AVAILABLE-08', statusType: 'available' as const, updatedText: 'Live' },
-      ],
-      totalHaults: 2,
-    },
-    {
-      id: `12004-${normFrom}-${normTo}`,
-      number: '12004',
-      name: 'Lucknow Swarna Shatabdi',
-      type: 'Shatabdi' as const,
-      isLocalEmu: false,
-      fromStationCode: normFrom || 'SRC',
-      fromStationName: 'Source Station',
-      toStationCode: normTo || 'DST',
-      toStationName: 'Destination Station',
-      depTime: '06:10 AM',
-      arrTime: '11:20 AM',
-      duration: '05h 10m',
-      runsOn: [true, true, true, true, true, true, true],
-      classes: [
-        { type: 'CC', price: 920, status: 'AVAILABLE-114', statusType: 'available' as const, updatedText: 'Live' },
-        { type: 'EC', price: 1675, status: 'AVAILABLE-16', statusType: 'available' as const, updatedText: 'Live' },
-      ],
-      totalHaults: 4,
-    },
-  ];
+  // If corridor master trains matched at least 10 trains, use them.
+  // Otherwise, use dynamic route generator to supply all trains between the two stations.
+  let result: TrainBetweenStation[];
+  if (matchingTrains.length >= 10) {
+    result = matchingTrains;
+  } else {
+    const dynamicList = generateDynamicTrainsForRoute(normFrom, normTo);
+    // Combine any corridor matches with dynamic trains without duplicate train numbers
+    const existingNums = new Set(matchingTrains.map((m) => m.number));
+    const combined = [...matchingTrains];
+    for (let i = 0; i < dynamicList.length; i++) {
+      if (!existingNums.has(dynamicList[i].number)) {
+        combined.push(dynamicList[i]);
+      }
+    }
+    result = combined;
+  }
 
   if (routeMatchesCache.size >= MAX_ROUTE_CACHE_SIZE) {
     const firstKey = routeMatchesCache.keys().next().value;
@@ -1430,32 +2078,4 @@ export function getTrainsBetweenStations(fromCode: string, toCode: string): Trai
   routeMatchesCache.set(cacheKey, result);
 
   return result;
-}
-
-// Helper: parse HH:MM AM/PM to calculate duration
-function calculateDuration(depStr: string, arrStr: string): string {
-  try {
-    const parseTime = (tStr: string) => {
-      const parts = tStr.trim().split(' ');
-      const timeParts = parts[0].split(':');
-      let hours = parseInt(timeParts[0], 10);
-      const minutes = parseInt(timeParts[1], 10);
-      const meridiem = parts[1]?.toUpperCase();
-
-      if (meridiem === 'PM' && hours !== 12) hours += 12;
-      if (meridiem === 'AM' && hours === 12) hours = 0;
-      return hours * 60 + minutes;
-    };
-
-    const depMins = parseTime(depStr);
-    let arrMins = parseTime(arrStr);
-    if (arrMins < depMins) arrMins += 24 * 60; // Next day arrival
-
-    const diffMins = arrMins - depMins;
-    const h = Math.floor(diffMins / 60);
-    const m = diffMins % 60;
-    return `${h.toString().padStart(2, '0')}h ${m.toString().padStart(2, '0')}m`;
-  } catch {
-    return '02h 15m';
-  }
 }

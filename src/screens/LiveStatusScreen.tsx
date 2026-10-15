@@ -13,11 +13,11 @@ interface LiveStatusScreenProps {
 }
 
 const QUICK_TRAINS = [
-  { number: '05379', name: 'Lucknow Jn. - Kasganj Passenger' },
-  { number: '64902', name: 'New Delhi - Mathura EMU' },
-  { number: '12002', name: 'NDLS - Bhopal Shatabdi' },
-  { number: '12417', name: 'Prayagraj Express' },
   { number: '22436', name: 'Vande Bharat Express' },
+  { number: '12417', name: 'Prayagraj Express' },
+  { number: '12002', name: 'NDLS - Bhopal Shatabdi' },
+  { number: '64902', name: 'New Delhi - Mathura EMU' },
+  { number: '05379', name: 'Lucknow Jn. - Kasganj Passenger' },
   { number: '64901', name: 'Mathura - New Delhi EMU' },
 ];
 

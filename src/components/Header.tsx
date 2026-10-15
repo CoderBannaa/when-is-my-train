@@ -53,38 +53,14 @@ export const Header: React.FC<HeaderProps> = ({
       </View>
 
       <View style={styles.rightSection}>
-        {/* Language Quick Switcher (EN / हिं) */}
-        <TouchableOpacity
-          style={styles.langPillBtn}
-          activeOpacity={0.75}
-          onPress={handleToggleLang}
-        >
-          <Text style={styles.langPillText}>
-            {language === 'en' ? 'हिन्दी' : 'EN'}
-          </Text>
-        </TouchableOpacity>
-
-        {/* Day / Night Mode Toggle (☀️ / 🌙) */}
-        <TouchableOpacity
-          style={[styles.actionBtn, { marginLeft: 6 }]}
-          activeOpacity={0.7}
-          onPress={toggleTheme}
-        >
-          <Ionicons
-            name={isDarkMode ? 'sunny' : 'moon'}
-            size={18}
-            color={isDarkMode ? '#FDE047' : '#FFFFFF'}
-          />
-        </TouchableOpacity>
-
-        {/* Preferences / Settings Modal */}
+        {/* Settings Button (Language & Dark Mode are inside Settings) */}
         {onOpenPreferences && (
           <TouchableOpacity
-            style={[styles.actionBtn, { marginLeft: 6 }]}
+            style={styles.actionBtn}
             activeOpacity={0.7}
             onPress={onOpenPreferences}
           >
-            <Ionicons name="settings-outline" size={18} color="#FFFFFF" />
+            <Ionicons name="settings-outline" size={20} color="#FFFFFF" />
           </TouchableOpacity>
         )}
       </View>

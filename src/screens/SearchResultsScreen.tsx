@@ -21,7 +21,7 @@ interface SearchResultsScreenProps {
   toStation: Station;
   selectedDate: string;
   onBack: () => void;
-  onTrackTrain: (trainNumber: string, trainName: string) => void;
+  onTrackTrain: (trainNumber: string, trainName: string, fromStation?: Station, toStation?: Station) => void;
 }
 
 type SortOption = 'fastest' | 'early_dep' | 'late_dep' | 'price_low';
@@ -45,42 +45,7 @@ function durationToMinutes(durStr: string): number {
   return total || 9999;
 }
 
-function get20RandomTrains(fromCode: string, toCode: string): TrainBetweenStation[] {
-  const list = [
-    { id: '22436', number: '22436', name: 'Vande Bharat Express', type: 'Superfast', depTime: '06:00 AM', arrTime: '10:08 AM', duration: '04h 08m', totalHaults: 2, classes: [{ type: 'CC', price: 1185, status: 'AVL 42', statusType: 'available', updatedText: 'Live' }, { type: 'EC', price: 2115, status: 'AVL 08', statusType: 'available', updatedText: 'Live' }] },
-    { id: '12004', number: '12004', name: 'Lucknow Swarna Shatabdi', type: 'Shatabdi', depTime: '06:10 AM', arrTime: '11:20 AM', duration: '05h 10m', totalHaults: 4, classes: [{ type: 'CC', price: 920, status: 'AVL 114', statusType: 'available', updatedText: 'Live' }, { type: 'EC', price: 1675, status: 'AVL 16', statusType: 'available', updatedText: 'Live' }] },
-    { id: '12418', number: '12418', name: 'Prayagraj Express', type: 'Superfast', depTime: '10:10 PM', arrTime: '03:55 AM', duration: '05h 45m', totalHaults: 2, classes: [{ type: 'SL', price: 345, status: 'AVL 88', statusType: 'available', updatedText: 'Live' }, { type: '3A', price: 890, status: 'WL 14', statusType: 'waiting', updatedText: 'Live' }, { type: '2A', price: 1250, status: 'RAC 04', statusType: 'rac', updatedText: 'Live' }, { type: '1A', price: 2100, status: 'AVL 02', statusType: 'available', updatedText: 'Live' }] },
-    { id: '12560', number: '12560', name: 'Shiv Ganga Express', type: 'Superfast', depTime: '08:05 PM', arrTime: '01:25 AM', duration: '05h 20m', totalHaults: 1, classes: [{ type: 'SL', price: 320, status: 'AVL 45', statusType: 'available', updatedText: 'Live' }, { type: '3A', price: 840, status: 'AVL 18', statusType: 'available', updatedText: 'Live' }, { type: '2A', price: 1190, status: 'AVL 06', statusType: 'available', updatedText: 'Live' }] },
-    { id: '12424', number: '12424', name: 'Dibrugarh Rajdhani Express', type: 'Rajdhani', depTime: '04:10 PM', arrTime: '09:15 PM', duration: '05h 05m', totalHaults: 1, classes: [{ type: '3A', price: 1340, status: 'AVL 64', statusType: 'available', updatedText: 'Live' }, { type: '2A', price: 1880, status: 'AVL 12', statusType: 'available', updatedText: 'Live' }, { type: '1A', price: 2950, status: 'WL 02', statusType: 'waiting', updatedText: 'Live' }] },
-    { id: '12582', number: '12582', name: 'Banaras SF Express', type: 'Superfast', depTime: '10:50 PM', arrTime: '04:45 AM', duration: '05h 55m', totalHaults: 3, classes: [{ type: '2S', price: 190, status: 'AVL 130', statusType: 'available', updatedText: 'Live' }, { type: 'SL', price: 335, status: 'AVL 52', statusType: 'available', updatedText: 'Live' }, { type: '3A', price: 870, status: 'WL 09', statusType: 'waiting', updatedText: 'Live' }] },
-    { id: '12452', number: '12452', name: 'Shram Shakti Express', type: 'Superfast', depTime: '11:55 PM', arrTime: '06:00 AM', duration: '06h 05m', totalHaults: 1, classes: [{ type: '2S', price: 175, status: 'AVL 76', statusType: 'available', updatedText: 'Live' }, { type: 'SL', price: 310, status: 'AVL 34', statusType: 'available', updatedText: 'Live' }, { type: '3A', price: 820, status: 'AVL 15', statusType: 'available', updatedText: 'Live' }, { type: '2A', price: 1150, status: 'AVL 08', statusType: 'available', updatedText: 'Live' }] },
-    { id: '12398', number: '12398', name: 'Mahabodhi Express', type: 'Superfast', depTime: '12:50 PM', arrTime: '05:55 PM', duration: '05h 05m', totalHaults: 2, classes: [{ type: '2S', price: 180, status: 'AVL 94', statusType: 'available', updatedText: 'Live' }, { type: 'SL', price: 325, status: 'RAC 12', statusType: 'rac', updatedText: 'Live' }, { type: '3A', price: 860, status: 'AVL 22', statusType: 'available', updatedText: 'Live' }] },
-    { id: '12878', number: '12878', name: 'Ranchi Garib Rath', type: 'Superfast', depTime: '04:10 PM', arrTime: '09:40 PM', duration: '05h 30m', totalHaults: 1, classes: [{ type: '3A', price: 685, status: 'AVL 110', statusType: 'available', updatedText: 'Live' }] },
-    { id: '12276', number: '12276', name: 'Prayagraj Humsafar Express', type: 'Superfast', depTime: '10:30 PM', arrTime: '04:20 AM', duration: '05h 50m', totalHaults: 1, classes: [{ type: '3A', price: 865, status: 'AVL 58', statusType: 'available', updatedText: 'Live' }] },
-    { id: '12420', number: '12420', name: 'Gomti Express', type: 'Express', depTime: '12:20 PM', arrTime: '07:35 PM', duration: '07h 15m', totalHaults: 12, classes: [{ type: '2S', price: 160, status: 'AVL 240', statusType: 'available', updatedText: 'Live' }, { type: 'CC', price: 640, status: 'AVL 38', statusType: 'available', updatedText: 'Live' }, { type: '2A', price: 1080, status: 'AVL 10', statusType: 'available', updatedText: 'Live' }] },
-    { id: '14218', number: '14218', name: 'Unchahar Express', type: 'Express', depTime: '09:10 PM', arrTime: '05:35 AM', duration: '08h 25m', totalHaults: 16, classes: [{ type: '2S', price: 145, status: 'AVL 180', statusType: 'available', updatedText: 'Live' }, { type: 'SL', price: 270, status: 'AVL 65', statusType: 'available', updatedText: 'Live' }, { type: '3A', price: 730, status: 'WL 08', statusType: 'waiting', updatedText: 'Live' }] },
-    { id: '12402', number: '12402', name: 'Magadh Express', type: 'Superfast', depTime: '09:05 PM', arrTime: '03:15 AM', duration: '06h 10m', totalHaults: 4, classes: [{ type: 'SL', price: 330, status: 'AVL 40', statusType: 'available', updatedText: 'Live' }, { type: '3A', price: 880, status: 'AVL 12', statusType: 'available', updatedText: 'Live' }, { type: '2A', price: 1230, status: 'RAC 02', statusType: 'rac', updatedText: 'Live' }] },
-    { id: '20802', number: '20802', name: 'Magadh Superfast Express', type: 'Superfast', depTime: '07:50 PM', arrTime: '01:40 AM', duration: '05h 50m', totalHaults: 2, classes: [{ type: 'SL', price: 340, status: 'AVL 92', statusType: 'available', updatedText: 'Live' }, { type: '3A', price: 895, status: 'AVL 24', statusType: 'available', updatedText: 'Live' }, { type: '2A', price: 1260, status: 'AVL 07', statusType: 'available', updatedText: 'Live' }] },
-    { id: '12259', number: '12259', name: 'Sealdah Duronto Express', type: 'Duronto', depTime: '08:00 PM', arrTime: '04:00 AM', duration: '08h 00m', totalHaults: 0, classes: [{ type: '3A', price: 1100, status: 'AVL 50', statusType: 'available', updatedText: 'Live' }, { type: '2A', price: 1650, status: 'AVL 15', statusType: 'available', updatedText: 'Live' }, { type: '1A', price: 2700, status: 'AVL 05', statusType: 'available', updatedText: 'Live' }] },
-    { id: '12313', number: '12313', name: 'Sealdah Rajdhani Express', type: 'Rajdhani', depTime: '04:25 PM', arrTime: '10:05 PM', duration: '05h 40m', totalHaults: 2, classes: [{ type: '3A', price: 1420, status: 'AVL 30', statusType: 'available', updatedText: 'Live' }, { type: '2A', price: 1950, status: 'AVL 10', statusType: 'available', updatedText: 'Live' }] },
-    { id: '12951', number: '12951', name: 'Tejas Rajdhani Express', type: 'Rajdhani', depTime: '05:00 PM', arrTime: '08:30 AM', duration: '15h 30m', totalHaults: 5, classes: [{ type: '3A', price: 1550, status: 'AVL 80', statusType: 'available', updatedText: 'Live' }, { type: '2A', price: 2100, status: 'AVL 25', statusType: 'available', updatedText: 'Live' }] },
-    { id: '22415', number: '22415', name: 'Andhra Pradesh AC Superfast', type: 'Superfast', depTime: '06:25 AM', arrTime: '02:15 PM', duration: '07h 50m', totalHaults: 6, classes: [{ type: '3A', price: 980, status: 'AVL 60', statusType: 'available', updatedText: 'Live' }, { type: '2A', price: 1400, status: 'AVL 18', statusType: 'available', updatedText: 'Live' }] },
-    { id: '12615', number: '12615', name: 'Grand Trunk Express', type: 'Express', depTime: '04:40 PM', arrTime: '06:20 AM', duration: '13h 40m', totalHaults: 18, classes: [{ type: 'SL', price: 410, status: 'AVL 105', statusType: 'available', updatedText: 'Live' }, { type: '3A', price: 1120, status: 'WL 05', statusType: 'waiting', updatedText: 'Live' }] },
-    { id: '64902', number: '64902', name: 'Ghaziabad - Kanpur MEMU Local', type: 'EMU Local', isLocalEmu: true, depTime: '05:30 AM', arrTime: '01:45 PM', duration: '08h 15m', totalHaults: 24, classes: [{ type: '2S', price: 95, status: 'UNRESERVED', statusType: 'unreserved', updatedText: 'Live' }] },
-  ];
 
-  return list.map((t, idx) => ({
-    ...t,
-    id: `${t.number}-${idx}`,
-    type: (t.type === 'Duronto' ? 'Superfast' : t.type) as any,
-    isLocalEmu: !!(t as any).isLocalEmu,
-    fromStationCode: fromCode || 'NDLS',
-    fromStationName: 'Origin Station',
-    toStationCode: toCode || 'PRYJ',
-    toStationName: 'Dest Station',
-    runsOn: [true, true, true, true, true, true, true],
-  })) as TrainBetweenStation[];
-}
 
 export interface DynamicDateItem {
   label: string;
@@ -227,12 +192,7 @@ export const SearchResultsScreen: React.FC<SearchResultsScreenProps> = ({
   }, [currentDate, dynamicDates, calendarDates]);
 
   const rawTrains = useMemo(() => {
-    const corridorTrains = getTrainsBetweenStations(fromStation.code, toStation.code);
-    if (corridorTrains && corridorTrains.length >= 20) {
-      return corridorTrains;
-    }
-    // Return 20 random train cards for testing as requested
-    return get20RandomTrains(fromStation.code, toStation.code);
+    return getTrainsBetweenStations(fromStation.code, toStation.code);
   }, [fromStation.code, toStation.code]);
 
   const classFilteredTrains = useMemo(() => {
@@ -350,7 +310,7 @@ Found on When is my train`;
             item.isLocalEmu && styles.emuCardHighlight,
           ]}
           activeOpacity={0.82}
-          onPress={() => onTrackTrain(item.number, item.name)}
+          onPress={() => onTrackTrain(item.number, item.name, fromStation, toStation)}
         >
           {/* Line 1: [Train Badge]  DepTime ── ArrTime  [Days S M T W T F S]  > */}
           <View style={styles.cardHeaderRow}>

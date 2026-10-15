@@ -15,10 +15,10 @@ export interface CacheEntry<T> {
 
 class SixtySecondCacheEngine {
   private cache = new Map<string, CacheEntry<any>>();
-  private defaultTtlMs = 60 * 1000; // 60 Seconds TTL
+  private defaultTtlMs = 10 * 60 * 1000; // 10 Minutes TTL (600,000 ms) to conserve API token quota
 
   /**
-   * Retrieves data if present and not expired (within 60 seconds)
+   * Retrieves data if present and not expired (within 10 minutes)
    */
   public get<T>(key: string): { data: T; isCached: true; ageSeconds: number } | null {
     const entry = this.cache.get(key);
@@ -39,7 +39,7 @@ class SixtySecondCacheEngine {
   }
 
   /**
-   * Stores data in cache with exact TTL (default: 60,000 ms)
+   * Stores data in cache with exact TTL (default: 10 minutes)
    */
   public set<T>(key: string, data: T, ttlMs?: number, source: 'api' | 'fallback' = 'api'): void {
     const ttl = ttlMs || this.defaultTtlMs;
@@ -255,7 +255,7 @@ class LiveTrainApiService {
     const cleanTrainNo = trainNumber.trim().replace(/\D/g, '');
     const cacheKey = `live_status_${cleanTrainNo}`;
 
-    // 1. Check 60-Second Cache first (unless forceRefresh is true)
+    // 1. Check in-memory cache first (unless forceRefresh is true)
     if (!forceRefresh) {
       const cached = TrainCache.get<LiveTrainTrackingData>(cacheKey);
       if (cached) {
@@ -265,6 +265,23 @@ class LiveTrainApiService {
           cacheAgeSeconds: cached.ageSeconds,
         };
       }
+
+      // 1.1 Check persistent storage to eliminate token waste across app restarts/screens
+      try {
+        const storedStr = await SafeStorage.getItem(`@cache_status_${cleanTrainNo}`);
+        if (storedStr) {
+          const stored = JSON.parse(storedStr);
+          const ageMs = Date.now() - (stored.savedAt || 0);
+          if (ageMs < 10 * 60 * 1000 && stored.data) {
+            TrainCache.set(cacheKey, stored.data, (10 * 60 * 1000) - ageMs, 'api');
+            return {
+              ...stored.data,
+              isCached: true,
+              cacheAgeSeconds: Math.round(ageMs / 1000),
+            };
+          }
+        }
+      } catch {}
     }
 
     // 2. RailRadar.in Real-Time Live Status (Priority Provider)
@@ -283,7 +300,8 @@ class LiveTrainApiService {
           const apiJson = await response.json();
           if (apiJson && (apiJson.success || apiJson.data)) {
             const parsed = this.transformRailRadarApiResponse(cleanTrainNo, apiJson);
-            TrainCache.set(cacheKey, parsed, 45 * 1000, 'api');
+            TrainCache.set(cacheKey, parsed, 10 * 60 * 1000, 'api');
+            SafeStorage.setItem(`@cache_status_${cleanTrainNo}`, JSON.stringify({ data: parsed, savedAt: Date.now() })).catch(() => {});
             this.lastKnownLiveStatus.set(cleanTrainNo, parsed);
             return parsed;
           }
