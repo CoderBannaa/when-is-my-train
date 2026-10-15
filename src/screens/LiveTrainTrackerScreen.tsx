@@ -67,10 +67,11 @@ export const VANDE_BHARAT_22436_STOPS: StationLiveDetail[] = [
     actualDep: '06:21 AM',
     platform: 'Platform 2',
     distanceKm: 15,
-    haltDuration: '2m',
+    haltDuration: 'Pass',
     status: 'PASSED',
     delayAtStopMinutes: 1,
     isDelayed: false,
+    isPassing: true,
   },
   {
     code: 'TKD',
@@ -79,13 +80,14 @@ export const VANDE_BHARAT_22436_STOPS: StationLiveDetail[] = [
     scheduledDep: '06:57 AM',
     actualArr: '07:02 AM',
     actualDep: '07:05 AM',
-    platform: 'Platform 1',
+    platform: 'Through',
     distanceKm: 32,
-    haltDuration: '2m',
+    haltDuration: 'Pass',
     status: 'PASSED',
     delayAtStopMinutes: 7,
     delayMinutes: 2,
     isDelayed: true,
+    isPassing: true,
   },
   {
     code: 'FDB',
@@ -96,11 +98,12 @@ export const VANDE_BHARAT_22436_STOPS: StationLiveDetail[] = [
     actualDep: '07:28 AM',
     platform: 'Platform 3',
     distanceKm: 58,
-    haltDuration: '2m',
+    haltDuration: 'Pass',
     status: 'PASSED',
     delayAtStopMinutes: 3,
     delayMinutes: 3,
     isDelayed: true,
+    isPassing: true,
   },
   {
     code: 'MTJ',
@@ -118,6 +121,51 @@ export const VANDE_BHARAT_22436_STOPS: StationLiveDetail[] = [
     isDelayed: true,
   },
   {
+    code: 'BTSR',
+    name: 'Bhuteshwar (BTSR)',
+    scheduledArr: '08:22 AM',
+    scheduledDep: '08:22 AM',
+    actualArr: '08:24 AM',
+    actualDep: '08:24 AM',
+    platform: 'Through',
+    distanceKm: 190,
+    haltDuration: 'Pass',
+    status: 'UPCOMING',
+    delayAtStopMinutes: 2,
+    isDelayed: false,
+    isPassing: true,
+  },
+  {
+    code: 'FAR',
+    name: 'Farah (FAR)',
+    scheduledArr: '08:38 AM',
+    scheduledDep: '08:38 AM',
+    actualArr: '08:40 AM',
+    actualDep: '08:40 AM',
+    platform: 'Through',
+    distanceKm: 212,
+    haltDuration: 'Pass',
+    status: 'UPCOMING',
+    delayAtStopMinutes: 2,
+    isDelayed: false,
+    isPassing: true,
+  },
+  {
+    code: 'RNKA',
+    name: 'Runkuta (RNKA)',
+    scheduledArr: '08:52 AM',
+    scheduledDep: '08:52 AM',
+    actualArr: '08:54 AM',
+    actualDep: '08:54 AM',
+    platform: 'Through',
+    distanceKm: 228,
+    haltDuration: 'Pass',
+    status: 'UPCOMING',
+    delayAtStopMinutes: 0,
+    isDelayed: false,
+    isPassing: true,
+  },
+  {
     code: 'AGC',
     name: 'Agra Cantt (AGC)',
     scheduledArr: '09:07 AM',
@@ -130,6 +178,51 @@ export const VANDE_BHARAT_22436_STOPS: StationLiveDetail[] = [
     status: 'UPCOMING',
     delayAtStopMinutes: 0,
     isDelayed: false,
+  },
+  {
+    code: 'BHA',
+    name: 'Bhandai Jn (BHA)',
+    scheduledArr: '09:20 AM',
+    scheduledDep: '09:20 AM',
+    actualArr: '09:20 AM',
+    actualDep: '09:20 AM',
+    platform: 'Through',
+    distanceKm: 254,
+    haltDuration: 'Pass',
+    status: 'UPCOMING',
+    delayAtStopMinutes: 0,
+    isDelayed: false,
+    isPassing: true,
+  },
+  {
+    code: 'TDL',
+    name: 'Tundla Jn (TDL)',
+    scheduledArr: '09:38 AM',
+    scheduledDep: '09:38 AM',
+    actualArr: '09:38 AM',
+    actualDep: '09:38 AM',
+    platform: 'Through',
+    distanceKm: 295,
+    haltDuration: 'Pass',
+    status: 'UPCOMING',
+    delayAtStopMinutes: 0,
+    isDelayed: false,
+    isPassing: true,
+  },
+  {
+    code: 'SKB',
+    name: 'Shikohabad Jn (SKB)',
+    scheduledArr: '09:48 AM',
+    scheduledDep: '09:48 AM',
+    actualArr: '09:48 AM',
+    actualDep: '09:48 AM',
+    platform: 'Through',
+    distanceKm: 318,
+    haltDuration: 'Pass',
+    status: 'UPCOMING',
+    delayAtStopMinutes: 0,
+    isDelayed: false,
+    isPassing: true,
   },
   {
     code: 'ETW',
@@ -146,6 +239,51 @@ export const VANDE_BHARAT_22436_STOPS: StationLiveDetail[] = [
     isDelayed: false,
   },
   {
+    code: 'PHD',
+    name: 'Phaphund (PHD)',
+    scheduledArr: '10:24 AM',
+    scheduledDep: '10:24 AM',
+    actualArr: '10:24 AM',
+    actualDep: '10:24 AM',
+    platform: 'Through',
+    distanceKm: 382,
+    haltDuration: 'Pass',
+    status: 'UPCOMING',
+    delayAtStopMinutes: 0,
+    isDelayed: false,
+    isPassing: true,
+  },
+  {
+    code: 'RURA',
+    name: 'Rura (RURA)',
+    scheduledArr: '10:38 AM',
+    scheduledDep: '10:38 AM',
+    actualArr: '10:38 AM',
+    actualDep: '10:38 AM',
+    platform: 'Through',
+    distanceKm: 405,
+    haltDuration: 'Pass',
+    status: 'UPCOMING',
+    delayAtStopMinutes: 0,
+    isDelayed: false,
+    isPassing: true,
+  },
+  {
+    code: 'PNKD',
+    name: 'Panki Dham (PNKD)',
+    scheduledArr: '10:52 AM',
+    scheduledDep: '10:52 AM',
+    actualArr: '10:52 AM',
+    actualDep: '10:52 AM',
+    platform: 'Through',
+    distanceKm: 428,
+    haltDuration: 'Pass',
+    status: 'UPCOMING',
+    delayAtStopMinutes: 0,
+    isDelayed: false,
+    isPassing: true,
+  },
+  {
     code: 'CNB',
     name: 'Kanpur Central (CNB)',
     scheduledArr: '10:08 AM',
@@ -160,6 +298,23 @@ export const VANDE_BHARAT_22436_STOPS: StationLiveDetail[] = [
     isDelayed: false,
   },
 ];
+
+export interface TimelineCommercialItem {
+  type: 'commercial';
+  station: StationLiveDetail;
+  originalIndex: number;
+}
+
+export interface TimelinePassingGroupItem {
+  type: 'passingGroup';
+  key: string;
+  stations: {
+    station: StationLiveDetail;
+    originalIndex: number;
+  }[];
+}
+
+export type TimelineItemType = TimelineCommercialItem | TimelinePassingGroupItem;
 
 interface LiveTrainTrackerScreenProps {
   trainNumber: string;
@@ -195,6 +350,7 @@ export const LiveTrainTrackerScreen: React.FC<LiveTrainTrackerScreenProps> = ({
   const [customDestCode, setCustomDestCode] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'journey' | 'live_map' | 'coach_position' | 'info'>('journey');
   const [selectedCoach, setSelectedCoach] = useState<string>('C3');
+  const [trackingSource, setTrackingSource] = useState<'cell' | 'gps'>('cell');
 
   // In-between / passing stations accordion expand state: { [groupKey: string]: boolean }
   const [expandedPassingGroups, setExpandedPassingGroups] = useState<{ [key: string]: boolean }>({});
@@ -419,16 +575,42 @@ export const LiveTrainTrackerScreen: React.FC<LiveTrainTrackerScreenProps> = ({
     return calculateLiveStatus(activeTrain, simulationMinutes);
   }, [liveApiResponse, activeTrain, simulationMinutes]);
 
-  // Clean station items mapping without collapsed accordion groups
-  const timelineItems = useMemo(() => {
-    return liveData.stationDetails
-      .filter((st) => !st.isPassing || activeTrain.number === '22436')
-      .map((st, idx) => ({
-        type: 'commercial' as const,
-        station: st,
-        originalIndex: idx,
-      }));
-  }, [liveData.stationDetails, activeTrain.number]);
+  // Clean station items mapping with collapsible intermediate passing groups
+  const timelineItems: TimelineItemType[] = useMemo(() => {
+    const items: TimelineItemType[] = [];
+    let currentPassing: { station: StationLiveDetail; originalIndex: number }[] = [];
+    let groupCount = 0;
+
+    liveData.stationDetails.forEach((st, idx) => {
+      if (st.isPassing) {
+        currentPassing.push({ station: st, originalIndex: idx });
+      } else {
+        if (currentPassing.length > 0) {
+          items.push({
+            type: 'passingGroup',
+            key: `pass-group-${groupCount++}`,
+            stations: [...currentPassing],
+          });
+          currentPassing = [];
+        }
+        items.push({
+          type: 'commercial',
+          station: st,
+          originalIndex: idx,
+        });
+      }
+    });
+
+    if (currentPassing.length > 0) {
+      items.push({
+        type: 'passingGroup',
+        key: `pass-group-${groupCount++}`,
+        stations: [...currentPassing],
+      });
+    }
+
+    return items;
+  }, [liveData.stationDetails]);
 
   // Derived route info
   const routeOriginStation = useMemo(() => {
@@ -615,6 +797,51 @@ Tracked on When is my train App`;
         </View>
       </View>
 
+      {/* ================= 2.5 TRACKING SOURCE & OFFLINE INDICATOR (Reference Feature) ================= */}
+      <View style={[styles.trackingSourceBar, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', borderBottomColor: colors.border }]}>
+        <View style={styles.trackingSourceLeft}>
+          <Text style={[styles.trackingSourceLabel, { color: colors.textSecondary }]}>Live position via:</Text>
+          <View style={styles.sourcePillsGroup}>
+            <TouchableOpacity
+              style={[styles.sourcePill, trackingSource === 'cell' && styles.sourcePillActive]}
+              onPress={() => setTrackingSource('cell')}
+              activeOpacity={0.8}
+            >
+              <MaterialCommunityIcons
+                name="transmission-tower"
+                size={13}
+                color={trackingSource === 'cell' ? '#FFFFFF' : Colors.primary}
+                style={{ marginRight: 4 }}
+              />
+              <Text style={[styles.sourcePillText, trackingSource === 'cell' && styles.sourcePillTextActive]}>
+                Cell tower
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.sourcePill, trackingSource === 'gps' && styles.sourcePillActive]}
+              onPress={() => setTrackingSource('gps')}
+              activeOpacity={0.8}
+            >
+              <MaterialCommunityIcons
+                name="crosshairs-gps"
+                size={13}
+                color={trackingSource === 'gps' ? '#FFFFFF' : Colors.primary}
+                style={{ marginRight: 4 }}
+              />
+              <Text style={[styles.sourcePillText, trackingSource === 'gps' && styles.sourcePillTextActive]}>
+                GPS
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={[styles.offlineBadge, { backgroundColor: isDarkMode ? '#064E3B' : '#DCFCE7' }]}>
+          <View style={styles.offlineGreenDot} />
+          <Text style={[styles.offlineBadgeText, { color: isDarkMode ? '#34D399' : '#15803D' }]}>Works without internet</Text>
+        </View>
+      </View>
+
       {/* ================= 3. ROUTE SUMMARY CARD ================= */}
       <View style={[styles.routeSummaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.routeStationCol}>
@@ -675,6 +902,34 @@ Tracked on When is my train App`;
       {/* ================= TAB 1: JOURNEY (TIMELINE VIEW) ================= */}
       {activeTab === 'journey' && (
         <View style={{ flex: 1, backgroundColor: colors.background }}>
+          {/* Hero Departed Status Banner (Reference App Screenshot 1) */}
+          <View style={[styles.heroStatusBanner, { backgroundColor: isDarkMode ? '#1E293B' : '#EFF6FF', borderColor: isDarkMode ? '#334155' : '#BFDBFE' }]}>
+            <View style={styles.heroStatusLeft}>
+              <View style={[styles.heroStatusIconCircle, { backgroundColor: liveData.isDelayed ? '#FEE2E2' : '#DCFCE7' }]}>
+                <MaterialCommunityIcons
+                  name={liveData.state === 'HALTED_AT_STATION' ? 'bus-stop' : 'train'}
+                  size={18}
+                  color={liveData.isDelayed ? '#DC2626' : '#16A34A'}
+                />
+              </View>
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <Text style={[styles.heroStatusTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+                    Departed {liveData.currentStationName}
+                  </Text>
+                  <View style={[styles.heroDelayPill, { backgroundColor: liveData.isDelayed ? '#FEE2E2' : '#DCFCE7' }]}>
+                    <Text style={[styles.heroDelayText, { color: liveData.isDelayed ? '#DC2626' : '#15803D' }]}>
+                      {liveData.isDelayed ? `+${liveData.delayMinutes}m` : 'ON TIME'}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={[styles.heroStatusSub, { color: colors.textSecondary }]} numberOfLines={1}>
+                  Next stop: {liveData.nextStationName} ({liveData.distanceToNextKm ?? 56} km away)
+                </Text>
+              </View>
+            </View>
+          </View>
+
           {/* Timeline Column Headers Strip */}
           <View style={[styles.timelineHeaderStrip, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', borderBottomColor: colors.border }]}>
             <Text style={[styles.stripColText, { color: colors.textSecondary }]}>Arrival</Text>
@@ -690,6 +945,85 @@ Tracked on When is my train App`;
           >
             <View style={styles.timelineContentWrapper}>
               {timelineItems.map((item, tIdx) => {
+                if (item.type === 'passingGroup') {
+                  const isExpanded = !!expandedPassingGroups[item.key];
+                  return (
+                    <View key={item.key} style={styles.passingGroupContainer}>
+                      <TouchableOpacity
+                        style={[styles.intermediateStationsBar, { backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC' }]}
+                        onPress={() => togglePassingGroup(item.key)}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.intermediateTrackLineCol}>
+                          <View style={[styles.trackLinePassing, { backgroundColor: isDarkMode ? '#475569' : '#CBD5E1' }]} />
+                        </View>
+                        <View style={styles.intermediateContentCol}>
+                          <View style={[styles.intermediateBadge, { backgroundColor: isDarkMode ? '#334155' : '#E0F2FE' }]}>
+                            <Ionicons
+                              name={isExpanded ? 'chevron-up' : 'chevron-down'}
+                              size={12}
+                              color={Colors.primary}
+                              style={{ marginRight: 4 }}
+                            />
+                            <Text style={styles.intermediateText}>
+                              {isExpanded
+                                ? `Hide ${item.stations.length} intermediate stations`
+                                : `+ ${item.stations.length} intermediate stations`}
+                            </Text>
+                          </View>
+                        </View>
+                      </TouchableOpacity>
+
+                      {isExpanded &&
+                        item.stations.map((pSub) => {
+                          const pSt = pSub.station;
+                          const pPassed = pSub.originalIndex < liveData.activeStopIndex;
+                          const pCurrent = pSub.originalIndex === liveData.activeStopIndex;
+                          return (
+                            <View
+                              key={`passing-${pSt.code}-${pSub.originalIndex}`}
+                              style={[
+                                styles.passingStationRow,
+                                { backgroundColor: colors.surface, borderBottomColor: colors.border },
+                                pCurrent && { backgroundColor: isDarkMode ? '#1E3A5F' : '#EDF6FF' },
+                              ]}
+                            >
+                              <View style={styles.timeColLeft}>
+                                <Text style={[styles.passingTimeText, { color: colors.textSecondary }]}>
+                                  {pSt.actualArr || pSt.scheduledArr || '--'}
+                                </Text>
+                              </View>
+                              <View style={styles.passingTrackCol}>
+                                <View style={[styles.passingTrackLineTop, pPassed ? styles.lineGreen : styles.lineGrey]} />
+                                <View
+                                  style={[
+                                    styles.passingTrackDot,
+                                    pPassed && styles.passingTrackDotGreen,
+                                    pCurrent && styles.passingTrackDotCurrent,
+                                  ]}
+                                />
+                                <View style={[styles.passingTrackLineBottom, pPassed ? styles.lineGreen : styles.lineGrey]} />
+                              </View>
+                              <View style={styles.passingInfoCol}>
+                                <Text style={[styles.passingStationName, { color: colors.textPrimary }]} numberOfLines={1}>
+                                  {pSt.name}
+                                </Text>
+                                <Text style={[styles.passingSpeedText, { color: colors.textSecondary }]}>
+                                  Pass • {pSt.distanceKm} km
+                                </Text>
+                              </View>
+                              <View style={styles.timeColRight}>
+                                <Text style={[styles.passingTimeText, { color: colors.textSecondary }]}>
+                                  {pSt.actualDep || pSt.scheduledDep || '--'}
+                                </Text>
+                              </View>
+                            </View>
+                          );
+                        })}
+                    </View>
+                  );
+                }
+
                 const st = item.station;
                 const index = item.originalIndex;
                 const isFirst = index === 0;
@@ -840,6 +1174,32 @@ Tracked on When is my train App`;
               })}
             </View>
           </ScrollView>
+
+          {/* Floating ETA & Speed Capsule (Reference Screenshots 1 & 8) */}
+          <View style={[styles.floatingEtaCapsule, { backgroundColor: isDarkMode ? '#1E293B' : '#0F172A' }]}>
+            <View style={styles.floatingEtaLeft}>
+              <MaterialCommunityIcons name="speedometer" size={17} color="#38BDF8" style={{ marginRight: 6 }} />
+              <Text style={styles.floatingEtaText} numberOfLines={1}>
+                {liveData.distanceToNextKm ?? 15} km to {liveData.nextStationName} • Speed {liveData.currentSpeed || 96} km/h
+              </Text>
+            </View>
+            <View style={styles.floatingEtaRight}>
+              <TouchableOpacity
+                style={styles.floatingWhistleBtn}
+                onPress={() => alert('Train horn whistle simulated 📢')}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <MaterialCommunityIcons name="bullhorn-outline" size={16} color="#FBBF24" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.floatingWhistleBtn, { marginLeft: 8 }]}
+                onPress={handleShare}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="share-social-outline" size={16} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+          </View>
 
           {/* ================= BOTTOM ACTION BAR (Exact from Screenshot 1) ================= */}
           <View style={[styles.journeyBottomBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
@@ -2795,6 +3155,251 @@ const styles = StyleSheet.create({
     borderRadius: 3.5,
     backgroundColor: '#34D399',
     marginRight: 5,
+  },
+
+  // Tracking Source Bar (Cell tower / GPS & Offline)
+  trackingSourceBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderBottomWidth: 1,
+  },
+  trackingSourceLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  trackingSourceLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginRight: 6,
+  },
+  sourcePillsGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  sourcePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    marginRight: 6,
+  },
+  sourcePillActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  sourcePillText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  sourcePillTextActive: {
+    color: '#FFFFFF',
+  },
+  offlineBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: 6,
+  },
+  offlineGreenDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#10B981',
+    marginRight: 5,
+  },
+  offlineBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+
+  // Hero Status Banner
+  heroStatusBanner: {
+    marginHorizontal: 12,
+    marginTop: 8,
+    marginBottom: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  heroStatusLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  heroStatusIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroStatusTitle: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    marginRight: 6,
+  },
+  heroDelayPill: {
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+  },
+  heroDelayText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  heroStatusSub: {
+    fontSize: 11,
+    fontWeight: '500',
+    marginTop: 1,
+  },
+
+  // Intermediate Passing Stations Group
+  intermediateStationsBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  intermediateTrackLineCol: {
+    width: 30,
+    alignItems: 'center',
+  },
+  trackLinePassing: {
+    width: 2,
+    height: 20,
+    borderRadius: 1,
+  },
+  intermediateContentCol: {
+    flex: 1,
+    paddingLeft: 6,
+  },
+  intermediateBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 3.5,
+    borderRadius: 12,
+  },
+  intermediateText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  passingStationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderBottomWidth: 0.5,
+    opacity: 0.85,
+  },
+  passingTimeColLeft: {
+    width: 60,
+    alignItems: 'flex-end',
+    paddingRight: 6,
+  },
+  passingTimeText: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  passingTrackCol: {
+    width: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 26,
+  },
+  passingTrackLineTop: {
+    position: 'absolute',
+    top: 0,
+    width: 2,
+    height: 13,
+  },
+  passingTrackDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#94A3B8',
+    zIndex: 2,
+  },
+  passingTrackDotGreen: {
+    backgroundColor: '#10B981',
+  },
+  passingTrackDotCurrent: {
+    backgroundColor: '#0284C7',
+    transform: [{ scale: 1.3 }],
+  },
+  passingTrackLineBottom: {
+    position: 'absolute',
+    bottom: 0,
+    width: 2,
+    height: 13,
+  },
+  passingInfoCol: {
+    flex: 1,
+    paddingLeft: 8,
+  },
+  passingStationName: {
+    fontSize: 11.5,
+    fontWeight: '600',
+  },
+  passingSpeedText: {
+    fontSize: 9.5,
+  },
+  passingTimeColRight: {
+    width: 60,
+    alignItems: 'flex-start',
+    paddingLeft: 6,
+  },
+
+  // Floating ETA & Speed Capsule (Reference App)
+  floatingEtaCapsule: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: 12,
+    marginBottom: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 24,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+  },
+  floatingEtaLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 8,
+  },
+  floatingEtaText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    flex: 1,
+  },
+  floatingEtaRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  floatingWhistleBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 

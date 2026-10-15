@@ -21,8 +21,69 @@ const QUICK_TRAINS = [
   { number: '64901', name: 'Mathura - New Delhi EMU' },
 ];
 
+export interface StationDepartureItem {
+  number: string;
+  name: string;
+  destCode: string;
+  destName: string;
+  platform: string;
+  schedDep: string;
+  actualDep: string;
+  delayMinutes: number;
+  isDelayed: boolean;
+  type: string;
+  isLocalEmu: boolean;
+}
+
+const DEPARTURE_BOARD_DATABASE: { [stationCode: string]: StationDepartureItem[] } = {
+  NDLS: [
+    { number: '22436', name: 'Vande Bharat Express', destCode: 'BSB', destName: 'Varanasi Jn', platform: 'PF 16', schedDep: '06:00 AM', actualDep: '06:00 AM', delayMinutes: 0, isDelayed: false, type: 'Vande Bharat', isLocalEmu: false },
+    { number: '12004', name: 'Lucknow Shatabdi Exp', destCode: 'LKO', destName: 'Lucknow Jn', platform: 'PF 1', schedDep: '06:10 AM', actualDep: '06:15 AM', delayMinutes: 5, isDelayed: true, type: 'Shatabdi', isLocalEmu: false },
+    { number: '64902', name: 'New Delhi - Mathura EMU', destCode: 'MTJ', destName: 'Mathura Jn', platform: 'PF 5', schedDep: '06:30 AM', actualDep: '06:30 AM', delayMinutes: 0, isDelayed: false, type: 'EMU Local', isLocalEmu: true },
+    { number: '12418', name: 'Prayagraj Superfast Exp', destCode: 'PRYJ', destName: 'Prayagraj Jn', platform: 'PF 14', schedDep: '06:45 AM', actualDep: '06:45 AM', delayMinutes: 0, isDelayed: false, type: 'Superfast', isLocalEmu: false },
+    { number: '12314', name: 'Sealdah Rajdhani Express', destCode: 'SDAH', destName: 'Sealdah', platform: 'PF 12', schedDep: '07:05 AM', actualDep: '07:05 AM', delayMinutes: 0, isDelayed: false, type: 'Rajdhani', isLocalEmu: false },
+    { number: '12952', name: 'Mumbai Central Tejas Rajdhani', destCode: 'MMCT', destName: 'Mumbai Central', platform: 'PF 3', schedDep: '07:25 AM', actualDep: '07:37 AM', delayMinutes: 12, isDelayed: true, type: 'Tejas Rajdhani', isLocalEmu: false },
+    { number: '64904', name: 'Ghaziabad - Palwal EMU', destCode: 'PWL', destName: 'Palwal', platform: 'PF 7', schedDep: '07:45 AM', actualDep: '07:45 AM', delayMinutes: 0, isDelayed: false, type: 'EMU Local', isLocalEmu: true },
+    { number: '12002', name: 'Bhopal Shatabdi Express', destCode: 'RKMP', destName: 'Rani Kamalapati', platform: 'PF 1', schedDep: '08:00 AM', actualDep: '08:00 AM', delayMinutes: 0, isDelayed: false, type: 'Shatabdi', isLocalEmu: false },
+    { number: '14006', name: 'Lichchavi Express', destCode: 'SMI', destName: 'Sitamarhi', platform: 'PF 9', schedDep: '08:20 AM', actualDep: '08:45 AM', delayMinutes: 25, isDelayed: true, type: 'Mail / Express', isLocalEmu: false },
+  ],
+  CNB: [
+    { number: '22436', name: 'Vande Bharat Express', destCode: 'BSB', destName: 'Varanasi Jn', platform: 'PF 1', schedDep: '10:20 AM', actualDep: '10:20 AM', delayMinutes: 0, isDelayed: false, type: 'Vande Bharat', isLocalEmu: false },
+    { number: '12418', name: 'Prayagraj Superfast', destCode: 'PRYJ', destName: 'Prayagraj Jn', platform: 'PF 2', schedDep: '11:05 AM', actualDep: '11:05 AM', delayMinutes: 0, isDelayed: false, type: 'Superfast', isLocalEmu: false },
+    { number: '64901', name: 'Kanpur - Lucknow MEMU', destCode: 'LKO', destName: 'Lucknow Charbagh', platform: 'PF 4', schedDep: '11:30 AM', actualDep: '11:30 AM', delayMinutes: 0, isDelayed: false, type: 'MEMU Local', isLocalEmu: true },
+    { number: '12004', name: 'New Delhi Shatabdi', destCode: 'NDLS', destName: 'New Delhi', platform: 'PF 1', schedDep: '12:15 PM', actualDep: '12:25 PM', delayMinutes: 10, isDelayed: true, type: 'Shatabdi', isLocalEmu: false },
+    { number: '05379', name: 'Lucknow - Kasganj Passenger', destCode: 'KSJ', destName: 'Kasganj Jn', platform: 'PF 6', schedDep: '01:00 PM', actualDep: '01:00 PM', delayMinutes: 0, isDelayed: false, type: 'Passenger', isLocalEmu: true },
+  ],
+  AGC: [
+    { number: '12002', name: 'Bhopal Shatabdi', destCode: 'RKMP', destName: 'Rani Kamalapati', platform: 'PF 1', schedDep: '09:07 AM', actualDep: '09:07 AM', delayMinutes: 0, isDelayed: false, type: 'Shatabdi', isLocalEmu: false },
+    { number: '22436', name: 'Vande Bharat Express', destCode: 'CNB', destName: 'Kanpur Central', platform: 'PF 1', schedDep: '09:09 AM', actualDep: '09:09 AM', delayMinutes: 0, isDelayed: false, type: 'Vande Bharat', isLocalEmu: false },
+    { number: '64902', name: 'Mathura - Agra Passenger', destCode: 'AF', destName: 'Agra Fort', platform: 'PF 3', schedDep: '09:40 AM', actualDep: '09:40 AM', delayMinutes: 0, isDelayed: false, type: 'Local Passenger', isLocalEmu: true },
+    { number: '12954', name: 'August Kranti Tejas Rajdhani', destCode: 'MMCT', destName: 'Mumbai Central', platform: 'PF 2', schedDep: '10:15 AM', actualDep: '10:35 AM', delayMinutes: 20, isDelayed: true, type: 'Tejas Rajdhani', isLocalEmu: false },
+  ],
+  BSB: [
+    { number: '22435', name: 'Vande Bharat Express', destCode: 'NDLS', destName: 'New Delhi', platform: 'PF 1', schedDep: '03:00 PM', actualDep: '03:00 PM', delayMinutes: 0, isDelayed: false, type: 'Vande Bharat', isLocalEmu: false },
+    { number: '12560', name: 'Shiv Ganga Express', destCode: 'NDLS', destName: 'New Delhi', platform: 'PF 8', schedDep: '07:15 PM', actualDep: '07:15 PM', delayMinutes: 0, isDelayed: false, type: 'Superfast', isLocalEmu: false },
+    { number: '14265', name: 'Varanasi - Dehradun Janta', destCode: 'DDN', destName: 'Dehradun', platform: 'PF 5', schedDep: '08:25 PM', actualDep: '08:40 PM', delayMinutes: 15, isDelayed: true, type: 'Express', isLocalEmu: false },
+  ],
+  HWH: [
+    { number: '12301', name: 'Howrah Rajdhani Express', destCode: 'NDLS', destName: 'New Delhi', platform: 'PF 9', schedDep: '04:50 PM', actualDep: '04:50 PM', delayMinutes: 0, isDelayed: false, type: 'Rajdhani', isLocalEmu: false },
+    { number: '12863', name: 'Howrah - SMVT Bengaluru SF', destCode: 'SMVB', destName: 'SMVT Bengaluru', platform: 'PF 18', schedDep: '05:40 PM', actualDep: '05:40 PM', delayMinutes: 0, isDelayed: false, type: 'Superfast', isLocalEmu: false },
+    { number: '38821', name: 'Howrah - Midnapore Local', destCode: 'MDN', destName: 'Midnapore', platform: 'PF 14', schedDep: '06:10 PM', actualDep: '06:10 PM', delayMinutes: 0, isDelayed: false, type: 'Local EMU', isLocalEmu: true },
+  ],
+  MMCT: [
+    { number: '12951', name: 'Mumbai Central Rajdhani', destCode: 'NDLS', destName: 'New Delhi', platform: 'PF 1', schedDep: '05:00 PM', actualDep: '05:00 PM', delayMinutes: 0, isDelayed: false, type: 'Tejas Rajdhani', isLocalEmu: false },
+    { number: '12953', name: 'August Kranti Rajdhani', destCode: 'NZM', destName: 'Hazrat Nizamuddin', platform: 'PF 2', schedDep: '05:40 PM', actualDep: '05:40 PM', delayMinutes: 0, isDelayed: false, type: 'Rajdhani', isLocalEmu: false },
+    { number: '90001', name: 'Churchgate - Virar Fast Local', destCode: 'VR', destName: 'Virar', platform: 'PF 3', schedDep: '06:05 PM', actualDep: '06:05 PM', delayMinutes: 0, isDelayed: false, type: 'Fast Local', isLocalEmu: true },
+  ],
+};
+
 export const LiveStatusScreen: React.FC<LiveStatusScreenProps> = ({ initialTrainNumber, onTrackTrain }) => {
   const { isDarkMode, colors, t } = usePreferences();
+  const [screenMode, setScreenMode] = useState<'spot_train' | 'departure_board'>('spot_train');
+  const [selectedDepartureStation, setSelectedDepartureStation] = useState('NDLS');
+  const [departureStationQuery, setDepartureStationQuery] = useState('New Delhi (NDLS)');
+  const [departureFilter, setDepartureFilter] = useState<'all' | 'express' | 'local'>('all');
+
   const [trainQuery, setTrainQuery] = useState(initialTrainNumber || '22436');
   const [selectedTrainNum, setSelectedTrainNum] = useState(initialTrainNumber || '22436');
   const [trackingMode, setTrackingMode] = useState<'gps' | 'internet'>('gps');
@@ -69,6 +130,18 @@ export const LiveStatusScreen: React.FC<LiveStatusScreenProps> = ({ initialTrain
     return calculateLiveStatus(activeTrain, minutesToUse, 7); // 7 mins delay for realistic tracking
   }, [activeTrain, timeMode, simulationMinutes, lastRefreshedAt]);
 
+  const currentDepartures = useMemo(() => {
+    return DEPARTURE_BOARD_DATABASE[selectedDepartureStation] || DEPARTURE_BOARD_DATABASE.NDLS;
+  }, [selectedDepartureStation]);
+
+  const filteredDepartures = useMemo(() => {
+    return currentDepartures.filter((d) => {
+      if (departureFilter === 'express') return !d.isLocalEmu;
+      if (departureFilter === 'local') return d.isLocalEmu;
+      return true;
+    });
+  }, [currentDepartures, departureFilter]);
+
   const handleSelectTrain = useCallback((num: string) => {
     setSelectedTrainNum(num);
     setTrainQuery(num);
@@ -95,24 +168,61 @@ export const LiveStatusScreen: React.FC<LiveStatusScreenProps> = ({ initialTrain
         <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} colors={[Colors.primary]} />
       }
     >
-      {/* 1. Iconic "Where is My Train" Top Tracking Mode Switcher */}
-      <View style={[styles.modeCard, isDarkMode && { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <View style={styles.modeTabs}>
-          <TouchableOpacity
-            style={[styles.modeTab, trackingMode === 'gps' && styles.modeTabActive]}
-            activeOpacity={0.8}
-            onPress={() => setTrackingMode('gps')}
-          >
-            <Ionicons
-              name="location"
-              size={14}
-              color={trackingMode === 'gps' ? '#FFFFFF' : Colors.textSecondary}
-              style={{ marginRight: 5 }}
-            />
-            <Text style={[styles.modeTabText, trackingMode === 'gps' && styles.modeTabTextActive]}>
-              Inside Train (Cell / GPS)
-            </Text>
-          </TouchableOpacity>
+      {/* 0. Top Segmented View Switcher: Spot Train vs Station Live Departures */}
+      <View style={[styles.topSegmentedSwitcher, isDarkMode && { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <TouchableOpacity
+          style={[styles.topSegmentedBtn, screenMode === 'spot_train' && styles.topSegmentedBtnActive]}
+          onPress={() => setScreenMode('spot_train')}
+          activeOpacity={0.8}
+        >
+          <MaterialCommunityIcons
+            name="train"
+            size={16}
+            color={screenMode === 'spot_train' ? '#FFFFFF' : Colors.primary}
+            style={{ marginRight: 6 }}
+          />
+          <Text style={[styles.topSegmentedText, screenMode === 'spot_train' && styles.topSegmentedTextActive]}>
+            Spot Train
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.topSegmentedBtn, screenMode === 'departure_board' && styles.topSegmentedBtnActive]}
+          onPress={() => setScreenMode('departure_board')}
+          activeOpacity={0.8}
+        >
+          <MaterialCommunityIcons
+            name="domain"
+            size={16}
+            color={screenMode === 'departure_board' ? '#FFFFFF' : Colors.primary}
+            style={{ marginRight: 6 }}
+          />
+          <Text style={[styles.topSegmentedText, screenMode === 'departure_board' && styles.topSegmentedTextActive]}>
+            Station Departure Board
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {screenMode === 'spot_train' ? (
+        <>
+          {/* 1. Iconic "Where is My Train" Top Tracking Mode Switcher */}
+          <View style={[styles.modeCard, isDarkMode && { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.modeTabs}>
+              <TouchableOpacity
+                style={[styles.modeTab, trackingMode === 'gps' && styles.modeTabActive]}
+                activeOpacity={0.8}
+                onPress={() => setTrackingMode('gps')}
+              >
+                <Ionicons
+                  name="location"
+                  size={14}
+                  color={trackingMode === 'gps' ? '#FFFFFF' : Colors.textSecondary}
+                  style={{ marginRight: 5 }}
+                />
+                <Text style={[styles.modeTabText, trackingMode === 'gps' && styles.modeTabTextActive]}>
+                  Inside Train (Cell / GPS)
+                </Text>
+              </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.modeTab, trackingMode === 'internet' && styles.modeTabActive]}
@@ -424,6 +534,176 @@ export const LiveStatusScreen: React.FC<LiveStatusScreenProps> = ({ initialTrain
           })}
         </View>
       </View>
+    </>
+  ) : (
+    <View style={styles.deptMainWrapper}>
+      {/* 1. Station Selector & Search Card */}
+      <View style={[styles.deptStationCard, isDarkMode && { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={styles.deptHeaderRow}>
+          <View style={styles.deptIconCircle}>
+            <MaterialCommunityIcons name="clock-time-four-outline" size={20} color="#FFFFFF" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.deptTitle, { color: colors.textPrimary }]}>Live Station Departures</Text>
+            <Text style={[styles.deptSub, { color: colors.textSecondary }]}>
+              Real-time platform & delay updates
+            </Text>
+          </View>
+        </View>
+
+        {/* Station Search Input */}
+        <View style={[styles.deptSearchInputRow, isDarkMode && { backgroundColor: colors.cardSecondary, borderColor: colors.border }]}>
+          <Ionicons name="search" size={17} color={Colors.primary} style={{ marginRight: 8 }} />
+          <TextInput
+            style={[styles.deptInput, isDarkMode && { color: colors.textPrimary }]}
+            value={departureStationQuery}
+            onChangeText={(text) => {
+              setDepartureStationQuery(text);
+              const upper = text.trim().toUpperCase();
+              if (DEPARTURE_BOARD_DATABASE[upper]) {
+                setSelectedDepartureStation(upper);
+              }
+            }}
+            placeholder="Search station (e.g. NDLS, Kanpur, AGC, HWH)..."
+            placeholderTextColor={colors.textMuted}
+          />
+          {departureStationQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setDepartureStationQuery('')}>
+              <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Quick Station Chips */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickStationsScroll}>
+          {[
+            { code: 'NDLS', name: 'New Delhi' },
+            { code: 'CNB', name: 'Kanpur Central' },
+            { code: 'AGC', name: 'Agra Cantt' },
+            { code: 'BSB', name: 'Varanasi' },
+            { code: 'HWH', name: 'Howrah' },
+            { code: 'MMCT', name: 'Mumbai' },
+          ].map((st) => {
+            const isSel = selectedDepartureStation === st.code;
+            return (
+              <TouchableOpacity
+                key={st.code}
+                style={[styles.quickStationPill, isSel && styles.quickStationPillActive]}
+                onPress={() => {
+                  setSelectedDepartureStation(st.code);
+                  setDepartureStationQuery(`${st.name} (${st.code})`);
+                }}
+              >
+                <Text style={[styles.quickStationPillCode, isSel && styles.quickStationPillCodeActive]}>
+                  {st.code}
+                </Text>
+                <Text style={[styles.quickStationPillName, isSel && styles.quickStationPillNameActive]}>
+                  {st.name}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
+        {/* Filter Chips (All vs Express vs Local) */}
+        <View style={styles.filterPillsRow}>
+          {[
+            { key: 'all', label: `All (${currentDepartures.length})` },
+            { key: 'express', label: 'Express / Mail' },
+            { key: 'local', label: 'Local EMU' },
+          ].map((f) => {
+            const isFActive = departureFilter === f.key;
+            return (
+              <TouchableOpacity
+                key={f.key}
+                style={[styles.filterPill, isFActive && styles.filterPillActive]}
+                onPress={() => setDepartureFilter(f.key as any)}
+              >
+                <Text style={[styles.filterPillText, isFActive && styles.filterPillTextActive]}>
+                  {f.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+
+      {/* 2. Departures List */}
+      <View style={styles.departureListContainer}>
+        {filteredDepartures.map((dept) => (
+          <View
+            key={dept.number}
+            style={[styles.deptItemCard, isDarkMode && { backgroundColor: colors.surface, borderColor: colors.border }]}
+          >
+            <View style={styles.deptCardRow}>
+              {/* Scheduled & Actual Times */}
+              <View style={styles.deptTimeCol}>
+                <Text style={[styles.deptSchedTime, { color: colors.textPrimary }]}>{dept.schedDep}</Text>
+                <Text
+                  style={[
+                    styles.deptTimeExp,
+                    dept.isDelayed ? styles.actualTimeDelayed : styles.actualTimeOnTime,
+                  ]}
+                >
+                  Exp: {dept.actualDep}
+                </Text>
+              </View>
+
+              {/* Train Name & Route */}
+              <View style={styles.deptMidCol}>
+                <View style={styles.deptBadgeAndNum}>
+                  <View style={[styles.deptNumBadge, dept.isLocalEmu && styles.deptEmuBadge]}>
+                    <Text style={styles.deptNumBadgeText}>{dept.number}</Text>
+                  </View>
+                  <Text style={[styles.deptTrainName, { color: colors.textPrimary }]} numberOfLines={1}>
+                    {dept.name}
+                  </Text>
+                </View>
+                <Text style={[styles.deptDestSub, { color: colors.textSecondary }]}>
+                  ➔ To {dept.destName} ({dept.destCode}) • {dept.type}
+                </Text>
+              </View>
+
+              {/* Platform & Delay status */}
+              <View style={styles.deptRightCol}>
+                <View style={[styles.deptPlatformBadge, isDarkMode && { backgroundColor: colors.cardSecondary }]}>
+                  <Text style={[styles.deptPlatformText, isDarkMode && { color: colors.textPrimary }]}>{dept.platform}</Text>
+                </View>
+                <View
+                  style={[
+                    styles.deptStatusPill,
+                    dept.isDelayed ? styles.deptStatusPillRed : styles.deptStatusPillGreen,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.deptStatusText,
+                      dept.isDelayed ? styles.actualTimeDelayed : styles.actualTimeOnTime,
+                    ]}
+                  >
+                    {dept.isDelayed ? `+${dept.delayMinutes}m` : 'ON TIME'}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Quick Track Action Button */}
+            {onTrackTrain && (
+              <TouchableOpacity
+                style={styles.deptTrackBtn}
+                onPress={() => onTrackTrain(dept.number, dept.name)}
+                activeOpacity={0.8}
+              >
+                <MaterialCommunityIcons name="train" size={14} color={Colors.primary} style={{ marginRight: 4 }} />
+                <Text style={styles.deptTrackBtnText}>Track Train Live</Text>
+                <Ionicons name="chevron-forward" size={13} color={Colors.primary} style={{ marginLeft: 2 }} />
+              </TouchableOpacity>
+            )}
+          </View>
+        ))}
+      </View>
+    </View>
+  )}
 
       <View style={{ height: 35 }} />
     </ScrollView>
@@ -1033,5 +1313,268 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#FFFFFF',
     letterSpacing: 0.4,
+  },
+
+  // Top Segmented Switcher
+  topSegmentedSwitcher: {
+    flexDirection: 'row',
+    backgroundColor: '#E0F2FE',
+    borderRadius: 14,
+    padding: 4,
+    marginBottom: 12,
+  },
+  topSegmentedBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 9,
+    borderRadius: 10,
+  },
+  topSegmentedBtnActive: {
+    backgroundColor: Colors.primary,
+    elevation: 2,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  topSegmentedText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  topSegmentedTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+
+  // Departure Board Styles
+  deptMainWrapper: {
+    width: '100%',
+  },
+  deptStationCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  deptHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  deptIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deptTitle: {
+    fontSize: 14.5,
+    fontWeight: '800',
+    marginLeft: 8,
+  },
+  deptSub: {
+    fontSize: 11,
+    marginLeft: 8,
+    marginTop: 1,
+  },
+  deptSearchInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 12,
+  },
+  deptInput: {
+    flex: 1,
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  quickStationsScroll: {
+    flexDirection: 'row',
+    marginBottom: 12,
+  },
+  quickStationPill: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginRight: 8,
+    alignItems: 'center',
+  },
+  quickStationPillActive: {
+    backgroundColor: Colors.primary,
+  },
+  quickStationPillCode: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  quickStationPillCodeActive: {
+    color: '#FFFFFF',
+  },
+  quickStationPillName: {
+    fontSize: 9.5,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  quickStationPillNameActive: {
+    color: 'rgba(255, 255, 255, 0.9)',
+  },
+  filterPillsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  filterPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    marginRight: 6,
+  },
+  filterPillActive: {
+    backgroundColor: Colors.primary,
+  },
+  filterPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  filterPillTextActive: {
+    color: '#FFFFFF',
+  },
+  departureListContainer: {
+    marginBottom: 16,
+  },
+  deptItemCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 5,
+    elevation: 2,
+  },
+  deptCardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  deptTimeCol: {
+    width: 72,
+  },
+  deptSchedTime: {
+    fontSize: 13.5,
+    fontWeight: '800',
+  },
+  deptTimeExp: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  deptMidCol: {
+    flex: 1,
+    marginHorizontal: 8,
+  },
+  deptBadgeAndNum: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  deptNumBadge: {
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+    marginRight: 6,
+  },
+  deptEmuBadge: {
+    backgroundColor: '#DCFCE7',
+  },
+  deptNumBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Colors.primary,
+  },
+  deptTrainName: {
+    fontSize: 13,
+    fontWeight: '800',
+    flex: 1,
+  },
+  deptDestSub: {
+    fontSize: 11,
+    marginTop: 1,
+  },
+  deptRightCol: {
+    alignItems: 'flex-end',
+  },
+  deptPlatformBadge: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginBottom: 4,
+  },
+  deptPlatformText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  deptStatusPill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  deptStatusPillGreen: {
+    backgroundColor: '#DCFCE7',
+  },
+  deptStatusPillRed: {
+    backgroundColor: '#FEE2E2',
+  },
+  deptStatusText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+  },
+  textOnTimeGreen: {
+    color: '#15803D',
+  },
+  textDelayedRed: {
+    color: '#DC2626',
+  },
+  deptTrackBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    borderRadius: 8,
+    paddingVertical: 7,
+    marginTop: 10,
+  },
+  deptTrackBtnText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: Colors.primary,
   },
 });

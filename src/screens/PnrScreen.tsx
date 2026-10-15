@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Share, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Share, Platform, ActivityIndicator, Modal } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '../theme/colors';
 import { getPnrStatusRecord, PnrRecord } from '../data/pnrDatabase';
@@ -13,6 +13,7 @@ export const PnrScreen: React.FC = () => {
   const [copiedNotification, setCopiedNotification] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [apiNotice, setApiNotice] = useState<string | null>(null);
+  const [showVacantModal, setShowVacantModal] = useState(false);
 
   const handleCheckPnr = async (pnrToQuery?: string) => {
     const targetPnr = pnrToQuery || pnrInput;
@@ -198,6 +199,32 @@ Shared via When is my train App`;
           <Text style={styles.copiedText}>Ticket details copied to clipboard!</Text>
         </View>
       )}
+
+      {/* 1.5 VACANT BERTHS / SEAT GAPS FINDER (Reference App Feature) */}
+      <TouchableOpacity
+        style={styles.vacantBerthHeroCard}
+        onPress={() => setShowVacantModal(true)}
+        activeOpacity={0.85}
+      >
+        <View style={styles.vacantIconBox}>
+          <MaterialCommunityIcons name="seat-passenger" size={22} color="#FFFFFF" />
+        </View>
+        <View style={{ flex: 1, marginHorizontal: 10 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
+            <Text style={styles.vacantHeroTitle}>Vacant Berths / Seat Gaps</Text>
+            <View style={styles.vacantFreePill}>
+              <Text style={styles.vacantFreePillText}>659 Free Part-Way</Text>
+            </View>
+          </View>
+          <Text style={styles.vacantHeroSub} numberOfLines={1}>
+            Chart vacant seats along route of {currentRecord.trainNumber} - {currentRecord.trainName}
+          </Text>
+        </View>
+        <View style={styles.vacantViewPill}>
+          <Text style={styles.vacantViewPillText}>View</Text>
+          <Ionicons name="chevron-forward" size={13} color="#0284C7" />
+        </View>
+      </TouchableOpacity>
 
       {/* 2. PNR Result Card */}
       <View style={styles.resultCard}>
@@ -404,6 +431,128 @@ Shared via When is my train App`;
       </View>
 
       <View style={{ height: 35 }} />
+
+      {/* Vacant Berths & Seat Gaps Modal (Competitor Killer Feature) */}
+      <Modal
+        visible={showVacantModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowVacantModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            {/* Modal Header */}
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <MaterialCommunityIcons name="seat-passenger" size={20} color={Colors.primary} style={{ marginRight: 6 }} />
+                  <Text style={styles.modalTitle}>Vacant Berths & Seat Gaps</Text>
+                </View>
+                <Text style={styles.modalSub}>{currentRecord.trainNumber} - {currentRecord.trainName} • Live Chart Gaps</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowVacantModal(false)} style={styles.modalCloseBtn}>
+                <Ionicons name="close" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+              {/* Pro Tip Alert */}
+              <View style={styles.vacantAlertBox}>
+                <Ionicons name="bulb-outline" size={18} color="#D97706" style={{ marginRight: 8, marginTop: 2 }} />
+                <Text style={styles.vacantAlertText}>
+                  Waitlisted ticket? Over <Text style={{ fontWeight: '800' }}>659+ berths</Text> go vacant on intermediate routes! You can travel seamlessly by changing seats or requesting TTE onboard.
+                </Text>
+              </View>
+
+              {/* Recommended Seat Split Card */}
+              <View style={styles.splitRecommendCard}>
+                <View style={styles.splitRecommendHeader}>
+                  <Ionicons name="sparkles" size={16} color="#0284C7" style={{ marginRight: 6 }} />
+                  <Text style={styles.splitRecommendTitle}>Smart Split-Journey Solution</Text>
+                  <View style={styles.splitBadge}>
+                    <Text style={styles.splitBadgeText}>100% SEAT COVERED</Text>
+                  </View>
+                </View>
+                <Text style={styles.splitExplainText}>
+                  Combine these 2 vacant segments to complete your journey with confirmed seats:
+                </Text>
+
+                {/* Leg 1 */}
+                <View style={styles.splitLegRow}>
+                  <View style={styles.legBadge}><Text style={styles.legBadgeText}>LEG 1</Text></View>
+                  <View style={{ flex: 1, marginHorizontal: 8 }}>
+                    <Text style={styles.legStations}>{currentRecord.originCode} ➔ TDL (Tundla Jn)</Text>
+                    <Text style={styles.legSeatInfo}>Coach C1 • Seat 24 (Window)</Text>
+                  </View>
+                  <View style={styles.confirmedPill}><Text style={styles.confirmedPillText}>Available</Text></View>
+                </View>
+
+                {/* Swap Indicator */}
+                <View style={styles.swapIndicatorRow}>
+                  <View style={styles.swapLine} />
+                  <View style={styles.swapCircle}>
+                    <MaterialCommunityIcons name="swap-vertical" size={16} color="#0284C7" />
+                  </View>
+                  <Text style={styles.swapNotice}>Switch coach at Tundla Jn (5 min halt)</Text>
+                  <View style={styles.swapLine} />
+                </View>
+
+                {/* Leg 2 */}
+                <View style={styles.splitLegRow}>
+                  <View style={styles.legBadge}><Text style={styles.legBadgeText}>LEG 2</Text></View>
+                  <View style={{ flex: 1, marginHorizontal: 8 }}>
+                    <Text style={styles.legStations}>TDL ➔ {currentRecord.destCode}</Text>
+                    <Text style={styles.legSeatInfo}>Coach C3 • Seat 42 (Aisle)</Text>
+                  </View>
+                  <View style={styles.confirmedPill}><Text style={styles.confirmedPillText}>Available</Text></View>
+                </View>
+              </View>
+
+              {/* Coach Wise Breakdown */}
+              <Text style={styles.sectionHeaderTitle}>Coach-Wise Vacant Berths</Text>
+              <View style={styles.breakdownGrid}>
+                <View style={styles.breakdownItem}>
+                  <Text style={styles.breakdownClass}>3A (AC 3 Tier)</Text>
+                  <Text style={styles.breakdownCount}>248 Vacant</Text>
+                  <Text style={styles.breakdownDesc}>High vacant across 4 halts</Text>
+                </View>
+                <View style={styles.breakdownItem}>
+                  <Text style={styles.breakdownClass}>2A (AC 2 Tier)</Text>
+                  <Text style={styles.breakdownCount}>94 Vacant</Text>
+                  <Text style={styles.breakdownDesc}>Available from AGC / TDL</Text>
+                </View>
+                <View style={styles.breakdownItem}>
+                  <Text style={styles.breakdownClass}>CC (Chair Car)</Text>
+                  <Text style={styles.breakdownCount}>142 Vacant</Text>
+                  <Text style={styles.breakdownDesc}>Vacant in C1, C3, C5</Text>
+                </View>
+                <View style={styles.breakdownItem}>
+                  <Text style={styles.breakdownClass}>SL (Sleeper)</Text>
+                  <Text style={styles.breakdownCount}>175 Vacant</Text>
+                  <Text style={styles.breakdownDesc}>Open berths in S2, S6, S8</Text>
+                </View>
+              </View>
+
+              {/* Steps To Claim Onboard */}
+              <View style={styles.claimGuideCard}>
+                <Text style={styles.claimGuideTitle}>How to Claim Vacant Berths Onboard:</Text>
+                <View style={styles.stepRow}>
+                  <Text style={styles.stepNum}>1</Text>
+                  <Text style={styles.stepText}>Wait for final chart preparation (usually 4 hours prior to departure).</Text>
+                </View>
+                <View style={styles.stepRow}>
+                  <Text style={styles.stepNum}>2</Text>
+                  <Text style={styles.stepText}>Approach the Travelling Ticket Examiner (TTE) in Coach B1/C1 after train departs.</Text>
+                </View>
+                <View style={styles.stepRow}>
+                  <Text style={styles.stepNum}>3</Text>
+                  <Text style={styles.stepText}>TTE can officially re-allot vacant gap berths against your waitlist PNR with an EFT receipt.</Text>
+                </View>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 };
@@ -889,5 +1038,293 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0284C7',
     flex: 1,
+  },
+  vacantBerthHeroCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0369A1',
+    borderRadius: 16,
+    padding: 12,
+    marginHorizontal: 12,
+    marginBottom: 14,
+    shadowColor: '#0369A1',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  vacantIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  vacantHeroTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginRight: 6,
+  },
+  vacantFreePill: {
+    backgroundColor: '#16A34A',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  vacantFreePillText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  vacantHeroSub: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.85)',
+    marginTop: 2,
+  },
+  vacantViewPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  vacantViewPillText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0284C7',
+    marginRight: 2,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 16,
+    paddingTop: 18,
+    maxHeight: '85%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    marginBottom: 14,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  modalSub: {
+    fontSize: 11.5,
+    color: '#64748B',
+    marginTop: 2,
+    fontWeight: '600',
+  },
+  modalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  vacantAlertBox: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 14,
+  },
+  vacantAlertText: {
+    fontSize: 11.5,
+    color: '#92400E',
+    lineHeight: 17,
+    flex: 1,
+  },
+  splitRecommendCard: {
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1.5,
+    borderColor: '#BAE6FD',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 16,
+  },
+  splitRecommendHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  splitRecommendTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0369A1',
+    flex: 1,
+  },
+  splitBadge: {
+    backgroundColor: '#16A34A',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  splitBadgeText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  splitExplainText: {
+    fontSize: 11,
+    color: '#475569',
+    marginBottom: 12,
+  },
+  splitLegRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  legBadge: {
+    backgroundColor: '#0284C7',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  legBadgeText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  legStations: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  legSeatInfo: {
+    fontSize: 11,
+    color: '#16A34A',
+    fontWeight: '700',
+    marginTop: 1,
+  },
+  confirmedPill: {
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  confirmedPillText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#15803D',
+  },
+  swapIndicatorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 6,
+    paddingHorizontal: 12,
+  },
+  swapLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#CBD5E1',
+  },
+  swapCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#E0F2FE',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 8,
+  },
+  swapNotice: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#0284C7',
+    marginRight: 8,
+  },
+  sectionHeaderTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 10,
+  },
+  breakdownGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
+  breakdownItem: {
+    width: '48%',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  breakdownClass: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  breakdownCount: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0284C7',
+    marginTop: 2,
+  },
+  breakdownDesc: {
+    fontSize: 9.5,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  claimGuideCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  claimGuideTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 8,
+  },
+  stepRow: {
+    flexDirection: 'row',
+    marginBottom: 6,
+  },
+  stepNum: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#0284C7',
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginRight: 8,
+  },
+  stepText: {
+    fontSize: 11,
+    color: '#475569',
+    flex: 1,
+    lineHeight: 16,
   },
 });

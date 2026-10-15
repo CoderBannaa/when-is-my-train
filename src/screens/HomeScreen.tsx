@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Animated, Easing, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Animated, Easing, Platform, Modal } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '../theme/colors';
 import { Station, STATIONS_DATABASE, POPULAR_STATIONS } from '../data/stations';
@@ -94,6 +94,20 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [sourceHasError, setSourceHasError] = useState(false);
   const [destHasError, setDestHasError] = useState(false);
   const [recentSearches, setRecentSearches] = useState<RecentSearchItem[]>(DEFAULT_RECENT_SEARCHES);
+
+  // Station Wake-up Alarm states (Reference App Feature)
+  const [showAlarmModal, setShowAlarmModal] = useState(false);
+  const [alarmStation, setAlarmStation] = useState<string>('Kanpur Central (CNB)');
+  const [alarmLeadMinutes, setAlarmLeadMinutes] = useState<number>(30);
+  const [alarmActive, setAlarmActive] = useState<boolean>(false);
+  const [alarmVibrate, setAlarmVibrate] = useState<boolean>(true);
+
+  // Sync alarm target with selected destination
+  useEffect(() => {
+    if (toStation && toStation.name) {
+      setAlarmStation(`${toStation.name} (${toStation.code})`);
+    }
+  }, [toStation]);
 
   // Animated 180deg rotation for Swap button
   const swapAnim = useRef(new Animated.Value(0)).current;
@@ -881,15 +895,48 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             <Text style={[styles.gridItemSubtitle, { color: colors.textSecondary }]}>Offline schedule</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={[styles.gridItem, { backgroundColor: colors.surface, borderColor: colors.border }]} activeOpacity={0.7}>
-            <View style={[styles.gridIconCircle, { backgroundColor: colors.accentLight }]}>
-              <Ionicons name="alarm-outline" size={24} color={colors.accent} />
+          <TouchableOpacity
+            style={[
+              styles.gridItem,
+              { backgroundColor: colors.surface, borderColor: alarmActive ? Colors.secondary : colors.border },
+              alarmActive && { borderWidth: 1.5 },
+            ]}
+            activeOpacity={0.7}
+            onPress={() => setShowAlarmModal(true)}
+          >
+            <View style={[styles.gridIconCircle, { backgroundColor: alarmActive ? Colors.secondaryLight : colors.accentLight }]}>
+              <Ionicons name={alarmActive ? "alarm" : "alarm-outline"} size={24} color={alarmActive ? Colors.secondary : colors.accent} />
             </View>
             <Text style={[styles.gridItemTitle, { color: colors.textPrimary }]}>Station Alarm</Text>
-            <Text style={[styles.gridItemSubtitle, { color: colors.textSecondary }]}>Wake-up alert</Text>
+            <Text style={[styles.gridItemSubtitle, { color: alarmActive ? Colors.secondary : colors.textSecondary }]}>
+              {alarmActive ? `Active (${alarmLeadMinutes}m)` : 'Wake-up alert'}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Active Station Alarm Banner */}
+      {alarmActive && (
+        <View style={styles.alarmActiveBanner}>
+          <View style={styles.alarmBannerIcon}>
+            <Ionicons name="alarm" size={20} color="#FFFFFF" />
+          </View>
+          <View style={{ flex: 1, marginHorizontal: 10 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={styles.alarmBannerTitle}>Station Alarm Active</Text>
+              <View style={styles.alarmLivePill}>
+                <Text style={styles.alarmLivePillText}>GPS ARMED</Text>
+              </View>
+            </View>
+            <Text style={styles.alarmBannerSub} numberOfLines={1}>
+              Wake up {alarmLeadMinutes}m before reaching {alarmStation}
+            </Text>
+          </View>
+          <TouchableOpacity onPress={() => setAlarmActive(false)} style={styles.alarmDismissBtn}>
+            <Text style={styles.alarmDismissText}>Turn Off</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Recent Searches (Guaranteed 4+ items) */}
       <View style={styles.section}>
@@ -943,6 +990,134 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
       <View style={{ height: 24 }} />
     </ScrollView>
+
+    {/* Station Wake-up Alarm Modal (Competitor Killer Feature) */}
+    <Modal
+      visible={showAlarmModal}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={() => setShowAlarmModal(false)}
+    >
+      <View style={styles.modalBackdrop}>
+        <View style={[styles.modalSheet, { backgroundColor: colors.surface }]}>
+          <View style={styles.modalSheetHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+              <View style={[styles.alarmIconCircle, { backgroundColor: Colors.accentLight }]}>
+                <Ionicons name="alarm" size={20} color={Colors.accent} />
+              </View>
+              <View style={{ marginLeft: 10, flex: 1 }}>
+                <Text style={[styles.modalSheetTitle, { color: colors.textPrimary }]}>Station Wake-Up Alarm</Text>
+                <Text style={[styles.modalSheetSub, { color: colors.textSecondary }]}>Rings before arrival so you never miss your stop</Text>
+              </View>
+            </View>
+            <TouchableOpacity onPress={() => setShowAlarmModal(false)} style={styles.modalCloseBtn}>
+              <Ionicons name="close" size={20} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+            {/* Target Station Input */}
+            <Text style={[styles.inputFieldLabel, { color: colors.textSecondary }]}>WAKE-UP STATION</Text>
+            <TextInput
+              style={[
+                styles.modalTextInput,
+                {
+                  color: colors.textPrimary,
+                  borderColor: colors.border,
+                  backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC',
+                },
+              ]}
+              value={alarmStation}
+              onChangeText={setAlarmStation}
+              placeholder="Enter destination station name or code"
+              placeholderTextColor={colors.textMuted}
+            />
+
+            {/* Quick Station Selectors */}
+            <View style={styles.quickAlarmStationsRow}>
+              {['Kanpur (CNB)', 'New Delhi (NDLS)', 'Agra Cantt (AGC)', 'Varanasi (BSB)'].map((st) => (
+                <TouchableOpacity
+                  key={st}
+                  style={[styles.quickAlarmChip, alarmStation.includes(st.slice(0, 3)) && styles.quickAlarmChipActive]}
+                  onPress={() => setAlarmStation(st)}
+                >
+                  <Text style={[styles.quickAlarmChipText, alarmStation.includes(st.slice(0, 3)) && styles.quickAlarmChipTextActive]}>
+                    {st}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Lead Time Selection */}
+            <Text style={[styles.inputFieldLabel, { color: colors.textSecondary, marginTop: 14 }]}>WAKE ME UP BEFORE ARRIVAL:</Text>
+            <View style={styles.leadTimeGrid}>
+              {[15, 30, 45, 60].map((mins) => (
+                <TouchableOpacity
+                  key={mins}
+                  style={[
+                    styles.leadTimeItem,
+                    { borderColor: colors.border, backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC' },
+                    alarmLeadMinutes === mins && styles.leadTimeItemActive,
+                  ]}
+                  onPress={() => setAlarmLeadMinutes(mins)}
+                >
+                  <Text style={[styles.leadTimeMins, alarmLeadMinutes === mins && styles.leadTimeMinsActive]}>{mins}</Text>
+                  <Text style={[styles.leadTimeLabel, alarmLeadMinutes === mins && styles.leadTimeLabelActive]}>Mins</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Vibrate Toggle Option */}
+            <TouchableOpacity
+              style={[styles.vibrateToggleRow, { borderColor: colors.border }]}
+              onPress={() => setAlarmVibrate(!alarmVibrate)}
+              activeOpacity={0.8}
+            >
+              <MaterialCommunityIcons name="vibrate" size={22} color={colors.primary} />
+              <View style={{ flex: 1, marginHorizontal: 10 }}>
+                <Text style={[styles.vibrateTitle, { color: colors.textPrimary }]}>Loud Alarm & Vibration</Text>
+                <Text style={[styles.vibrateSub, { color: colors.textSecondary }]}>Rings even if phone is on silent mode</Text>
+              </View>
+              <Ionicons name={alarmVibrate ? "checkbox" : "square-outline"} size={22} color={colors.primary} />
+            </TouchableOpacity>
+
+            {/* GPS Battery Saver Note */}
+            <View style={styles.gpsInfoBox}>
+              <Ionicons name="information-circle-outline" size={16} color="#0284C7" style={{ marginRight: 6, marginTop: 1 }} />
+              <Text style={styles.gpsInfoText}>
+                Uses battery-efficient GPS geo-fencing. Runs seamlessly in background without draining your battery.
+              </Text>
+            </View>
+
+            {/* Action Buttons */}
+            <TouchableOpacity
+              style={styles.activateAlarmBtn}
+              activeOpacity={0.85}
+              onPress={() => {
+                setAlarmActive(true);
+                setShowAlarmModal(false);
+              }}
+            >
+              <Ionicons name="alarm" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+              <Text style={styles.activateAlarmText}>{alarmActive ? 'UPDATE ALARM' : 'SET STATION ALARM'}</Text>
+            </TouchableOpacity>
+
+            {alarmActive && (
+              <TouchableOpacity
+                style={styles.cancelAlarmBtn}
+                activeOpacity={0.85}
+                onPress={() => {
+                  setAlarmActive(false);
+                  setShowAlarmModal(false);
+                }}
+              >
+                <Text style={styles.cancelAlarmText}>Turn Off Alarm</Text>
+              </TouchableOpacity>
+            )}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
   </View>
 );
 };
@@ -1553,5 +1728,243 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#94A3B8',
     fontWeight: '600',
+  },
+  alarmActiveBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0F766E', // Modern teal for destination safety
+    borderRadius: 16,
+    padding: 12,
+    marginHorizontal: 14,
+    marginBottom: 16,
+    shadowColor: '#0F766E',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  alarmBannerIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  alarmBannerTitle: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginRight: 6,
+  },
+  alarmLivePill: {
+    backgroundColor: '#14B8A6',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 5,
+  },
+  alarmLivePillText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  alarmBannerSub: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.85)',
+    marginTop: 2,
+  },
+  alarmDismissBtn: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  alarmDismissText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0F766E',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 16,
+    paddingTop: 18,
+    maxHeight: '85%',
+  },
+  modalSheetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    marginBottom: 14,
+  },
+  alarmIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalSheetTitle: {
+    fontSize: 15.5,
+    fontWeight: '800',
+  },
+  modalSheetSub: {
+    fontSize: 11,
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  modalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inputFieldLabel: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+    marginBottom: 6,
+  },
+  modalTextInput: {
+    fontSize: 14,
+    fontWeight: '700',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 10,
+  },
+  quickAlarmStationsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 4,
+  },
+  quickAlarmChip: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  quickAlarmChipActive: {
+    backgroundColor: '#E0F2FE',
+    borderColor: '#0284C7',
+  },
+  quickAlarmChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  quickAlarmChipTextActive: {
+    color: '#0284C7',
+    fontWeight: '800',
+  },
+  leadTimeGrid: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 14,
+  },
+  leadTimeItem: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  leadTimeItemActive: {
+    borderColor: '#0284C7',
+    backgroundColor: '#EFF6FF',
+  },
+  leadTimeMins: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  leadTimeMinsActive: {
+    color: '#0284C7',
+  },
+  leadTimeLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#64748B',
+    marginTop: 2,
+  },
+  leadTimeLabelActive: {
+    color: '#0284C7',
+    fontWeight: '700',
+  },
+  vibrateToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 12,
+  },
+  vibrateTitle: {
+    fontSize: 12.5,
+    fontWeight: '800',
+  },
+  vibrateSub: {
+    fontSize: 10.5,
+    marginTop: 2,
+  },
+  gpsInfoBox: {
+    flexDirection: 'row',
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 16,
+  },
+  gpsInfoText: {
+    fontSize: 11,
+    color: '#0369A1',
+    lineHeight: 16,
+    flex: 1,
+  },
+  activateAlarmBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0F766E',
+    borderRadius: 14,
+    paddingVertical: 14,
+    shadowColor: '#0F766E',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  activateAlarmText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  cancelAlarmBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    marginTop: 8,
+  },
+  cancelAlarmText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#EF4444',
   },
 });
