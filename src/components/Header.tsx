@@ -28,7 +28,7 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <View style={styles.headerContainer}>
+    <View style={[styles.headerContainer, { backgroundColor: isDarkMode ? '#0F172A' : '#00529B' }]}>
       <View style={styles.leftSection}>
         {showBack ? (
           <TouchableOpacity 
@@ -36,24 +36,23 @@ export const Header: React.FC<HeaderProps> = ({
             activeOpacity={0.7} 
             onPress={onBack}
           >
-            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+            <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
           </TouchableOpacity>
         ) : (
           <View style={styles.iconCircle}>
-            <MaterialCommunityIcons name="train" size={26} color="#FFFFFF" />
+            <MaterialCommunityIcons name="train" size={24} color="#FFFFFF" />
           </View>
         )}
         <View style={styles.titleWrapper}>
           <Text style={styles.title} numberOfLines={1}>{title}</Text>
-          <View style={styles.livePill}>
-            <View style={styles.greenPulse} />
-            <Text style={styles.liveText}>{showBack ? t('tapToBack') : t('gpsReady')}</Text>
-          </View>
+          <Text style={styles.subtitle} numberOfLines={1}>
+            {showBack ? t('tapToBack') : subtitle}
+          </Text>
         </View>
       </View>
 
       <View style={styles.rightSection}>
-        {/* Settings Button (Language & Dark Mode are inside Settings) */}
+        {/* Settings Button */}
         {onOpenPreferences && (
           <TouchableOpacity
             style={styles.actionBtn}
@@ -74,13 +73,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 18,
-    paddingVertical: 18,
-    backgroundColor: Colors.primary,
-    elevation: 6,
+    paddingTop: 16,
+    paddingBottom: 16,
+    elevation: 4,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
   },
   leftSection: {
     flexDirection: 'row',
@@ -88,55 +89,39 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 14,
+    marginRight: 12,
   },
   iconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 14,
+    marginRight: 12,
   },
   titleWrapper: {
     justifyContent: 'center',
     flex: 1,
   },
   title: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: '#FFFFFF',
-    letterSpacing: -0.4,
-  },
-  livePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.18)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    alignSelf: 'flex-start',
-  },
-  greenPulse: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: '#4ADE80',
-    marginRight: 6,
-  },
-  liveText: {
-    fontSize: 10,
+    fontSize: 20,
     fontWeight: '800',
     color: '#FFFFFF',
-    letterSpacing: 0.6,
+    letterSpacing: -0.3,
+  },
+  subtitle: {
+    fontSize: 11.5,
+    fontWeight: '500',
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginTop: 2,
+    letterSpacing: 0.1,
   },
   rightSection: {
     flexDirection: 'row',

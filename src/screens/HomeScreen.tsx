@@ -417,6 +417,54 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       }
     }
 
+    // Edge Case: Source aur Destination same station select kare
+    if (validSource && validDest && validSource.code === validDest.code) {
+      setSourceHasError(true);
+      setDestHasError(true);
+      showErrorPopup('Source and Destination cannot be the same.');
+      return;
+    }
+
+    // Both valid stations! Immediately proceed with search (works smoothly for Recent Searches & Normal Searches)
+    if (validSource && validDest) {
+      setValidationError(null);
+      setSourceHasError(false);
+      setDestHasError(false);
+      onSetFromStation(validSource);
+      onSetToStation(validDest);
+      setFromText(`${validSource.name}${validSource.code ? ` (${validSource.code})` : ''}`);
+      setToText(`${validDest.name}${validDest.code ? ` (${validDest.code})` : ''}`);
+      setSourceConfirmed(true);
+      setDestConfirmed(true);
+
+      if (onSearchTrains) {
+        const now = new Date();
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const travelDateStr = `Today, ${now.getDate()} ${months[now.getMonth()]}`;
+        
+        // Save to dynamic recent searches list
+        const newRec: RecentSearchItem = {
+          id: `rec-${validSource.code}-${validDest.code}-${Date.now()}`,
+          from: validSource,
+          to: validDest,
+          route: `${validSource.code} ➔ ${validDest.code}`,
+          sub: `${validSource.name} to ${validDest.name}`,
+        };
+        setRecentSearches((prev) => {
+          const filtered = prev.filter(
+            (r) => !(r.from.code === validSource!.code && r.to.code === validDest!.code)
+          );
+          const updated = [newRec, ...filtered].slice(0, 8);
+          SafeStorage.setItem('@user_recent_searches', JSON.stringify(updated)).catch(() => {});
+          return updated;
+        });
+
+        onSearchTrains(validSource, validDest, travelDateStr);
+      }
+      return;
+    }
+
+    // If not both valid, check remaining edge cases and show appropriate error message
     const fromBlank = !fromText.trim();
     const toBlank = !toText.trim();
 
@@ -484,47 +532,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       showErrorPopup('Please select a proper Destination Station.');
       return;
     }
-
-    // Edge Case 8: Source aur Destination same station select kare
-    if (validSource && validDest && validSource.code === validDest.code) {
-      setSourceHasError(true);
-      setDestHasError(true);
-      showErrorPopup('Source and Destination cannot be the same.');
-      return;
-    }
-
-    // Edge Case 9: Dono valid stations hain! Search proceed
-    if (validSource && validDest) {
-      setValidationError(null);
-      setSourceHasError(false);
-      setDestHasError(false);
-      onSetFromStation(validSource);
-      onSetToStation(validDest);
-
-      if (onSearchTrains) {
-        const selectedOpt = dateOptions.find((d) => d.key === selectedDateOption) || dateOptions[0];
-        const travelDateStr = `${selectedOpt.label}, ${selectedOpt.dateStr}`;
-        
-        // Save to dynamic recent searches list
-        const newRec: RecentSearchItem = {
-          id: `rec-${validSource.code}-${validDest.code}-${Date.now()}`,
-          from: validSource,
-          to: validDest,
-          route: `${validSource.code} ➔ ${validDest.code}`,
-          sub: `${validSource.name} to ${validDest.name}`,
-        };
-        setRecentSearches((prev) => {
-          const filtered = prev.filter(
-            (r) => !(r.from.code === validSource!.code && r.to.code === validDest!.code)
-          );
-          const updated = [newRec, ...filtered].slice(0, 8);
-          SafeStorage.setItem('@user_recent_searches', JSON.stringify(updated)).catch(() => {});
-          return updated;
-        });
-
-        onSearchTrains(validSource, validDest, travelDateStr);
-      }
-    }
   }, [
     fromStation,
     toStation,
@@ -532,8 +539,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     toText,
     sourceConfirmed,
     destConfirmed,
-    selectedDateOption,
-    dateOptions,
     showErrorPopup,
     onSetFromStation,
     onSetToStation,
@@ -564,55 +569,24 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       )}
 
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-        {/* Search Card */}
-        <View style={[styles.searchCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={[styles.unifiedStationBox, { backgroundColor: isDarkMode ? colors.cardSecondary : '#F8FAFC', borderColor: colors.border }]}>
-            {/* Animated Dotted Track Column on Left Extreme */}
-            <View style={[styles.leftTrackColumn, { pointerEvents: 'none' as const }]}>
-              <View style={styles.stationDotSource} />
-              <View style={styles.dottedTrackLine}>
-                <View style={[styles.trackDot, { backgroundColor: isDarkMode ? '#475569' : '#94A3B8' }]} />
-                <View style={[styles.trackDot, { backgroundColor: isDarkMode ? '#475569' : '#94A3B8' }]} />
-                <View style={[styles.trackDot, { backgroundColor: isDarkMode ? '#475569' : '#94A3B8' }]} />
-                <View style={[styles.trackDot, { backgroundColor: isDarkMode ? '#475569' : '#94A3B8' }]} />
-                <View style={[styles.trackDot, { backgroundColor: isDarkMode ? '#475569' : '#94A3B8' }]} />
-                <Animated.View
-                  style={[
-                    styles.movingTrainBadge,
-                    {
-                      transform: [{ translateY: trainTranslateY }],
-                      opacity: trainOpacity,
-                    },
-                  ]}
-                >
-                  <MaterialCommunityIcons name="train" size={13} color={Colors.primary} />
-                </Animated.View>
-              </View>
-              <View style={styles.stationDotDest} />
+        {/* Modern Clean Search Card - Single card, no nested boxes */}
+        <View style={[styles.modernSearchCard, { backgroundColor: colors.surface, borderColor: isDarkMode ? '#1E293B' : '#E2E8F0' }]}>
+          
+          {/* 1. FROM STATION ROW */}
+          <View style={[styles.stationRowContainer, sourceHasError && styles.stationRowError]}>
+            <View style={styles.stationIndicatorCol}>
+              <View style={styles.sourceDotPulse} />
+              <View style={styles.sourceDotInner} />
             </View>
-
-            {/* 1. FROM STATION ROW */}
-            <View
-              style={[
-                styles.stationInputRow,
-                sourceHasError && styles.stationInputRowError,
-                activeInlineSearch === 'from' && [
-                  styles.stationInputRowActive,
-                  { backgroundColor: isDarkMode ? '#1E293B' : '#F0F9FF' },
-                ],
-              ]}
-            >
-              <View style={styles.stationInputContent}>
+            <View style={styles.stationDetailsCol}>
+              <Text style={[styles.stationMicroLabel, { color: colors.textSecondary }]}>{t('fromStation').toUpperCase()}</Text>
+              <View style={styles.stationInputLine}>
                 <TextInput
                   style={[
-                    styles.stationTextInput,
+                    styles.stationModernInput,
                     {
                       color: colors.textPrimary,
-                      outline: 'none',
-                      outlineWidth: 0,
-                      outlineStyle: 'none',
-                      borderWidth: 0,
-                    } as any,
+                    },
                   ]}
                   value={fromText}
                   onChangeText={handleFromChangeText}
@@ -621,12 +595,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     setValidationError(null);
                     setSourceHasError(false);
                   }}
-                  placeholder={t('fromStation')}
+                  placeholder="Enter source station"
                   placeholderTextColor={colors.textMuted}
                 />
                 {fromStation && sourceConfirmed && (
-                  <View style={[styles.confirmedCodePill, { backgroundColor: isDarkMode ? '#1E3A5F' : '#E0F2FE' }]}>
-                    <Text style={styles.confirmedCodePillText}>{fromStation.code}</Text>
+                  <View style={[styles.stationCodeBadge, { backgroundColor: isDarkMode ? '#1E3A5F' : '#E0F2FE' }]}>
+                    <Text style={styles.stationCodeBadgeText}>{fromStation.code}</Text>
                   </View>
                 )}
                 {fromText.length > 0 && (
@@ -635,112 +609,104 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     style={styles.clearStationBtn}
                   >
-                    <Ionicons name="close-circle" size={19} color={colors.textMuted} />
+                    <Ionicons name="close-circle" size={18} color={colors.textMuted} />
                   </TouchableOpacity>
                 )}
               </View>
             </View>
+          </View>
 
-            {/* DROPDOWN / POPULAR HUBS FOR FROM STATION */}
-            {activeInlineSearch === 'from' && (
-              fromText.trim().length === 0 ? (
-                /* Popular Hubs Fast Tap Chips */
-                <View style={[styles.inlineDropdownCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                  <View style={styles.popularHubsHeader}>
-                    <Ionicons name="flash-outline" size={14} color="#007AFF" style={{ marginRight: 5 }} />
-                    <Text style={[styles.popularHubsTitle, { color: colors.textSecondary }]}>Popular Stations (Tap to select)</Text>
-                  </View>
-                  <View style={styles.popularHubsChipsContainer}>
-                    {POPULAR_STATIONS.slice(0, 8).map((st) => (
-                      <TouchableOpacity
-                        key={`from-pop-${st.code}`}
-                        style={[styles.popularHubChip, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', borderColor: colors.border }]}
-                        activeOpacity={0.7}
-                        onPress={() => handleSelectFrom(st)}
-                      >
-                        <Text style={styles.popularHubCode}>{st.code}</Text>
-                        <Text style={[styles.popularHubName, { color: colors.textPrimary }]}>{st.city || st.name}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
+          {/* DROPDOWN / POPULAR HUBS FOR FROM STATION */}
+          {activeInlineSearch === 'from' && (
+            fromText.trim().length === 0 ? (
+              <View style={[styles.inlineDropdownCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <View style={styles.popularHubsHeader}>
+                  <Ionicons name="flash-outline" size={14} color="#007AFF" style={{ marginRight: 5 }} />
+                  <Text style={[styles.popularHubsTitle, { color: colors.textSecondary }]}>Popular Stations (Tap to select)</Text>
                 </View>
-              ) : fromRankedResults.length > 0 ? (
-                /* Filtered Dropdown list */
-                <View style={[styles.inlineDropdownCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                  <ScrollView
-                    style={styles.inlineDropdownScroll}
-                    contentContainerStyle={styles.inlineDropdownContent}
-                    nestedScrollEnabled={true}
-                    keyboardShouldPersistTaps="handled"
-                    showsVerticalScrollIndicator={true}
-                  >
-                    {fromRankedResults.map((st) => (
-                      <TouchableOpacity
-                        key={st.code}
-                        style={[styles.stationDropdownItem, { borderBottomColor: colors.border }]}
-                        activeOpacity={0.7}
-                        onPress={() => handleSelectFrom(st)}
-                      >
-                        <View style={[styles.stationDropdownCodeBadge, { backgroundColor: isDarkMode ? '#1E3A5F' : '#E0F2FE' }]}>
-                          <Text style={styles.stationDropdownCodeText}>{st.code}</Text>
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.stationDropdownName, { color: colors.textPrimary }]}>{st.name}</Text>
-                          <Text style={[styles.stationDropdownLocation, { color: colors.textSecondary }]}>
-                            {st.city === st.state ? st.city : `${st.city}, ${st.state}`}
-                          </Text>
-                        </View>
-                        <Ionicons name="chevron-forward" size={16} color={colors.primary} />
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
+                <View style={styles.popularHubsChipsContainer}>
+                  {POPULAR_STATIONS.slice(0, 8).map((st) => (
+                    <TouchableOpacity
+                      key={`from-pop-${st.code}`}
+                      style={[styles.popularHubChip, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', borderColor: colors.border }]}
+                      activeOpacity={0.7}
+                      onPress={() => handleSelectFrom(st)}
+                    >
+                      <Text style={styles.popularHubCode}>{st.code}</Text>
+                      <Text style={[styles.popularHubName, { color: colors.textPrimary }]}>{st.city || st.name}</Text>
+                    </TouchableOpacity>
+                  ))}
                 </View>
-              ) : null
-            )}
+              </View>
+            ) : fromRankedResults.length > 0 ? (
+              <View style={[styles.inlineDropdownCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <ScrollView
+                  style={styles.inlineDropdownScroll}
+                  contentContainerStyle={styles.inlineDropdownContent}
+                  nestedScrollEnabled={true}
+                  keyboardShouldPersistTaps="handled"
+                  showsVerticalScrollIndicator={true}
+                >
+                  {fromRankedResults.map((st) => (
+                    <TouchableOpacity
+                      key={st.code}
+                      style={[styles.stationDropdownItem, { borderBottomColor: colors.border }]}
+                      activeOpacity={0.7}
+                      onPress={() => handleSelectFrom(st)}
+                    >
+                      <View style={[styles.stationDropdownCodeBadge, { backgroundColor: isDarkMode ? '#1E3A5F' : '#E0F2FE' }]}>
+                        <Text style={styles.stationDropdownCodeText}>{st.code}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.stationDropdownName, { color: colors.textPrimary }]}>{st.name}</Text>
+                        <Text style={[styles.stationDropdownLocation, { color: colors.textSecondary }]}>
+                          {st.city === st.state ? st.city : `${st.city}, ${st.state}`}
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            ) : null
+          )}
 
-            {/* Divider line with Animated Swap button */}
-            <View style={styles.dividerWrapper}>
-              <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
-              <TouchableOpacity
-                style={[
-                  styles.swapBtnOnLine,
-                  {
-                    backgroundColor: colors.primary,
-                    borderColor: isDarkMode ? colors.surface : '#FFFFFF',
-                  },
-                ]}
-                activeOpacity={0.75}
-                onPress={swapStations}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Animated.View style={{ transform: [{ rotate: swapAnim.interpolate({ inputRange: [0, 360], outputRange: ['0deg', '360deg'] }) }] }}>
-                  <Ionicons name="swap-vertical" size={18} color="#FFFFFF" />
-                </Animated.View>
-              </TouchableOpacity>
-            </View>
-
-            {/* 2. TO STATION ROW */}
-            <View
+          {/* DIVIDER ROW WITH RIGHT-SHIFTED SWAP BUTTON */}
+          <View style={styles.modernDividerRow}>
+            <View style={[styles.modernDividerLine, { backgroundColor: isDarkMode ? '#334155' : '#E2E8F0' }]} />
+            <TouchableOpacity
               style={[
-                styles.stationInputRow,
-                destHasError && styles.stationInputRowError,
-                activeInlineSearch === 'to' && [
-                  styles.stationInputRowActive,
-                  { backgroundColor: isDarkMode ? '#1E293B' : '#F0F9FF' },
-                ],
+                styles.modernSwapBtn,
+                {
+                  backgroundColor: colors.primary,
+                  borderColor: isDarkMode ? colors.surface : '#FFFFFF',
+                },
               ]}
+              activeOpacity={0.75}
+              onPress={swapStations}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <View style={styles.stationInputContent}>
+              <Animated.View style={{ transform: [{ rotate: swapAnim.interpolate({ inputRange: [0, 360], outputRange: ['0deg', '360deg'] }) }] }}>
+                <Ionicons name="swap-vertical" size={18} color="#FFFFFF" />
+              </Animated.View>
+            </TouchableOpacity>
+          </View>
+
+          {/* 2. TO STATION ROW */}
+          <View style={[styles.stationRowContainer, destHasError && styles.stationRowError]}>
+            <View style={styles.stationIndicatorCol}>
+              <View style={styles.destDotPulse} />
+              <View style={styles.destDotInner} />
+            </View>
+            <View style={styles.stationDetailsCol}>
+              <Text style={[styles.stationMicroLabel, { color: colors.textSecondary }]}>{t('toStation').toUpperCase()}</Text>
+              <View style={styles.stationInputLine}>
                 <TextInput
                   style={[
-                    styles.stationTextInput,
+                    styles.stationModernInput,
                     {
                       color: colors.textPrimary,
-                      outline: 'none',
-                      outlineWidth: 0,
-                      outlineStyle: 'none',
-                      borderWidth: 0,
-                    } as any,
+                    },
                   ]}
                   value={toText}
                   onChangeText={handleToChangeText}
@@ -749,12 +715,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     setValidationError(null);
                     setDestHasError(false);
                   }}
-                  placeholder={t('toStation')}
+                  placeholder="Enter destination station"
                   placeholderTextColor={colors.textMuted}
                 />
                 {toStation && destConfirmed && (
-                  <View style={[styles.confirmedCodePill, { backgroundColor: isDarkMode ? '#1E3A5F' : '#E0F2FE' }]}>
-                    <Text style={styles.confirmedCodePillText}>{toStation.code}</Text>
+                  <View style={[styles.stationCodeBadge, { backgroundColor: isDarkMode ? '#1E3A5F' : '#E0F2FE' }]}>
+                    <Text style={styles.stationCodeBadgeText}>{toStation.code}</Text>
                   </View>
                 )}
                 {toText.length > 0 && (
@@ -763,131 +729,82 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     style={styles.clearStationBtn}
                   >
-                    <Ionicons name="close-circle" size={19} color={colors.textMuted} />
+                    <Ionicons name="close-circle" size={18} color={colors.textMuted} />
                   </TouchableOpacity>
                 )}
               </View>
             </View>
-
-            {/* DROPDOWN / POPULAR HUBS FOR TO STATION */}
-            {activeInlineSearch === 'to' && (
-              toText.trim().length === 0 ? (
-                /* Popular Hubs Fast Tap Chips */
-                <View style={[styles.inlineDropdownCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                  <View style={styles.popularHubsHeader}>
-                    <Ionicons name="flash-outline" size={14} color="#007AFF" style={{ marginRight: 5 }} />
-                    <Text style={[styles.popularHubsTitle, { color: colors.textSecondary }]}>Popular Stations (Tap to select)</Text>
-                  </View>
-                  <View style={styles.popularHubsChipsContainer}>
-                    {POPULAR_STATIONS.filter((s) => s.code !== fromStation?.code).slice(0, 8).map((st) => (
-                      <TouchableOpacity
-                        key={`to-pop-${st.code}`}
-                        style={[styles.popularHubChip, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', borderColor: colors.border }]}
-                        activeOpacity={0.7}
-                        onPress={() => handleSelectTo(st)}
-                      >
-                        <Text style={styles.popularHubCode}>{st.code}</Text>
-                        <Text style={[styles.popularHubName, { color: colors.textPrimary }]}>{st.city || st.name}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-              ) : toRankedResults.length > 0 ? (
-                /* Filtered Dropdown list */
-                <View style={[styles.inlineDropdownCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                  <ScrollView
-                    style={styles.inlineDropdownScroll}
-                    contentContainerStyle={styles.inlineDropdownContent}
-                    nestedScrollEnabled={true}
-                    keyboardShouldPersistTaps="handled"
-                    showsVerticalScrollIndicator={true}
-                  >
-                    {toRankedResults.map((st) => (
-                      <TouchableOpacity
-                        key={st.code}
-                        style={[styles.stationDropdownItem, { borderBottomColor: colors.border }]}
-                        activeOpacity={0.7}
-                        onPress={() => handleSelectTo(st)}
-                      >
-                        <View style={[styles.stationDropdownCodeBadge, { backgroundColor: isDarkMode ? '#1E3A5F' : '#E0F2FE' }]}>
-                          <Text style={styles.stationDropdownCodeText}>{st.code}</Text>
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.stationDropdownName, { color: colors.textPrimary }]}>{st.name}</Text>
-                          <Text style={[styles.stationDropdownLocation, { color: colors.textSecondary }]}>
-                            {st.city === st.state ? st.city : `${st.city}, ${st.state}`}
-                          </Text>
-                        </View>
-                        <Ionicons name="chevron-forward" size={16} color={colors.primary} />
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-              ) : null
-            )}
           </View>
 
-          {/* Quick Travel Date Selector (Today / Tomorrow / Day After) */}
-          <View style={styles.dateRow}>
-            {dateOptions.map((opt) => {
-              const isSelected = selectedDateOption === opt.key;
-              return (
-                <TouchableOpacity
-                  key={opt.key}
-                  style={[
-                    styles.dateChip,
-                    {
-                      backgroundColor: isSelected
-                        ? (isDarkMode ? 'rgba(2, 132, 199, 0.25)' : '#EFF6FF')
-                        : (isDarkMode ? '#0F172A' : '#F8FAFC'),
-                      borderColor: isSelected
-                        ? (isDarkMode ? '#38BDF8' : '#007AFF')
-                        : (isDarkMode ? '#334155' : '#E2E8F0'),
-                    },
-                  ]}
-                  activeOpacity={0.75}
-                  onPress={() => setSelectedDateOption(opt.key as any)}
+          {/* DROPDOWN / POPULAR HUBS FOR TO STATION */}
+          {activeInlineSearch === 'to' && (
+            toText.trim().length === 0 ? (
+              <View style={[styles.inlineDropdownCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <View style={styles.popularHubsHeader}>
+                  <Ionicons name="flash-outline" size={14} color="#007AFF" style={{ marginRight: 5 }} />
+                  <Text style={[styles.popularHubsTitle, { color: colors.textSecondary }]}>Popular Stations (Tap to select)</Text>
+                </View>
+                <View style={styles.popularHubsChipsContainer}>
+                  {POPULAR_STATIONS.filter((s) => s.code !== fromStation?.code).slice(0, 8).map((st) => (
+                    <TouchableOpacity
+                      key={`to-pop-${st.code}`}
+                      style={[styles.popularHubChip, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', borderColor: colors.border }]}
+                      activeOpacity={0.7}
+                      onPress={() => handleSelectTo(st)}
+                    >
+                      <Text style={styles.popularHubCode}>{st.code}</Text>
+                      <Text style={[styles.popularHubName, { color: colors.textPrimary }]}>{st.city || st.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            ) : toRankedResults.length > 0 ? (
+              <View style={[styles.inlineDropdownCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <ScrollView
+                  style={styles.inlineDropdownScroll}
+                  contentContainerStyle={styles.inlineDropdownContent}
+                  nestedScrollEnabled={true}
+                  keyboardShouldPersistTaps="handled"
+                  showsVerticalScrollIndicator={true}
                 >
-                  <Ionicons
-                    name="calendar-outline"
-                    size={13}
-                    color={isSelected ? (isDarkMode ? '#38BDF8' : '#007AFF') : (isDarkMode ? '#94A3B8' : '#64748B')}
-                    style={{ marginRight: 4 }}
-                  />
-                  <Text
-                    style={[
-                      styles.dateChipText,
-                      {
-                        color: isSelected
-                          ? (isDarkMode ? '#38BDF8' : '#007AFF')
-                          : (isDarkMode ? '#CBD5E1' : '#475569'),
-                        fontWeight: isSelected ? '800' : '600',
-                      },
-                    ]}
-                  >
-                    {opt.label} • {opt.dateStr}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+                  {toRankedResults.map((st) => (
+                    <TouchableOpacity
+                      key={st.code}
+                      style={[styles.stationDropdownItem, { borderBottomColor: colors.border }]}
+                      activeOpacity={0.7}
+                      onPress={() => handleSelectTo(st)}
+                    >
+                      <View style={[styles.stationDropdownCodeBadge, { backgroundColor: isDarkMode ? '#1E3A5F' : '#E0F2FE' }]}>
+                        <Text style={styles.stationDropdownCodeText}>{st.code}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.stationDropdownName, { color: colors.textPrimary }]}>{st.name}</Text>
+                        <Text style={[styles.stationDropdownLocation, { color: colors.textSecondary }]}>
+                          {st.city === st.state ? st.city : `${st.city}, ${st.state}`}
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            ) : null
+          )}
 
-          {/* Search Action Button */}
+          {/* 3. FIND TRAINS ACTION BUTTON (NO DATE PILLS - DIRECT SEARCH) */}
           <TouchableOpacity
             style={[
-              styles.searchButton,
+              styles.modernFindTrainsBtn,
               {
                 backgroundColor: isDarkMode ? '#059669' : colors.searchBtnGreen,
-                borderWidth: isDarkMode ? 1.5 : 0,
-                borderColor: isDarkMode ? '#34D399' : 'transparent',
                 shadowColor: isDarkMode ? '#10B981' : colors.searchBtnGreen,
               },
             ]}
             activeOpacity={0.85}
             onPress={() => handleFindTrains()}
           >
-            <Ionicons name="search" size={19} color="#FFFFFF" style={{ marginRight: 8 }} />
-            <Text style={styles.searchButtonText}>{t('findTrains')}</Text>
+            <Ionicons name="search" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
+            <Text style={styles.modernFindTrainsText}>{t('findTrains')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -1116,18 +1033,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingTop: 12,
   },
-  searchCard: {
+  modernSearchCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 15,
-    padding: 14,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.07,
+    shadowRadius: 10,
     elevation: 3,
-    marginBottom: 12,
+    marginBottom: 14,
   },
   spotTrainCard: {
     backgroundColor: '#FFFFFF',
@@ -1255,135 +1173,93 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginTop: 1,
   },
-  unifiedStationBox: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    position: 'relative',
-    marginBottom: 16,
-    overflow: 'visible',
-  },
-  leftTrackColumn: {
-    position: 'absolute',
-    left: 14,
-    top: 18,
-    bottom: 18,
-    width: 14,
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    zIndex: 5,
-  },
-  dottedTrackLine: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    paddingVertical: 3,
-    width: 18,
-    position: 'relative',
-  },
-  trackDot: {
-    width: 2.5,
-    height: 2.5,
-    borderRadius: 1.25,
-    backgroundColor: '#94A3B8',
-  },
-  movingTrainBadge: {
-    position: 'absolute',
-    top: 0,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: '#EFF6FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#93C5FD',
-    elevation: 3,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.25,
-    shadowRadius: 2,
-    zIndex: 10,
-  },
-  stationInputRow: {
+  stationRowContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingLeft: 38,
-    paddingRight: 10,
-    minHeight: 52,
+    paddingVertical: 6,
     borderRadius: 12,
   },
-  stationInputRowActive: {
-    borderRadius: 12,
-  },
-  stationInputRowError: {
+  stationRowError: {
     backgroundColor: '#FEF2F2',
     borderLeftWidth: 3,
     borderLeftColor: '#DC2626',
+    paddingLeft: 6,
   },
-  stationFilledContent: {
+  stationIndicatorCol: {
+    width: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  sourceDotPulse: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: 'rgba(16, 185, 129, 0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sourceDotInner: {
+    position: 'absolute',
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#10B981',
+  },
+  destDotPulse: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: 'rgba(239, 68, 68, 0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  destDotInner: {
+    position: 'absolute',
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#EF4444',
+  },
+  stationDetailsCol: {
     flex: 1,
+  },
+  stationMicroLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    marginBottom: 2,
+  },
+  stationInputLine: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 14,
   },
-  stationFilledText: {
+  stationModernInput: {
     flex: 1,
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#0F172A',
-    letterSpacing: -0.2,
-  },
-  stationFilledCodeText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: Colors.primary,
-  },
-  stationInputContent: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  stationTextInput: {
-    flex: 1,
-    fontSize: 15,
+    fontSize: 15.5,
     fontWeight: '700',
     color: '#0F172A',
-    paddingVertical: 14,
+    paddingVertical: 4,
     paddingHorizontal: 0,
     borderWidth: 0,
     backgroundColor: 'transparent',
     ...(Platform.OS === 'web' ? { outline: 'none', outlineWidth: 0, outlineStyle: 'none' } : {}),
   } as any,
-  confirmedCodePill: {
+  stationCodeBadge: {
     backgroundColor: '#E0F2FE',
     borderRadius: 6,
     paddingHorizontal: 7,
-    paddingVertical: 3,
+    paddingVertical: 2.5,
     marginRight: 6,
   },
-  confirmedCodePillText: {
+  stationCodeBadgeText: {
     fontSize: 11,
     fontWeight: '800',
     color: '#0284C7',
   },
   clearStationBtn: {
     padding: 6,
-    marginLeft: 6,
-  },
-  stationDotSource: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: Colors.secondary,
-  },
-  stationDotDest: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: Colors.danger,
+    marginLeft: 4,
   },
   singleDotColumn: {
     position: 'absolute',
@@ -1537,25 +1413,26 @@ const styles = StyleSheet.create({
     color: '#DC2626',
     marginLeft: 6,
   },
-  dividerWrapper: {
+  modernDividerRow: {
     position: 'relative',
     justifyContent: 'center',
-    height: 1,
+    height: 18,
+    marginVertical: 4,
     zIndex: 10,
   },
-  dividerLine: {
+  modernDividerLine: {
     height: 1,
     backgroundColor: '#E2E8F0',
-    marginLeft: 36,
-    marginRight: 10,
+    marginLeft: 34,
+    marginRight: 56,
   },
-  swapBtnOnLine: {
+  modernSwapBtn: {
     position: 'absolute',
-    right: 46,
-    top: -17,
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    right: 12,
+    top: -9,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1568,49 +1445,21 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     zIndex: 20,
   },
-  dateRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-    gap: 6,
-  },
-  dateChip: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-    borderRadius: 9,
-    borderWidth: 1,
-  },
-  dateChipActive: {
-    backgroundColor: Colors.primarySoft,
-    borderColor: Colors.primary,
-  },
-  dateChipText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: Colors.textSecondary,
-  },
-  dateChipTextActive: {
-    color: Colors.primary,
-    fontWeight: '800',
-  },
-  searchButton: {
+  modernFindTrainsBtn: {
     flexDirection: 'row',
     backgroundColor: Colors.searchBtnGreen,
     paddingVertical: 14,
-    borderRadius: 12,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 14,
     shadowColor: Colors.searchBtnGreen,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.28,
     shadowRadius: 8,
     elevation: 4,
   },
-  searchButtonText: {
+  modernFindTrainsText: {
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '800',
