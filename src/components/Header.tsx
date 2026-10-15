@@ -28,7 +28,7 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <View style={[styles.headerContainer, { backgroundColor: isDarkMode ? '#0F172A' : '#00529B' }]}>
+    <View style={[styles.headerContainer, { backgroundColor: isDarkMode ? '#0F172A' : Colors.primary }]}>
       <View style={styles.leftSection}>
         {showBack ? (
           <TouchableOpacity 

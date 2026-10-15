@@ -616,59 +616,37 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             </View>
           </View>
 
-          {/* DROPDOWN / POPULAR HUBS FOR FROM STATION */}
-          {activeInlineSearch === 'from' && (
-            fromText.trim().length === 0 ? (
-              <View style={[styles.inlineDropdownCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <View style={styles.popularHubsHeader}>
-                  <Ionicons name="flash-outline" size={14} color="#007AFF" style={{ marginRight: 5 }} />
-                  <Text style={[styles.popularHubsTitle, { color: colors.textSecondary }]}>Popular Stations (Tap to select)</Text>
-                </View>
-                <View style={styles.popularHubsChipsContainer}>
-                  {POPULAR_STATIONS.slice(0, 8).map((st) => (
-                    <TouchableOpacity
-                      key={`from-pop-${st.code}`}
-                      style={[styles.popularHubChip, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', borderColor: colors.border }]}
-                      activeOpacity={0.7}
-                      onPress={() => handleSelectFrom(st)}
-                    >
-                      <Text style={styles.popularHubCode}>{st.code}</Text>
-                      <Text style={[styles.popularHubName, { color: colors.textPrimary }]}>{st.city || st.name}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            ) : fromRankedResults.length > 0 ? (
-              <View style={[styles.inlineDropdownCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <ScrollView
-                  style={styles.inlineDropdownScroll}
-                  contentContainerStyle={styles.inlineDropdownContent}
-                  nestedScrollEnabled={true}
-                  keyboardShouldPersistTaps="handled"
-                  showsVerticalScrollIndicator={true}
-                >
-                  {fromRankedResults.map((st) => (
-                    <TouchableOpacity
-                      key={st.code}
-                      style={[styles.stationDropdownItem, { borderBottomColor: colors.border }]}
-                      activeOpacity={0.7}
-                      onPress={() => handleSelectFrom(st)}
-                    >
-                      <View style={[styles.stationDropdownCodeBadge, { backgroundColor: isDarkMode ? '#1E3A5F' : '#E0F2FE' }]}>
-                        <Text style={styles.stationDropdownCodeText}>{st.code}</Text>
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.stationDropdownName, { color: colors.textPrimary }]}>{st.name}</Text>
-                        <Text style={[styles.stationDropdownLocation, { color: colors.textSecondary }]}>
-                          {st.city === st.state ? st.city : `${st.city}, ${st.state}`}
-                        </Text>
-                      </View>
-                      <Ionicons name="chevron-forward" size={16} color={colors.primary} />
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-            ) : null
+          {/* DROPDOWN FOR FROM STATION (Shows only when typing & matching) */}
+          {activeInlineSearch === 'from' && fromText.trim().length > 0 && fromRankedResults.length > 0 && (
+            <View style={[styles.inlineDropdownCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <ScrollView
+                style={styles.inlineDropdownScroll}
+                contentContainerStyle={styles.inlineDropdownContent}
+                nestedScrollEnabled={true}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={true}
+              >
+                {fromRankedResults.map((st) => (
+                  <TouchableOpacity
+                    key={st.code}
+                    style={[styles.stationDropdownItem, { borderBottomColor: colors.border }]}
+                    activeOpacity={0.7}
+                    onPress={() => handleSelectFrom(st)}
+                  >
+                    <View style={[styles.stationDropdownCodeBadge, { backgroundColor: isDarkMode ? '#1E3A5F' : '#E0F2FE' }]}>
+                      <Text style={styles.stationDropdownCodeText}>{st.code}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.stationDropdownName, { color: colors.textPrimary }]}>{st.name}</Text>
+                      <Text style={[styles.stationDropdownLocation, { color: colors.textSecondary }]}>
+                        {st.city === st.state ? st.city : `${st.city}, ${st.state}`}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
           )}
 
           {/* DIVIDER ROW WITH RIGHT-SHIFTED SWAP BUTTON */}
@@ -736,59 +714,37 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             </View>
           </View>
 
-          {/* DROPDOWN / POPULAR HUBS FOR TO STATION */}
-          {activeInlineSearch === 'to' && (
-            toText.trim().length === 0 ? (
-              <View style={[styles.inlineDropdownCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <View style={styles.popularHubsHeader}>
-                  <Ionicons name="flash-outline" size={14} color="#007AFF" style={{ marginRight: 5 }} />
-                  <Text style={[styles.popularHubsTitle, { color: colors.textSecondary }]}>Popular Stations (Tap to select)</Text>
-                </View>
-                <View style={styles.popularHubsChipsContainer}>
-                  {POPULAR_STATIONS.filter((s) => s.code !== fromStation?.code).slice(0, 8).map((st) => (
-                    <TouchableOpacity
-                      key={`to-pop-${st.code}`}
-                      style={[styles.popularHubChip, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', borderColor: colors.border }]}
-                      activeOpacity={0.7}
-                      onPress={() => handleSelectTo(st)}
-                    >
-                      <Text style={styles.popularHubCode}>{st.code}</Text>
-                      <Text style={[styles.popularHubName, { color: colors.textPrimary }]}>{st.city || st.name}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            ) : toRankedResults.length > 0 ? (
-              <View style={[styles.inlineDropdownCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <ScrollView
-                  style={styles.inlineDropdownScroll}
-                  contentContainerStyle={styles.inlineDropdownContent}
-                  nestedScrollEnabled={true}
-                  keyboardShouldPersistTaps="handled"
-                  showsVerticalScrollIndicator={true}
-                >
-                  {toRankedResults.map((st) => (
-                    <TouchableOpacity
-                      key={st.code}
-                      style={[styles.stationDropdownItem, { borderBottomColor: colors.border }]}
-                      activeOpacity={0.7}
-                      onPress={() => handleSelectTo(st)}
-                    >
-                      <View style={[styles.stationDropdownCodeBadge, { backgroundColor: isDarkMode ? '#1E3A5F' : '#E0F2FE' }]}>
-                        <Text style={styles.stationDropdownCodeText}>{st.code}</Text>
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.stationDropdownName, { color: colors.textPrimary }]}>{st.name}</Text>
-                        <Text style={[styles.stationDropdownLocation, { color: colors.textSecondary }]}>
-                          {st.city === st.state ? st.city : `${st.city}, ${st.state}`}
-                        </Text>
-                      </View>
-                      <Ionicons name="chevron-forward" size={16} color={colors.primary} />
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-            ) : null
+          {/* DROPDOWN FOR TO STATION (Shows only when typing & matching) */}
+          {activeInlineSearch === 'to' && toText.trim().length > 0 && toRankedResults.length > 0 && (
+            <View style={[styles.inlineDropdownCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <ScrollView
+                style={styles.inlineDropdownScroll}
+                contentContainerStyle={styles.inlineDropdownContent}
+                nestedScrollEnabled={true}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={true}
+              >
+                {toRankedResults.map((st) => (
+                  <TouchableOpacity
+                    key={st.code}
+                    style={[styles.stationDropdownItem, { borderBottomColor: colors.border }]}
+                    activeOpacity={0.7}
+                    onPress={() => handleSelectTo(st)}
+                  >
+                    <View style={[styles.stationDropdownCodeBadge, { backgroundColor: isDarkMode ? '#1E3A5F' : '#E0F2FE' }]}>
+                      <Text style={styles.stationDropdownCodeText}>{st.code}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.stationDropdownName, { color: colors.textPrimary }]}>{st.name}</Text>
+                      <Text style={[styles.stationDropdownLocation, { color: colors.textSecondary }]}>
+                        {st.city === st.state ? st.city : `${st.city}, ${st.state}`}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
           )}
 
           {/* 3. FIND TRAINS ACTION BUTTON (NO DATE PILLS - DIRECT SEARCH) */}
