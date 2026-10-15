@@ -765,31 +765,33 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </View>
 
       {/* 2. Spot Your Train Card */}
-      <View style={[styles.spotTrainCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <View style={[styles.spotTrainCard, { backgroundColor: colors.surface, borderColor: isDarkMode ? '#1E293B' : '#E2E8F0' }]}>
         <View style={styles.spotCardHeader}>
-          <Text style={[styles.spotCardTitle, { color: colors.textPrimary }]}>Spot Your Train</Text>
+          <View style={[styles.spotHeaderIconBox, { backgroundColor: isDarkMode ? '#1E3A5F' : '#EFF6FF' }]}>
+            <MaterialCommunityIcons name="train" size={20} color={colors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.spotCardTitle, { color: colors.textPrimary }]}>Spot Your Train</Text>
+            <Text style={[styles.spotCardSubtitle, { color: colors.textSecondary }]}>Live GPS & platform status</Text>
+          </View>
           <View style={styles.liveSideBadge}>
             <Animated.View style={[styles.liveBlinkDot, { opacity: liveBlinkAnim }]} />
             <Text style={styles.liveSideText}>LIVE</Text>
           </View>
         </View>
 
-        <View style={[styles.spotInputContainer, { backgroundColor: colors.cardSecondary, borderColor: colors.border }]}>
-          <MaterialCommunityIcons name="train" size={20} color={colors.primary} style={{ marginRight: 8 }} />
+        <View style={[styles.spotInputContainer, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', borderColor: isDarkMode ? '#334155' : '#E2E8F0' }]}>
+          <Ionicons name="search-outline" size={18} color={colors.textMuted} style={{ marginLeft: 6, marginRight: 8 }} />
           <TextInput
             style={[
               styles.spotTextInput,
               {
                 color: colors.textPrimary,
-                outline: 'none',
-                outlineWidth: 0,
-                outlineStyle: 'none',
-                borderWidth: 0,
-              } as any,
+              },
             ]}
             value={spotTrainQuery}
             onChangeText={setSpotTrainQuery}
-            placeholder="Train No./ Train Name"
+            placeholder="Train No. / Train Name"
             placeholderTextColor={colors.textMuted}
             onSubmitEditing={() => {
               const num = spotTrainQuery.trim() || '22436';
@@ -809,7 +811,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               handleSpotTrain(num, `Train ${num}`);
             }}
           >
-            <Ionicons name="search" size={18} color="#FFFFFF" />
+            <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
 
@@ -1005,29 +1007,50 @@ const styles = StyleSheet.create({
   },
   spotTrainCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 13,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
     elevation: 3,
-    marginBottom: 14,
+    marginBottom: 16,
   },
   spotCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 9,
+    marginBottom: 12,
+  },
+  spotHeaderIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  spotCardTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+    letterSpacing: -0.2,
+  },
+  spotCardSubtitle: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#64748B',
+    marginTop: 1,
   },
   liveSideBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#DCFCE7',
-    paddingHorizontal: 7,
-    paddingVertical: 2.5,
-    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
     marginLeft: 8,
     borderWidth: 1,
     borderColor: '#BBF7D0',
@@ -1045,27 +1068,21 @@ const styles = StyleSheet.create({
     color: '#15803D',
     letterSpacing: 0.5,
   },
-  spotCardTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#0F172A',
-    letterSpacing: -0.2,
-  },
   spotInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F8FAFC',
-    borderRadius: 10,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    paddingLeft: 10,
-    paddingRight: 5,
-    paddingVertical: 4,
+    borderColor: '#E2E8F0',
+    paddingLeft: 6,
+    paddingRight: 6,
+    paddingVertical: 5,
   },
   spotTextInput: {
     flex: 1,
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
     color: '#0F172A',
     paddingVertical: 6,
     paddingHorizontal: 0,
@@ -1075,12 +1092,12 @@ const styles = StyleSheet.create({
   } as any,
   greenSearchBox: {
     backgroundColor: '#16A34A',
-    borderRadius: 9,
+    borderRadius: 10,
     width: 38,
     height: 38,
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 2,
+    elevation: 3,
     shadowColor: '#16A34A',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
@@ -1431,13 +1448,14 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 16.5,
     fontWeight: '800',
     color: '#0F172A',
+    letterSpacing: -0.3,
     marginBottom: 12,
   },
   clearText: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '700',
     color: Colors.primary,
   },
@@ -1449,33 +1467,35 @@ const styles = StyleSheet.create({
   gridItem: {
     width: '48%',
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: 18,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
     elevation: 2,
   },
   gridIconCircle: {
     width: 44,
     height: 44,
-    borderRadius: 12,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 10,
   },
   gridItemTitle: {
-    fontSize: 14,
+    fontSize: 14.5,
     fontWeight: '800',
     color: '#0F172A',
+    letterSpacing: -0.2,
     marginBottom: 2,
   },
   gridItemSubtitle: {
-    fontSize: 11,
+    fontSize: 11.5,
+    fontWeight: '500',
     color: Colors.textSecondary,
   },
   recentItem: {
@@ -1483,32 +1503,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    borderRadius: 16,
     padding: 14,
-    marginBottom: 8,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
   },
   recentLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
   },
   recentIconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     backgroundColor: Colors.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
   },
   recentRoute: {
-    fontSize: 14,
+    fontSize: 14.5,
     fontWeight: '800',
     color: '#0F172A',
+    letterSpacing: -0.2,
   },
   recentSub: {
-    fontSize: 11,
+    fontSize: 11.5,
+    fontWeight: '500',
     color: Colors.textSecondary,
     marginTop: 2,
   },

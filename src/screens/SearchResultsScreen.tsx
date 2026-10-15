@@ -312,51 +312,90 @@ Found on When is my train`;
           activeOpacity={0.82}
           onPress={() => onTrackTrain(item.number, item.name, fromStation, toStation)}
         >
-          {/* Line 1: [Train Badge]  DepTime ── ArrTime  [Days S M T W T F S]  > */}
+          {/* Line 1: [Train Badge] Train Name  > */}
           <View style={styles.cardHeaderRow}>
             <View style={[styles.compactNumBadge, item.isLocalEmu && styles.emuNumBadge]}>
               <Text style={styles.compactNumText}>{item.number}</Text>
             </View>
+            <Text style={[styles.compactTrainName, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
+              {item.name}
+            </Text>
+            <Ionicons name="chevron-forward" size={17} color="#94A3B8" style={{ marginLeft: 6 }} />
+          </View>
 
-            <View style={styles.cardTimeBlock}>
+          {/* Line 2: Journey Route Visual (DepTime Station ── Train ── ArrTime Station) */}
+          <View style={styles.routeJourneyRow}>
+            <View style={styles.stationTimeCol}>
               <Text style={[styles.timeMainText, isDarkMode && { color: colors.textPrimary }]}>{item.depTime}</Text>
-              <Text style={[styles.timeDashText, isDarkMode && { color: colors.textSecondary }]}>──</Text>
-              <Text style={[styles.timeMainText, isDarkMode && { color: colors.textPrimary }]}>{item.arrTime}</Text>
+              <Text style={[styles.stationCodeSubText, isDarkMode && { color: colors.textSecondary }]}>
+                {item.fromStationCode}
+              </Text>
             </View>
 
-            {/* Days letters S M T W T F S */}
+            <View style={styles.routeVisualCenter}>
+              <Text style={[styles.durationCenterText, isDarkMode && { color: colors.textSecondary }]}>
+                {item.duration}
+              </Text>
+              <View style={styles.routeTrackLine}>
+                <View style={styles.trackEndpointDot} />
+                <View style={[styles.trackDottedLine, { backgroundColor: isDarkMode ? '#334155' : '#E2E8F0' }]} />
+                <MaterialCommunityIcons name="train" size={14} color={Colors.primary} style={styles.trainCenterIcon} />
+                <View style={[styles.trackDottedLine, { backgroundColor: isDarkMode ? '#334155' : '#E2E8F0' }]} />
+                <View style={[styles.trackEndpointDot, { backgroundColor: Colors.danger }]} />
+              </View>
+              <Text style={[styles.stopsCenterText, isDarkMode && { color: colors.textMuted }]}>
+                {item.totalHaults > 0 ? `${item.totalHaults} Stops` : 'Non-stop'}
+              </Text>
+            </View>
+
+            <View style={[styles.stationTimeCol, { alignItems: 'flex-end' }]}>
+              <Text style={[styles.timeMainText, isDarkMode && { color: colors.textPrimary }]}>{item.arrTime}</Text>
+              <Text style={[styles.stationCodeSubText, isDarkMode && { color: colors.textSecondary }]}>
+                {item.toStationCode}
+              </Text>
+            </View>
+          </View>
+
+          {/* Line 3: Footer (Days letters S M T W T F S & Live Status Tag) */}
+          <View style={styles.cardFooterRow}>
             <View style={styles.daysLetterRow}>
               {item.runsOn.map((runs, dIdx) => (
-                <Text
+                <View
                   key={dIdx}
-                  style={[styles.dayLetterChar, runs ? styles.dayActiveText : styles.dayInactiveText]}
+                  style={[
+                    styles.dayLetterPill,
+                    runs && (isDarkMode ? styles.dayPillActiveDark : styles.dayPillActiveLight),
+                  ]}
                 >
-                  {runningDaysLetters[dIdx]}
-                </Text>
+                  <Text
+                    style={[
+                      styles.dayLetterChar,
+                      runs ? styles.dayActiveText : styles.dayInactiveText,
+                    ]}
+                  >
+                    {runningDaysLetters[dIdx]}
+                  </Text>
+                </View>
               ))}
             </View>
 
-            <Ionicons name="chevron-forward" size={18} color="#94A3B8" style={{ marginLeft: 6 }} />
+            {/* Status Pill */}
+            {isNotRunningToday ? (
+              <View style={styles.statusTagRed}>
+                <Text style={styles.statusNotRunningText}>Not running today</Text>
+              </View>
+            ) : departedStatus ? (
+              <View style={styles.statusTagGreen}>
+                <View style={styles.livePulseDotSmall} />
+                <Text style={styles.statusDepartedText} numberOfLines={1}>{departedStatus}</Text>
+              </View>
+            ) : (
+              <View style={styles.statusTagGreen}>
+                <View style={styles.livePulseDotSmall} />
+                <Text style={styles.statusDepartedText}>Runs On Schedule</Text>
+              </View>
+            )}
           </View>
-
-          {/* Line 2: Duration | Stops */}
-          <View style={styles.cardSubDetailsRow}>
-            <Text style={[styles.durationStopsText, isDarkMode && { color: colors.textSecondary }]}>
-              {item.duration} · {item.totalHaults > 0 ? `${item.totalHaults} Stops` : 'Non-stop'}
-            </Text>
-          </View>
-
-          {/* Line 3: Train Name */}
-          <Text style={[styles.compactTrainName, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
-            {item.name}
-          </Text>
-
-          {/* Line 4: Running Status / Departed Status */}
-          {isNotRunningToday ? (
-            <Text style={styles.statusNotRunningText}>Not running today</Text>
-          ) : departedStatus ? (
-            <Text style={styles.statusDepartedText}>{departedStatus}</Text>
-          ) : null}
         </TouchableOpacity>
       );
     },
@@ -846,69 +885,140 @@ const styles = StyleSheet.create({
   },
   compactTrainCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    marginBottom: 8,
+    borderRadius: 18,
+    paddingHorizontal: 15,
+    paddingVertical: 13,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     elevation: 2,
     shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
   },
   emuCardHighlight: {
     borderColor: '#BBF7D0',
   },
-
-  // Line 1: Header
   cardHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 4,
+    marginBottom: 10,
   },
   compactNumBadge: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    backgroundColor: Colors.primarySoft,
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 6,
     marginRight: 8,
   },
   emuNumBadge: {
-    backgroundColor: '#15803D',
+    backgroundColor: '#DCFCE7',
   },
   compactNumText: {
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: Colors.primary,
   },
-  cardTimeBlock: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  timeMainText: {
-    fontSize: 14.5,
+  compactTrainName: {
+    fontSize: 14,
     fontWeight: '800',
     color: '#0F172A',
+    flex: 1,
+    letterSpacing: -0.2,
   },
-  timeDashText: {
-    fontSize: 11,
-    color: '#94A3B8',
+
+  // Line 2: Route Visual
+  routeJourneyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+    marginBottom: 10,
+  },
+  stationTimeCol: {
+    minWidth: 64,
+  },
+  timeMainText: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0F172A',
+    letterSpacing: -0.3,
+  },
+  stationCodeSubText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#64748B',
+    marginTop: 1,
+  },
+  routeVisualCenter: {
+    flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: 12,
+  },
+  durationCenterText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#64748B',
+    marginBottom: 3,
+  },
+  routeTrackLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+  },
+  trackEndpointDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#10B981',
+  },
+  trackDottedLine: {
+    flex: 1,
+    height: 1.5,
+    backgroundColor: '#E2E8F0',
+  },
+  trainCenterIcon: {
     marginHorizontal: 4,
+  },
+  stopsCenterText: {
+    fontSize: 10,
     fontWeight: '600',
+    color: '#94A3B8',
+    marginTop: 3,
+  },
+
+  // Line 3: Footer
+  cardFooterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
   },
   daysLetterRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginLeft: 6,
+    gap: 2,
+  },
+  dayLetterPill: {
+    width: 17,
+    height: 17,
+    borderRadius: 8.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+  },
+  dayPillActiveLight: {
+    backgroundColor: '#EFF6FF',
+  },
+  dayPillActiveDark: {
+    backgroundColor: '#1E3A5F',
   },
   dayLetterChar: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: '800',
-    marginHorizontal: 1,
   },
   dayActiveText: {
     color: Colors.primary,
@@ -916,29 +1026,37 @@ const styles = StyleSheet.create({
   dayInactiveText: {
     color: '#CBD5E1',
   },
-  cardSubDetailsRow: {
-    marginBottom: 2,
+  statusTagGreen: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    maxWidth: '55%',
   },
-  durationStopsText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  compactTrainName: {
-    fontSize: 13.5,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginBottom: 3,
-  },
-  statusNotRunningText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#DC2626',
+  livePulseDotSmall: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#16A34A',
+    marginRight: 4,
   },
   statusDepartedText: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '700',
-    color: '#D97706',
+    color: '#15803D',
+  },
+  statusTagRed: {
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  statusNotRunningText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#DC2626',
   },
 
   emptyCard: {
