@@ -583,7 +583,7 @@ Tracked on When is my train App`;
             onPress={() => setShowDateModal(true)}
           >
             <Text style={styles.todayActionPillText}>{datePillLabel}</Text>
-            <Ionicons name="caret-down" size={13} color="#005A9C" style={{ marginLeft: 4 }} />
+            <Ionicons name="caret-down" size={13} color={Colors.primary} style={{ marginLeft: 4 }} />
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -627,7 +627,7 @@ Tracked on When is my train App`;
           <View style={styles.routeTrackLineRow}>
             <View style={styles.routeDotBlue} />
             <View style={styles.routeTrackLine} />
-            <Ionicons name="arrow-forward" size={12} color="#007AFF" />
+            <Ionicons name="arrow-forward" size={12} color={Colors.primary} />
           </View>
           <Text style={[styles.routeStopsText, { color: colors.textSecondary }]}>
             {routeCommercialHalts > 0 && activeTrain.number !== '22436' ? `${routeCommercialHalts} stops` : 'Non-stop'}
@@ -641,7 +641,7 @@ Tracked on When is my train App`;
         >
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <Text style={[styles.routeCodeBig, { color: colors.textPrimary }]}>{routeDestCode}</Text>
-            <Ionicons name="chevron-down" size={14} color="#007AFF" style={{ marginLeft: 3 }} />
+            <Ionicons name="chevron-down" size={14} color={Colors.primary} style={{ marginLeft: 3 }} />
           </View>
           <Text style={[styles.routeTimeSub, { color: colors.textSecondary }]}>{routeDestArrTime}</Text>
         </TouchableOpacity>
@@ -1593,25 +1593,25 @@ const styles = StyleSheet.create({
 
   // 1. Top Header
   headerWrapper: {
-    backgroundColor: '#005A9C',
+    backgroundColor: Colors.primary,
     elevation: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
     zIndex: 10,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#005A9C',
-    paddingHorizontal: 12,
-    paddingTop: 8,
-    paddingBottom: 4,
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 6,
   },
   headerBackBtn: {
     padding: 4,
-    marginRight: 4,
+    marginRight: 6,
   },
   headerTitleCol: {
     flex: 1,
@@ -1619,13 +1619,13 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   headerTitleText: {
-    fontSize: 15.5,
+    fontSize: 16.5,
     fontWeight: '800',
     color: '#FFFFFF',
-    letterSpacing: 0.1,
+    letterSpacing: -0.2,
   },
   headerSubText: {
-    fontSize: 11,
+    fontSize: 11.5,
     color: 'rgba(255, 255, 255, 0.9)',
     fontWeight: '500',
     marginTop: 1,
@@ -1640,45 +1640,45 @@ const styles = StyleSheet.create({
   actionPillsBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#005A9C',
-    paddingHorizontal: 12,
-    paddingTop: 2,
-    paddingBottom: 7,
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 14,
+    paddingTop: 4,
+    paddingBottom: 9,
   },
   todayActionPill: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 9,
-    paddingVertical: 3.5,
+    paddingHorizontal: 11,
+    paddingVertical: 4.5,
     borderRadius: 14,
     marginRight: 6,
   },
   todayActionPillText: {
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: '800',
-    color: '#005A9C',
+    color: Colors.primary,
   },
   outlinedActionPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.16)',
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.4)',
-    paddingHorizontal: 9,
-    paddingVertical: 3.5,
+    paddingHorizontal: 11,
+    paddingVertical: 4.5,
     borderRadius: 14,
     marginRight: 6,
   },
   outlinedActionPillText: {
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: '700',
     color: '#FFFFFF',
   },
   dynamicStationThumbBadge: {
     width: 60,
     height: 50,
-    borderRadius: 8,
+    borderRadius: 10,
     backgroundColor: '#F0F9FF',
     borderWidth: 1,
     borderColor: '#BAE6FD',
@@ -1686,9 +1686,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   dynamicStationThumbText: {
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: '800',
-    color: '#005A9C',
+    color: Colors.primary,
     marginTop: 2,
   },
 
@@ -1698,45 +1698,45 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: '#FFFFFF',
-    marginHorizontal: 12,
-    marginTop: 8,
+    marginHorizontal: 14,
+    marginTop: 10,
     marginBottom: 8,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    borderRadius: 20,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     elevation: 2,
     shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
-    shadowRadius: 6,
+    shadowRadius: 8,
   },
   routeStationCol: {
     alignItems: 'flex-start',
   },
   routeCodeBig: {
-    fontSize: 16,
+    fontSize: 17.5,
     fontWeight: '800',
     color: '#0F172A',
-    letterSpacing: -0.2,
+    letterSpacing: -0.3,
   },
   routeTimeSub: {
-    fontSize: 11.5,
+    fontSize: 12,
     fontWeight: '700',
     color: '#64748B',
-    marginTop: 1,
+    marginTop: 1.5,
   },
   routeCenterTrackCol: {
     alignItems: 'center',
     flex: 1,
-    marginHorizontal: 8,
+    marginHorizontal: 10,
   },
   routeDurationText: {
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: '800',
-    color: '#007AFF',
-    marginBottom: 2,
+    color: Colors.primary,
+    marginBottom: 3,
   },
   routeTrackLineRow: {
     flexDirection: 'row',
@@ -1745,15 +1745,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   routeDotBlue: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: '#007AFF',
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.primary,
   },
   routeTrackLine: {
     flex: 1,
     height: 2,
-    backgroundColor: '#93C5FD',
+    backgroundColor: '#BAE6FD',
     marginHorizontal: 4,
   },
   routeStopsText: {
@@ -1794,12 +1794,12 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   subTabText: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '600',
     color: '#64748B',
   },
   subTabTextActive: {
-    color: '#007AFF',
+    color: Colors.primary,
     fontWeight: '800',
   },
   subTabActiveLine: {
@@ -1808,7 +1808,7 @@ const styles = StyleSheet.create({
     left: 8,
     right: 8,
     height: 2.5,
-    backgroundColor: '#007AFF',
+    backgroundColor: Colors.primary,
     borderRadius: 2,
   },
 
@@ -1948,7 +1948,7 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: '#007AFF',
+    backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 4,
@@ -1979,7 +1979,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: '#007AFF',
+    backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 6,
@@ -3075,7 +3075,7 @@ const lmStyles = StyleSheet.create({
   dynamicStationBadgeCode: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#005A9C',
+    color: Colors.primary,
     marginTop: 1,
   },
   dynamicStationBadgeType: {

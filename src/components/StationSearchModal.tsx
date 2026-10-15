@@ -11,9 +11,9 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../theme/colors';
-import { Station, STATIONS_DATABASE, POPULAR_STATIONS } from '../data/stations';
+import { Station, STATIONS_DATABASE } from '../data/stations';
 import { searchAndRankStations } from '../utils/searchRanker';
 
 interface StationSearchModalProps {
@@ -102,33 +102,10 @@ export const StationSearchModal: React.FC<StationSearchModalProps> = ({
             </View>
           </View>
 
-          {/* Quick Popular Stations Chips (shown when search is empty) */}
-          {searchQuery.trim().length === 0 && (
-            <View style={styles.popularSection}>
-              <View style={styles.popularTitleRow}>
-                <MaterialCommunityIcons name="fire" size={18} color={Colors.accent} />
-                <Text style={styles.popularTitle}>Popular Stations</Text>
-              </View>
-              <View style={styles.chipsRow}>
-                {POPULAR_STATIONS.slice(0, 8).map((st) => (
-                  <TouchableOpacity
-                    key={st.code}
-                    style={styles.chip}
-                    activeOpacity={0.7}
-                    onPress={() => handleSelect(st)}
-                  >
-                    <Text style={styles.chipCode}>{st.code}</Text>
-                    <Text style={styles.chipName}>{st.name.split(' ')[0]}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-          )}
-
           {/* Station Results List */}
           <View style={styles.listContainer}>
             <Text style={styles.listHeaderTitle}>
-              {searchQuery ? `Matching Stations (${filteredStations.length})` : 'All Stations'}
+              {searchQuery ? `Matching Stations (${filteredStations.length})` : 'All Major Railway Stations'}
             </Text>
 
             <FlatList
@@ -200,66 +177,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
     elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowRadius: 5,
   },
   input: {
     flex: 1,
-    fontSize: 14,
+    fontSize: 14.5,
     fontWeight: '700',
     color: '#0F172A',
-  },
-  popularSection: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  popularTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  popularTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginLeft: 6,
-    letterSpacing: 0.2,
-  },
-  chipsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F0F7FD',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    marginRight: 8,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: Colors.borderBlue,
-  },
-  chipCode: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: Colors.primary,
-    marginRight: 4,
-  },
-  chipName: {
-    fontSize: 11,
-    color: '#475569',
-    fontWeight: '600',
   },
   listContainer: {
     flex: 1,
@@ -267,11 +198,12 @@ const styles = StyleSheet.create({
     paddingTop: 12,
   },
   listHeaderTitle: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
     color: '#64748B',
     marginBottom: 10,
-    letterSpacing: 0.5,
+    letterSpacing: 0.7,
+    textTransform: 'uppercase',
   },
   stationItem: {
     flexDirection: 'row',
@@ -280,9 +212,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     paddingVertical: 12,
     paddingHorizontal: 14,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    elevation: 1,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
   },
   stationLeft: {
     flexDirection: 'row',
@@ -290,31 +227,33 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   codeBadge: {
-    backgroundColor: Colors.primarySoft,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 9,
+    paddingVertical: 4.5,
+    borderRadius: 8,
     marginRight: 12,
-    minWidth: 54,
+    minWidth: 56,
     alignItems: 'center',
   },
   codeText: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '800',
-    color: Colors.primary,
+    color: '#0284C7',
+    letterSpacing: 0.2,
   },
   stationDetails: {
     flex: 1,
   },
   stationName: {
-    fontSize: 14,
-    fontWeight: '800',
+    fontSize: 14.5,
+    fontWeight: '700',
     color: '#0F172A',
   },
   stationLocation: {
-    fontSize: 11,
+    fontSize: 11.5,
     color: '#64748B',
     marginTop: 2,
+    fontWeight: '500',
   },
   separator: {
     height: 8,
