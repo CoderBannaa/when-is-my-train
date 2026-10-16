@@ -809,81 +809,85 @@ Tracked on When is my train App`;
         </View>
       </View>
 
-      {/* ================= 2.5 TRACKING SOURCE & OFFLINE INDICATOR (Reference Feature) ================= */}
-      <View style={[styles.trackingSourceBar, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', borderBottomColor: colors.border }]}>
-        <View style={styles.trackingSourceLeft}>
-          <Text style={[styles.trackingSourceLabel, { color: colors.textSecondary }]}>Live position via:</Text>
-          <View style={styles.sourcePillsGroup}>
+      {/* ================= 3. SQUEEZED ROUTE & TRACKING COMPACT STRIP (High Density, Saves 80px) ================= */}
+      <View style={[styles.squeezedRouteCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        {/* Top: Compact Route Track Row */}
+        <View style={styles.squeezedRouteRow}>
+          <View style={styles.squeezedStationCol}>
+            <Text style={[styles.squeezedCodeBig, { color: colors.textPrimary }]}>{routeOriginCode}</Text>
+            <Text style={[styles.squeezedTimeSub, { color: colors.textSecondary }]}>{routeOriginDepTime}</Text>
+          </View>
+
+          <View style={styles.squeezedCenterTrackCol}>
+            <View style={styles.squeezedDurationPill}>
+              <Text style={styles.squeezedDurationText}>
+                {routeDuration} • {routeCommercialHalts > 0 && activeTrain.number !== '22436' ? `${routeCommercialHalts} stops` : 'Non-stop'}
+              </Text>
+            </View>
+            <View style={styles.squeezedTrackLineRow}>
+              <View style={styles.squeezedDotBlue} />
+              <View style={styles.squeezedTrackLine} />
+              <Ionicons name="arrow-forward" size={11} color={Colors.primary} />
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.squeezedStationCol, { alignItems: 'flex-end' }]}
+            onPress={() => setShowDestModal(true)}
+            activeOpacity={0.7}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={[styles.squeezedCodeBig, { color: colors.textPrimary }]}>{routeDestCode}</Text>
+              <Ionicons name="chevron-down" size={13} color={Colors.primary} style={{ marginLeft: 2 }} />
+            </View>
+            <Text style={[styles.squeezedTimeSub, { color: colors.textSecondary }]}>{routeDestArrTime}</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Micro-row: Integrated Squeezed Tracking Engine & Offline Tag */}
+        <View style={[styles.squeezedTrackingMicroRow, { borderTopColor: isDarkMode ? '#1E293B' : '#F1F5F9' }]}>
+          <View style={styles.squeezedTrackingLeft}>
+            <Text style={[styles.squeezedTrackingLabel, { color: colors.textSecondary }]}>Via:</Text>
             <TouchableOpacity
-              style={[styles.sourcePill, trackingSource === 'cell' && styles.sourcePillActive]}
+              style={[styles.squeezedSourcePill, trackingSource === 'cell' && styles.squeezedSourcePillActive]}
               onPress={() => setTrackingSource('cell')}
               activeOpacity={0.8}
             >
               <MaterialCommunityIcons
                 name="transmission-tower"
-                size={13}
+                size={11}
                 color={trackingSource === 'cell' ? '#FFFFFF' : Colors.primary}
-                style={{ marginRight: 4 }}
+                style={{ marginRight: 3 }}
               />
-              <Text style={[styles.sourcePillText, trackingSource === 'cell' && styles.sourcePillTextActive]}>
+              <Text style={[styles.squeezedSourcePillText, trackingSource === 'cell' && styles.squeezedSourcePillTextActive]}>
                 Cell tower
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.sourcePill, trackingSource === 'gps' && styles.sourcePillActive]}
+              style={[styles.squeezedSourcePill, trackingSource === 'gps' && styles.squeezedSourcePillActive]}
               onPress={() => setTrackingSource('gps')}
               activeOpacity={0.8}
             >
               <MaterialCommunityIcons
                 name="crosshairs-gps"
-                size={13}
+                size={11}
                 color={trackingSource === 'gps' ? '#FFFFFF' : Colors.primary}
-                style={{ marginRight: 4 }}
+                style={{ marginRight: 3 }}
               />
-              <Text style={[styles.sourcePillText, trackingSource === 'gps' && styles.sourcePillTextActive]}>
+              <Text style={[styles.squeezedSourcePillText, trackingSource === 'gps' && styles.squeezedSourcePillTextActive]}>
                 GPS
               </Text>
             </TouchableOpacity>
           </View>
-        </View>
 
-        <View style={[styles.offlineBadge, { backgroundColor: isDarkMode ? '#064E3B' : '#DCFCE7' }]}>
-          <View style={styles.offlineGreenDot} />
-          <Text style={[styles.offlineBadgeText, { color: isDarkMode ? '#34D399' : '#15803D' }]}>Works without internet</Text>
-        </View>
-      </View>
-
-      {/* ================= 3. ROUTE SUMMARY CARD ================= */}
-      <View style={[styles.routeSummaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <View style={styles.routeStationCol}>
-          <Text style={[styles.routeCodeBig, { color: colors.textPrimary }]}>{routeOriginCode}</Text>
-          <Text style={[styles.routeTimeSub, { color: colors.textSecondary }]}>{routeOriginDepTime}</Text>
-        </View>
-
-        <View style={styles.routeCenterTrackCol}>
-          <Text style={styles.routeDurationText}>{routeDuration}</Text>
-          <View style={styles.routeTrackLineRow}>
-            <View style={styles.routeDotBlue} />
-            <View style={styles.routeTrackLine} />
-            <Ionicons name="arrow-forward" size={12} color={Colors.primary} />
+          <View style={[styles.squeezedOfflineTag, { backgroundColor: isDarkMode ? '#064E3B' : '#DCFCE7' }]}>
+            <View style={styles.squeezedGreenDot} />
+            <Text style={[styles.squeezedOfflineText, { color: isDarkMode ? '#34D399' : '#15803D' }]}>
+              Works without internet
+            </Text>
           </View>
-          <Text style={[styles.routeStopsText, { color: colors.textSecondary }]}>
-            {routeCommercialHalts > 0 && activeTrain.number !== '22436' ? `${routeCommercialHalts} stops` : 'Non-stop'}
-          </Text>
         </View>
-
-        <TouchableOpacity
-          style={[styles.routeStationCol, { alignItems: 'flex-end' }]}
-          onPress={() => setShowDestModal(true)}
-          activeOpacity={0.7}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={[styles.routeCodeBig, { color: colors.textPrimary }]}>{routeDestCode}</Text>
-            <Ionicons name="chevron-down" size={14} color={Colors.primary} style={{ marginLeft: 3 }} />
-          </View>
-          <Text style={[styles.routeTimeSub, { color: colors.textSecondary }]}>{routeDestArrTime}</Text>
-        </TouchableOpacity>
       </View>
 
       {/* ================= 4. 4 SUB-TABS NAVIGATION BAR ================= */}
@@ -1184,6 +1188,104 @@ Tracked on When is my train App`;
                   </View>
                 );
               })}
+
+              {/* ================= 5. DESTINATION TERMINUS & STATION AMENITIES (Fills bottom void) ================= */}
+              <View style={[styles.terminalSummaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                {/* Header */}
+                <View style={styles.terminalHeaderRow}>
+                  <View style={styles.terminalFlagCircle}>
+                    <MaterialCommunityIcons name="flag-checkered" size={17} color="#FFFFFF" />
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 10 }}>
+                    <Text style={[styles.terminalStationTitle, { color: colors.textPrimary }]}>
+                      Terminating at {routeDestStation.name || 'Agra Cantt'} ({routeDestCode})
+                    </Text>
+                    <Text style={[styles.terminalRunSub, { color: colors.textSecondary }]}>
+                      Total Run: {liveData.totalDistanceKm || 195} km • {routeDuration} • {routeCommercialHalts} Halts
+                    </Text>
+                  </View>
+                  <View style={[styles.terminalPlatformBadge, { backgroundColor: isDarkMode ? '#1E3A5F' : '#E0F2FE' }]}>
+                    <Text style={[styles.terminalPlatformText, { color: Colors.primary }]}>PF {routeDestStation.platform ? routeDestStation.platform.replace(/[^0-9]/g, '') || '2' : '2'}</Text>
+                  </View>
+                </View>
+
+                {/* Key Station Amenities Grid */}
+                <View style={[styles.terminalDivider, { backgroundColor: colors.border }]} />
+                <View style={styles.terminalAmenitiesHeader}>
+                  <Ionicons name="business-outline" size={13} color={Colors.primary} style={{ marginRight: 5 }} />
+                  <Text style={[styles.terminalSectionTitle, { color: colors.textSecondary }]}>
+                    STATION AMENITIES & PASSENGER FACILITIES
+                  </Text>
+                </View>
+
+                <View style={styles.terminalAmenitiesGrid}>
+                  <View style={[styles.amenityCard, { backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC', borderColor: colors.border }]}>
+                    <MaterialCommunityIcons name="bag-checked" size={15} color="#0284C7" />
+                    <View style={{ marginLeft: 7, flex: 1 }}>
+                      <Text style={[styles.amenityTitle, { color: colors.textPrimary }]}>Cloak Room</Text>
+                      <Text style={[styles.amenityDesc, { color: colors.textSecondary }]}>Platform 1 • 24 Hrs</Text>
+                    </View>
+                  </View>
+
+                  <View style={[styles.amenityCard, { backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC', borderColor: colors.border }]}>
+                    <MaterialCommunityIcons name="taxi" size={15} color="#16A34A" />
+                    <View style={{ marginLeft: 7, flex: 1 }}>
+                      <Text style={[styles.amenityTitle, { color: colors.textPrimary }]}>Prepaid Cab & Auto</Text>
+                      <Text style={[styles.amenityDesc, { color: colors.textSecondary }]}>Exit Gate 1 & 2</Text>
+                    </View>
+                  </View>
+
+                  <View style={[styles.amenityCard, { backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC', borderColor: colors.border }]}>
+                    <MaterialCommunityIcons name="bed" size={15} color="#8B5CF6" />
+                    <View style={{ marginLeft: 7, flex: 1 }}>
+                      <Text style={[styles.amenityTitle, { color: colors.textPrimary }]}>IRCTC Retiring Room</Text>
+                      <Text style={[styles.amenityDesc, { color: colors.textSecondary }]}>1st Floor • PF 1</Text>
+                    </View>
+                  </View>
+
+                  <View style={[styles.amenityCard, { backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC', borderColor: colors.border }]}>
+                    <MaterialCommunityIcons name="food" size={15} color="#EA580C" />
+                    <View style={{ marginLeft: 7, flex: 1 }}>
+                      <Text style={[styles.amenityTitle, { color: colors.textPrimary }]}>Food Plaza</Text>
+                      <Text style={[styles.amenityDesc, { color: colors.textSecondary }]}>Comesum & Jan Aahar</Text>
+                    </View>
+                  </View>
+
+                  <View style={[styles.amenityCard, { backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC', borderColor: colors.border }]}>
+                    <MaterialCommunityIcons name="wheelchair-accessibility" size={15} color="#0284C7" />
+                    <View style={{ marginLeft: 7, flex: 1 }}>
+                      <Text style={[styles.amenityTitle, { color: colors.textPrimary }]}>Lifts & Escalators</Text>
+                      <Text style={[styles.amenityDesc, { color: colors.textSecondary }]}>All Platforms</Text>
+                    </View>
+                  </View>
+
+                  <View style={[styles.amenityCard, { backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC', borderColor: colors.border }]}>
+                    <MaterialCommunityIcons name="shield-check" size={15} color="#DC2626" />
+                    <View style={{ marginLeft: 7, flex: 1 }}>
+                      <Text style={[styles.amenityTitle, { color: colors.textPrimary }]}>RPF Post (139)</Text>
+                      <Text style={[styles.amenityDesc, { color: colors.textSecondary }]}>Platform 1</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Train Technical Specs Strip */}
+                <View style={[styles.terminalSpecsStrip, { backgroundColor: isDarkMode ? '#0F172A' : '#F0F9FF', borderColor: isDarkMode ? '#1E293B' : '#BAE6FD' }]}>
+                  <View style={styles.terminalSpecCol}>
+                    <Text style={styles.terminalSpecLabel}>Rake Type</Text>
+                    <Text style={[styles.terminalSpecVal, { color: colors.textPrimary }]}>LHB Superfast</Text>
+                  </View>
+                  <View style={styles.terminalSpecDivider} />
+                  <View style={styles.terminalSpecCol}>
+                    <Text style={styles.terminalSpecLabel}>Locomotive</Text>
+                    <Text style={[styles.terminalSpecVal, { color: colors.textPrimary }]}>WAP-7 (Electric)</Text>
+                  </View>
+                  <View style={styles.terminalSpecDivider} />
+                  <View style={styles.terminalSpecCol}>
+                    <Text style={styles.terminalSpecLabel}>Punctuality</Text>
+                    <Text style={[styles.terminalSpecVal, { color: '#16A34A' }]}>94% On Time</Text>
+                  </View>
+                </View>
+              </View>
             </View>
           </ScrollView>
 
@@ -2076,75 +2178,247 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  // 2. Route Summary Card & Quick Tools
-  routeSummaryCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  // 2. Squeezed Route & Tracking High-Density Strip
+  squeezedRouteCard: {
     backgroundColor: '#FFFFFF',
-    marginHorizontal: 14,
-    marginTop: 10,
-    marginBottom: 8,
-    borderRadius: 20,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
+    marginHorizontal: 12,
+    marginTop: 6,
+    marginBottom: 4,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingTop: 8,
+    paddingBottom: 6,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     elevation: 2,
     shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
   },
-  routeStationCol: {
-    alignItems: 'flex-start',
+  squeezedRouteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  routeCodeBig: {
-    fontSize: 17.5,
+  squeezedStationCol: {
+    minWidth: 55,
+  },
+  squeezedCodeBig: {
+    fontSize: 15,
     fontWeight: '800',
     color: '#0F172A',
-    letterSpacing: -0.3,
+    letterSpacing: -0.2,
   },
-  routeTimeSub: {
-    fontSize: 12,
+  squeezedTimeSub: {
+    fontSize: 10.5,
     fontWeight: '700',
     color: '#64748B',
-    marginTop: 1.5,
+    marginTop: 1,
   },
-  routeCenterTrackCol: {
-    alignItems: 'center',
+  squeezedCenterTrackCol: {
     flex: 1,
-    marginHorizontal: 10,
+    alignItems: 'center',
+    marginHorizontal: 8,
   },
-  routeDurationText: {
-    fontSize: 11.5,
+  squeezedDurationPill: {
+    backgroundColor: '#F0F9FF',
+    paddingHorizontal: 8,
+    paddingVertical: 1.5,
+    borderRadius: 10,
+    marginBottom: 2,
+  },
+  squeezedDurationText: {
+    fontSize: 10,
     fontWeight: '800',
     color: Colors.primary,
-    marginBottom: 3,
   },
-  routeTrackLineRow: {
+  squeezedTrackLineRow: {
     flexDirection: 'row',
     alignItems: 'center',
     width: '100%',
     justifyContent: 'center',
   },
-  routeDotBlue: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+  squeezedDotBlue: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
     backgroundColor: Colors.primary,
   },
-  routeTrackLine: {
+  squeezedTrackLine: {
     flex: 1,
-    height: 2,
+    height: 1.5,
     backgroundColor: '#BAE6FD',
-    marginHorizontal: 4,
+    marginHorizontal: 3,
   },
-  routeStopsText: {
+  squeezedTrackingMicroRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: 0.8,
+    borderTopColor: '#F1F5F9',
+    marginTop: 6,
+    paddingTop: 4,
+  },
+  squeezedTrackingLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  squeezedTrackingLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    marginRight: 5,
+  },
+  squeezedSourcePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginRight: 5,
+  },
+  squeezedSourcePillActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  squeezedSourcePillText: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  squeezedSourcePillTextActive: {
+    color: '#FFFFFF',
+  },
+  squeezedOfflineTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 5,
+  },
+  squeezedGreenDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#10B981',
+    marginRight: 4,
+  },
+  squeezedOfflineText: {
+    fontSize: 9.5,
+    fontWeight: '700',
+  },
+
+  // Terminal Summary & Station Amenities (Bottom void filler)
+  terminalSummaryCard: {
+    marginTop: 14,
+    marginBottom: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 14,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  terminalHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  terminalFlagCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#DC2626',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  terminalStationTitle: {
+    fontSize: 13.5,
+    fontWeight: '800',
+  },
+  terminalRunSub: {
+    fontSize: 10.5,
+    fontWeight: '500',
+    marginTop: 1,
+  },
+  terminalPlatformBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  terminalPlatformText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  terminalDivider: {
+    height: 1,
+    marginVertical: 10,
+  },
+  terminalAmenitiesHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  terminalSectionTitle: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+  },
+  terminalAmenitiesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 10,
+  },
+  amenityCard: {
+    width: '48%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  amenityTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  amenityDesc: {
+    fontSize: 9.5,
+    marginTop: 1,
+  },
+  terminalSpecsStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  terminalSpecCol: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  terminalSpecLabel: {
     fontSize: 9.5,
     fontWeight: '600',
     color: '#64748B',
-    marginTop: 2,
+    marginBottom: 1,
+  },
+  terminalSpecVal: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  terminalSpecDivider: {
+    width: 1,
+    height: 18,
+    backgroundColor: '#CBD5E1',
   },
   routeQuickTools: {
     flexDirection: 'row',
@@ -2245,8 +2519,8 @@ const styles = StyleSheet.create({
   stationTimelineRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 52,
-    paddingVertical: 3,
+    minHeight: 56,
+    paddingVertical: 4.5,
     paddingHorizontal: 4,
     backgroundColor: '#FFFFFF',
   },
