@@ -47,6 +47,7 @@ export interface LiveTrainStatusData {
   distanceCoveredKm: number;
   distanceRemainingKm?: number;
   distanceToNextKm?: number;
+  expectedArrivalAtDestination?: string;
   stationDetails: StationLiveDetail[];
   activeStopIndex: number;
 }

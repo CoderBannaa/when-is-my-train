@@ -351,6 +351,10 @@ export const LiveTrainTrackerScreen: React.FC<LiveTrainTrackerScreenProps> = ({
   const [activeTab, setActiveTab] = useState<'journey' | 'live_map' | 'coach_position' | 'info'>('journey');
   const [selectedCoach, setSelectedCoach] = useState<string>('C3');
   const [trackingSource, setTrackingSource] = useState<'cell' | 'gps'>('cell');
+  const [selectedMapStationCode, setSelectedMapStationCode] = useState<string | null>(null);
+  const [isTelemetryDeckExpanded, setIsTelemetryDeckExpanded] = useState<boolean>(true);
+  const [alarmInterval, setAlarmInterval] = useState<'10m' | '15m' | '30m' | '5km' | '10km'>('15m');
+  const [isAlarmActive, setIsAlarmActive] = useState<boolean>(false);
 
   // In-between / passing stations accordion expand state: { [groupKey: string]: boolean }
   const [expandedPassingGroups, setExpandedPassingGroups] = useState<{ [key: string]: boolean }>({});
@@ -781,12 +785,12 @@ Tracked on When is my train App`;
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.outlinedActionPill}
+            style={[styles.outlinedActionPill, isAlarmActive && { backgroundColor: '#16A34A', borderColor: '#16A34A' }]}
             onPress={() => setShowAlarmModal(true)}
             activeOpacity={0.75}
           >
-            <Ionicons name="alarm-outline" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
-            <Text style={styles.outlinedActionPillText}>Alarm</Text>
+            <Ionicons name={isAlarmActive ? 'alarm' : 'alarm-outline'} size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
+            <Text style={styles.outlinedActionPillText}>{isAlarmActive ? 'Alarm ON' : 'Alarm'}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -951,6 +955,108 @@ Tracked on When is my train App`;
             <Text style={[styles.stripColText, { color: colors.textSecondary }]}>Arrival</Text>
             <Text style={[styles.stripTitleText, { color: colors.textPrimary }]}>{formattedDayText}</Text>
             <Text style={[styles.stripColText, { color: colors.textSecondary }]}>Departure</Text>
+          </View>
+
+          {/* ================= REAL-TIME GPS / TELEMETRY & SPEEDOMETER DECK (find.mytrain.where signature feature) ================= */}
+          <View style={[styles.telemetryDeckContainer, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            {/* Top Micro-Bar: RailRadar GPS Real-time + Sync Button */}
+            <View style={[styles.telemetryStatusSubBar, { backgroundColor: isDarkMode ? '#064E3B' : '#F0FDF4', borderBottomColor: isDarkMode ? '#065F46' : '#DCFCE7' }]}>
+              <View style={styles.telemetryLiveIndicatorRow}>
+                <View style={styles.telemetryBlinkingDot} />
+                <Text style={[styles.telemetryLiveStatusText, { color: isDarkMode ? '#34D399' : '#15803D' }]}>
+                  {trackingSource === 'gps' ? 'RailRadar GPS Real-time' : 'Cell Tower Triangulation'} • Updated {lastUpdatedSec}s ago
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.telemetrySyncButton}
+                onPress={() => fetchLiveTracking(true)}
+                activeOpacity={0.7}
+                disabled={isLoadingApi}
+              >
+                <Animated.View style={{ transform: [{ rotate: spin }] }}>
+                  <Ionicons name="sync" size={13} color={isDarkMode ? '#34D399' : '#15803D'} />
+                </Animated.View>
+                <Text style={[styles.telemetrySyncText, { color: isDarkMode ? '#34D399' : '#15803D' }]}>Sync</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Collapsible Speedometer Stats Row */}
+            {isTelemetryDeckExpanded && (
+              <>
+                <View style={styles.speedometerMetricsRow}>
+                  {/* Metric 1: Speed */}
+                  <View style={[styles.speedometerMetricBox, { borderRightColor: colors.border }]}>
+                    <View style={[styles.speedometerIconCircle, { backgroundColor: isDarkMode ? '#064E3B' : '#DCFCE7' }]}>
+                      <MaterialCommunityIcons name="speedometer" size={18} color={isDarkMode ? '#34D399' : '#16A34A'} />
+                    </View>
+                    <View style={styles.speedometerTextCol}>
+                      <Text style={[styles.speedometerLabelText, { color: colors.textSecondary }]}>Speed</Text>
+                      <Text style={[styles.speedometerValueText, { color: isDarkMode ? '#34D399' : '#16A34A' }]}>
+                        {liveData.currentSpeed || (activeTrain.number === '22436' ? 92 : 88)} km/h
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Metric 2: Distance Left */}
+                  <View style={[styles.speedometerMetricBox, { borderRightColor: colors.border }]}>
+                    <View style={[styles.speedometerIconCircle, { backgroundColor: isDarkMode ? '#1E3A5F' : '#E0F2FE' }]}>
+                      <Ionicons name="location" size={16} color="#0284C7" />
+                    </View>
+                    <View style={styles.speedometerTextCol}>
+                      <Text style={[styles.speedometerLabelText, { color: colors.textSecondary }]}>Distance Left</Text>
+                      <Text style={[styles.speedometerValueText, { color: colors.textPrimary }]}>
+                        {liveData.distanceRemainingKm ?? 635} km
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Metric 3: Expected Arrival */}
+                  <View style={styles.speedometerMetricBox}>
+                    <View style={[styles.speedometerIconCircle, { backgroundColor: isDarkMode ? '#312E81' : '#EEF2FF' }]}>
+                      <Ionicons name="alarm" size={16} color="#4F46E5" />
+                    </View>
+                    <View style={styles.speedometerTextCol}>
+                      <Text style={[styles.speedometerLabelText, { color: colors.textSecondary }]}>Exp. Arrival</Text>
+                      <Text style={[styles.speedometerValueText, { color: colors.textPrimary }]}>
+                        {liveData.expectedArrivalAtDestination || routeDestArrTime || '07:00 AM'}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Telemetry Location & Next Stop Strip */}
+                <View style={[styles.telemetryLocationStrip, { backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC', borderTopColor: colors.border }]}>
+                  <View style={styles.telemetryLocationRow}>
+                    <Text style={styles.telemetryLocationEmoji}>📍</Text>
+                    <Text style={[styles.telemetryLocationLabel, { color: colors.textSecondary }]}>Current:</Text>
+                    <Text style={[styles.telemetryLocationValue, { color: colors.textPrimary }]} numberOfLines={1}>
+                      {liveData.currentStationName} ({liveData.currentPlatform || 'PF 4'})
+                    </Text>
+                  </View>
+                  <View style={styles.telemetryLocationRow}>
+                    <Text style={styles.telemetryLocationEmoji}>➡️</Text>
+                    <Text style={[styles.telemetryLocationLabel, { color: colors.textSecondary }]}>Next Stop:</Text>
+                    <Text style={[styles.telemetryLocationValue, { color: colors.textPrimary }]} numberOfLines={1}>
+                      {liveData.nextStationName}
+                    </Text>
+                  </View>
+                </View>
+              </>
+            )}
+
+            {/* Mini Toggle Handle to Collapse/Expand */}
+            <TouchableOpacity
+              style={styles.telemetryCollapseHandle}
+              onPress={() => setIsTelemetryDeckExpanded(!isTelemetryDeckExpanded)}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name={isTelemetryDeckExpanded ? 'chevron-up' : 'chevron-down'}
+                size={14}
+                color={colors.textSecondary}
+              />
+            </TouchableOpacity>
           </View>
 
           <ScrollView
@@ -1357,7 +1463,8 @@ Tracked on When is my train App`;
       {activeTab === 'live_map' && (() => {
         const isVandeBharat = activeTrain.number === '22436';
         const displayStops = liveData.stationDetails.filter((s) => !s.isPassing);
-        const currentStop = displayStops[liveData.activeStopIndex] || displayStops[0] || {
+        const activeCurrentStop = displayStops[liveData.activeStopIndex] || displayStops[0];
+        const currentStop = (selectedMapStationCode ? displayStops.find(s => s.code === selectedMapStationCode) : null) || activeCurrentStop || {
           code: 'MTJ',
           name: 'Mathura Jn',
           scheduledArr: '08:10 AM',
@@ -1388,13 +1495,13 @@ Tracked on When is my train App`;
               isCurrent: i === Math.min(liveData.activeStopIndex, arr.length - 1),
             }));
 
-        const cardStnName = isVandeBharat ? 'Mathura Jn (MTJ)' : `${currentStop.name} (${currentStop.code})`;
-        const cardArrSched = isVandeBharat ? '08:10 AM' : (currentStop.scheduledArr || '--');
-        const cardArrAct = isVandeBharat ? '(08:12 AM)' : (currentStop.actualArr ? `(${currentStop.actualArr})` : '');
-        const cardDepSched = isVandeBharat ? '08:12 AM' : (currentStop.scheduledDep || '--');
-        const cardDepAct = isVandeBharat ? '(08:14 AM)' : (currentStop.actualDep ? `(${currentStop.actualDep})` : '');
-        const cardDelayMins = isVandeBharat ? 2 : (currentStop.delayAtStopMinutes || 0);
-        const cardPlatform = isVandeBharat ? '4' : (currentStop.platform?.replace(/\D/g, '') || '1');
+        const cardStnName = `${currentStop.name} (${currentStop.code})`;
+        const cardArrSched = currentStop.scheduledArr || '--';
+        const cardArrAct = currentStop.actualArr ? `(${currentStop.actualArr})` : '';
+        const cardDepSched = currentStop.scheduledDep || '--';
+        const cardDepAct = currentStop.actualDep ? `(${currentStop.actualDep})` : '';
+        const cardDelayMins = currentStop.delayAtStopMinutes || 0;
+        const cardPlatform = currentStop.platform?.replace(/\D/g, '') || '4';
         const originCode = activeTrain.originCode || 'Origin';
         const destCode = activeTrain.destCode || 'Dest';
         const distFromOrigin = currentStop.distanceKm || 0;
@@ -1431,30 +1538,39 @@ Tracked on When is my train App`;
               </View>
 
               {/* Stations on Map */}
-              {stopsOnMap.map((st) => (
-                <View
-                  key={st.code}
-                  style={[
-                    lmStyles.mapStationWrapper,
-                    { left: `${st.x}%`, top: `${st.y}%` },
-                  ]}
-                >
-                  {st.isOrigin && <View style={lmStyles.mapStartGreenDot} />}
-                  {st.isDest && <View style={lmStyles.mapDestRedDot} />}
-
-                  {/* Station Name & Time Callout Bubble */}
-                  <View
+              {stopsOnMap.map((st) => {
+                const isStationSelected = (currentStop.code === st.code);
+                return (
+                  <TouchableOpacity
+                    key={st.code}
                     style={[
-                      lmStyles.mapStationBubble,
-                      st.isDest && { transform: [{ translateX: -50 }] },
-                      st.code === 'AGC' && { transform: [{ translateX: -35 }] },
+                      lmStyles.mapStationWrapper,
+                      { left: `${st.x}%`, top: `${st.y}%` },
                     ]}
+                    onPress={() => setSelectedMapStationCode(st.code)}
+                    activeOpacity={0.8}
                   >
-                    <Text style={lmStyles.mapBubbleName}>{st.name}</Text>
-                    <Text style={lmStyles.mapBubbleTime}>{st.time}</Text>
-                  </View>
-                </View>
-              ))}
+                    {st.isOrigin && <View style={lmStyles.mapStartGreenDot} />}
+                    {st.isDest && <View style={lmStyles.mapDestRedDot} />}
+                    {!st.isOrigin && !st.isDest && (
+                      <View style={[lmStyles.mapInterDot, isStationSelected && lmStyles.mapInterDotActive]} />
+                    )}
+
+                    {/* Station Name & Time Callout Bubble */}
+                    <View
+                      style={[
+                        lmStyles.mapStationBubble,
+                        isStationSelected && lmStyles.mapStationBubbleActive,
+                        st.isDest && { transform: [{ translateX: -50 }] },
+                        st.code === 'AGC' && { transform: [{ translateX: -35 }] },
+                      ]}
+                    >
+                      <Text style={[lmStyles.mapBubbleName, isStationSelected && lmStyles.mapBubbleNameActive]}>{st.name}</Text>
+                      <Text style={lmStyles.mapBubbleTime}>{st.time}</Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
 
             {/* ===== 2. BOTTOM DOCKED SECTION (STATION CARD + FULL JOURNEY BUTTON) ===== */}
@@ -1470,7 +1586,11 @@ Tracked on When is my train App`;
                     <MaterialCommunityIcons name="train" size={18} color="#007AFF" />
                   </View>
                   <Text style={[lmStyles.bottomStationTitle, { color: colors.textPrimary }]}>{cardStnName}</Text>
-                  <TouchableOpacity style={lmStyles.bottomCloseBtn}>
+                  <TouchableOpacity
+                    style={lmStyles.bottomCloseBtn}
+                    onPress={() => setSelectedMapStationCode(null)}
+                    activeOpacity={0.7}
+                  >
                     <Ionicons name="close" size={16} color={colors.textSecondary} />
                   </TouchableOpacity>
                 </View>
@@ -1831,6 +1951,42 @@ Tracked on When is my train App`;
             </View>
           </View>
 
+          {/* Emergency Helplines Section (find.mytrain.where signature feature) */}
+          <View style={[styles.infoSectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.infoSectionHeader}>
+              <MaterialCommunityIcons name="shield-alert-outline" size={18} color="#DC2626" style={{ marginRight: 6 }} />
+              <Text style={[styles.infoSectionTitle, { color: colors.textPrimary }]}>Indian Railways Helplines</Text>
+            </View>
+
+            {[
+              { num: '139', name: 'All-in-One Railway Helpline', desc: 'PNR, train enquiry, security, catering & cleanliness', color: '#0284C7', icon: 'phone-in-talk' },
+              { num: '182 / 112', name: 'RPF & Women Safety Helpline', desc: 'On-board security and immediate protection assistance', color: '#DC2626', icon: 'shield-check' },
+              { num: '138', name: 'Medical Emergency Helpline', desc: 'Doctors & paramedical support at next upcoming junction', color: '#16A34A', icon: 'hospital-box' },
+              { num: '1072', name: 'Rail Accident Emergency', desc: 'Disaster management & emergency accident relief control', color: '#EAB308', icon: 'alert-octagon' },
+              { num: 'RailMadad', name: 'IRCTC Grievance Portal', desc: 'Instant complaint registration with live tracking ID', color: '#8B5CF6', icon: 'card-text-outline' },
+            ].map((hp, hIdx) => (
+              <TouchableOpacity
+                key={hIdx}
+                style={[styles.helplineItemRow, { borderBottomColor: colors.border }]}
+                onPress={() => alert(`Calling ${hp.num} - ${hp.name}`)}
+                activeOpacity={0.75}
+              >
+                <View style={[styles.helplineIconCircle, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9' }]}>
+                  <MaterialCommunityIcons name={hp.icon as any} size={18} color={hp.color} />
+                </View>
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Text style={[styles.helplineNameText, { color: colors.textPrimary }]}>{hp.name}</Text>
+                    <View style={[styles.helplineNumPill, { backgroundColor: hp.color }]}>
+                      <Text style={styles.helplineNumText}>{hp.num}</Text>
+                    </View>
+                  </View>
+                  <Text style={[styles.helplineDescText, { color: colors.textSecondary }]}>{hp.desc}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+
           <View style={{ height: 40 }} />
         </ScrollView>
       )}
@@ -1961,10 +2117,46 @@ Tracked on When is my train App`;
               </TouchableOpacity>
             </View>
             <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
-              You will receive an audible alert 15 minutes before reaching:
+              Select when you want to be alerted before reaching the station:
             </Text>
 
-            <ScrollView style={{ maxHeight: 240 }} showsVerticalScrollIndicator={false}>
+            {/* Alarm Interval Selector Chips */}
+            <View style={styles.alarmIntervalRow}>
+              {[
+                { id: '10m', label: '10 mins' },
+                { id: '15m', label: '15 mins (Default)' },
+                { id: '30m', label: '30 mins' },
+                { id: '5km', label: '5 km' },
+                { id: '10km', label: '10 km' },
+              ].map((inv) => (
+                <TouchableOpacity
+                  key={inv.id}
+                  style={[
+                    styles.alarmIntervalChip,
+                    { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', borderColor: colors.border },
+                    alarmInterval === inv.id && styles.alarmIntervalChipActive,
+                  ]}
+                  onPress={() => setAlarmInterval(inv.id as any)}
+                  activeOpacity={0.8}
+                >
+                  <Text
+                    style={[
+                      styles.alarmIntervalText,
+                      { color: colors.textPrimary },
+                      alarmInterval === inv.id && styles.alarmIntervalTextActive,
+                    ]}
+                  >
+                    {inv.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={[styles.modalSubtitle, { color: colors.textSecondary, marginTop: 8 }]}>
+              Select Target Station:
+            </Text>
+
+            <ScrollView style={{ maxHeight: 200 }} showsVerticalScrollIndicator={false}>
               {activeTrain.stops
                 .filter((stop) => !stop.isPassing)
                 .map((stop) => (
@@ -1973,7 +2165,9 @@ Tracked on When is my train App`;
                     style={[
                       styles.alarmStationRow,
                       { borderBottomColor: colors.border },
-                      alarmStation === stop.name && { backgroundColor: isDarkMode ? '#1E3A5F' : '#F0F9FF' },
+                      (alarmStation === stop.name || (!alarmStation && stop.name === liveData.nextStationName)) && {
+                        backgroundColor: isDarkMode ? '#1E3A5F' : '#F0F9FF',
+                      },
                     ]}
                     onPress={() => setAlarmStation(stop.name)}
                   >
@@ -1981,27 +2175,56 @@ Tracked on When is my train App`;
                       style={[
                         styles.alarmStationText,
                         { color: colors.textPrimary },
-                        alarmStation === stop.name && { color: '#007AFF', fontWeight: '800' },
+                        (alarmStation === stop.name || (!alarmStation && stop.name === liveData.nextStationName)) && {
+                          color: '#007AFF',
+                          fontWeight: '800',
+                        },
                       ]}
                     >
                       {stop.name} ({stop.code})
                     </Text>
-                    {alarmStation === stop.name && (
+                    {(alarmStation === stop.name || (!alarmStation && stop.name === liveData.nextStationName)) && (
                       <Ionicons name="checkmark-circle" size={18} color="#007AFF" />
                     )}
                   </TouchableOpacity>
                 ))}
             </ScrollView>
 
+            {/* Test Alarm Sound Trigger */}
             <TouchableOpacity
-              style={styles.saveAlarmBtn}
-              onPress={() => {
-                alert(`Alarm activated for ${alarmStation || liveData.nextStationName}!`);
-                setShowAlarmModal(false);
-              }}
+              style={[styles.alarmTestSoundBtn, { backgroundColor: isDarkMode ? '#1E293B' : '#FEF3C7', borderColor: isDarkMode ? colors.border : '#FDE68A' }]}
+              onPress={() => alert('🔔 Loud Wake-Up Tone Playing: [Beep-Beep-Beep! Station approaching!]')}
+              activeOpacity={0.8}
             >
-              <Text style={styles.saveAlarmBtnText}>SET ALARM</Text>
+              <Ionicons name="volume-high-outline" size={16} color="#D97706" style={{ marginRight: 6 }} />
+              <Text style={[styles.alarmTestSoundText, { color: isDarkMode ? '#FBBF24' : '#92400E' }]}>Test Wake-Up Sound & Vibration</Text>
             </TouchableOpacity>
+
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+              {isAlarmActive && (
+                <TouchableOpacity
+                  style={[styles.saveAlarmBtn, { flex: 1, backgroundColor: '#EF4444' }]}
+                  onPress={() => {
+                    setIsAlarmActive(false);
+                    alert('Alarm cancelled successfully.');
+                    setShowAlarmModal(false);
+                  }}
+                >
+                  <Text style={styles.saveAlarmBtnText}>CANCEL ALARM</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                style={[styles.saveAlarmBtn, { flex: isAlarmActive ? 1 : 2 }]}
+                onPress={() => {
+                  const target = alarmStation || liveData.nextStationName;
+                  setIsAlarmActive(true);
+                  alert(`✅ Alarm Set! You will be alerted ${alarmInterval} before arriving at ${target}.`);
+                  setShowAlarmModal(false);
+                }}
+              >
+                <Text style={styles.saveAlarmBtnText}>{isAlarmActive ? 'UPDATE ALARM' : 'SET ALARM'}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </TouchableOpacity>
       </Modal>
@@ -3717,6 +3940,197 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FBBF24',
   },
+
+  // ================= REAL-TIME TELEMETRY & SPEEDOMETER DECK STYLES =================
+  telemetryDeckContainer: {
+    marginHorizontal: 12,
+    marginTop: 6,
+    marginBottom: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    overflow: 'hidden',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+  },
+  telemetryStatusSubBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderBottomWidth: 1,
+  },
+  telemetryLiveIndicatorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  telemetryBlinkingDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: '#10B981',
+    marginRight: 6,
+  },
+  telemetryLiveStatusText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  telemetrySyncButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.4)',
+  },
+  telemetrySyncText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    marginLeft: 3,
+  },
+  speedometerMetricsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+  },
+  speedometerMetricBox: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    borderRightWidth: 0.8,
+  },
+  speedometerIconCircle: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 6,
+  },
+  speedometerTextCol: {
+    flex: 1,
+  },
+  speedometerLabelText: {
+    fontSize: 9,
+    fontWeight: '600',
+  },
+  speedometerValueText: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    marginTop: 1,
+  },
+  telemetryLocationStrip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderTopWidth: 0.8,
+    gap: 3,
+  },
+  telemetryLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  telemetryLocationEmoji: {
+    fontSize: 11,
+    marginRight: 5,
+  },
+  telemetryLocationLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    marginRight: 4,
+  },
+  telemetryLocationValue: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    flex: 1,
+  },
+  telemetryCollapseHandle: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 2,
+    backgroundColor: 'transparent',
+  },
+
+  // ================= EMERGENCY HELPLINES STYLES =================
+  helplineItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 9,
+    paddingHorizontal: 10,
+    borderBottomWidth: 0.8,
+  },
+  helplineIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  helplineNameText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  helplineNumPill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  helplineNumText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  helplineDescText: {
+    fontSize: 10,
+    fontWeight: '500',
+    marginTop: 2,
+  },
+
+  // ================= ALARM INTERVAL STYLES =================
+  alarmIntervalRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginVertical: 6,
+  },
+  alarmIntervalChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  alarmIntervalChipActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  alarmIntervalText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  alarmIntervalTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  alarmTestSoundBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginTop: 10,
+  },
+  alarmTestSoundText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
 });
 
 // ===== Live Map Tab Styles (Separate StyleSheet) =====
@@ -3820,6 +4234,21 @@ const lmStyles = StyleSheet.create({
     borderColor: '#FFFFFF',
     marginBottom: 2,
   },
+  mapInterDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    backgroundColor: '#0284C7',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    marginBottom: 2,
+  },
+  mapInterDotActive: {
+    backgroundColor: '#007AFF',
+    borderColor: '#F59E0B',
+    borderWidth: 2,
+    transform: [{ scale: 1.3 }],
+  },
   mapStationBubble: {
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 6,
@@ -3834,10 +4263,19 @@ const lmStyles = StyleSheet.create({
     shadowRadius: 2,
     minWidth: 85,
   },
+  mapStationBubbleActive: {
+    borderColor: '#007AFF',
+    borderWidth: 1.5,
+    backgroundColor: '#F0F9FF',
+    transform: [{ scale: 1.05 }],
+  },
   mapBubbleName: {
     fontSize: 9.5,
     fontWeight: '800',
     color: '#0F172A',
+  },
+  mapBubbleNameActive: {
+    color: '#007AFF',
   },
   mapBubbleTime: {
     fontSize: 8.5,
