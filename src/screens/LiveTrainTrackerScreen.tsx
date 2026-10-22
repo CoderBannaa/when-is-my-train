@@ -903,44 +903,6 @@ Tracked on When is my train App`;
       {/* ================= TAB 1: JOURNEY (TIMELINE VIEW) ================= */}
       {activeTab === 'journey' && (
         <View style={{ flex: 1, backgroundColor: colors.background }}>
-          {/* Strictly Needed Details Strip: Current Station + Platform + Delay Badge + Fast Sync */}
-          <View style={[styles.compactStatusOnlyRow, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-            <View style={styles.compactStatusLeft}>
-              <View style={[styles.compactPulseDot, { backgroundColor: liveData.isDelayed ? '#EF4444' : '#10B981' }]} />
-              <Text style={[styles.compactStatusStation, { color: colors.textPrimary }]} numberOfLines={1}>
-                {liveData.currentStationName ? `Arrived ${liveData.currentStationName}` : 'En Route'}
-              </Text>
-              <Text style={[styles.compactPlatformText, { color: colors.textSecondary }]}>
-                • {liveData.currentPlatform || 'PF 1'}
-              </Text>
-              {liveData.currentSpeed > 0 && (
-                <Text style={[styles.compactSpeedText, { color: isDarkMode ? '#34D399' : '#16A34A' }]}>
-                  • {liveData.currentSpeed} km/h
-                </Text>
-              )}
-            </View>
-
-            <View style={styles.compactStatusRight}>
-              <View style={[styles.compactDelayBadge, { backgroundColor: liveData.isDelayed ? '#FEE2E2' : '#DCFCE7' }]}>
-                <Text style={[styles.compactDelayBadgeText, { color: liveData.isDelayed ? '#DC2626' : '#15803D' }]}>
-                  {liveData.isDelayed ? `+${liveData.delayMinutes}m Late` : 'On Time'}
-                </Text>
-              </View>
-
-              <TouchableOpacity
-                style={styles.compactSyncBtn}
-                onPress={() => fetchLiveTracking(true)}
-                activeOpacity={0.7}
-                disabled={isLoadingApi}
-              >
-                <Animated.View style={{ transform: [{ rotate: spin }] }}>
-                  <Ionicons name="sync" size={12} color="#15803D" />
-                </Animated.View>
-                <Text style={styles.compactSyncText}>Sync</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
           {/* Solid Black Column Header Bar (Arrival | Date | Departure) */}
           <View style={styles.screenshot2BlackHeaderBar}>
             <Text style={styles.screenshot2HeaderColText}>Arrival</Text>
@@ -1232,18 +1194,35 @@ Tracked on When is my train App`;
             </View>
           )}
 
-          {/* Floating Action Pill & Circular Blue Refresh Button (Exact from Screenshot 2) */}
+          {/* Merged Floating Action Pill (Current Status + Platform + Delay Badge + Update Time + Refresh) */}
           <View style={styles.screenshot2FloatingBottomBar}>
             <View style={[styles.screenshot2FloatingPill, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: isDarkMode ? '#334155' : '#E2E8F0' }]}>
-              <View style={styles.screenshot2FloatingPillIcon}>
-                <MaterialCommunityIcons name="train" size={18} color={Colors.primary} />
+              <View style={[styles.screenshot2FloatingPillIcon, { backgroundColor: liveData.isDelayed ? '#FEE2E2' : '#DCFCE7' }]}>
+                <MaterialCommunityIcons
+                  name="train"
+                  size={18}
+                  color={liveData.isDelayed ? '#DC2626' : '#16A34A'}
+                />
               </View>
               <View style={styles.screenshot2FloatingPillTextCol}>
-                <Text style={[styles.screenshot2FloatingPillTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-                  {liveData.distanceToNextKm ?? 4} km to {liveData.nextStationName || 'Faridabad New Town'}
-                </Text>
-                <Text style={[styles.screenshot2FloatingPillSub, { color: colors.textSecondary }]}>
-                  Updated {lastUpdatedSec || 45}s ago • {liveData.currentSpeed || 68} km/h
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Text style={[styles.screenshot2FloatingPillTitle, { color: colors.textPrimary, flexShrink: 1 }]} numberOfLines={1}>
+                    {liveData.currentStationName ? `Arrived ${liveData.currentStationName}` : 'En Route'} • {liveData.currentPlatform ? liveData.currentPlatform.replace(/Platform\s*/i, 'PF ') : 'PF 1'}
+                  </Text>
+                  <View style={[
+                    styles.bottomPillDelayBadge,
+                    { backgroundColor: liveData.isDelayed ? '#FEE2E2' : '#DCFCE7' }
+                  ]}>
+                    <Text style={[
+                      styles.bottomPillDelayBadgeText,
+                      { color: liveData.isDelayed ? '#DC2626' : '#15803D' }
+                    ]}>
+                      {liveData.isDelayed ? `+${liveData.delayMinutes}m` : 'On Time'}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={[styles.screenshot2FloatingPillSub, { color: colors.textSecondary }]} numberOfLines={1}>
+                  Updated {lastUpdatedSec || 5}s ago{liveData.currentSpeed > 0 ? ` • ${liveData.currentSpeed} km/h` : ''}
                 </Text>
               </View>
               <TouchableOpacity
@@ -4322,6 +4301,16 @@ const styles = StyleSheet.create({
   },
   screenshot2FloatingPillTitle: {
     fontSize: 12.5,
+    fontWeight: '800',
+  },
+  bottomPillDelayBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+    marginLeft: 6,
+  },
+  bottomPillDelayBadgeText: {
+    fontSize: 9.5,
     fontWeight: '800',
   },
   screenshot2FloatingPillSub: {
