@@ -9,7 +9,7 @@ import { LiveStatusScreen } from './src/screens/LiveStatusScreen';
 import { LiveTrainTrackerScreen } from './src/screens/LiveTrainTrackerScreen';
 import { PnrScreen } from './src/screens/PnrScreen';
 import { TimetableScreen } from './src/screens/TimetableScreen';
-import { Station } from './src/data/stations';
+import { Station, STATIONS_DATABASE } from './src/data/stations';
 import { PreferencesProvider, usePreferences } from './src/context/PreferencesContext';
 import { PreferencesModal } from './src/components/PreferencesModal';
 
@@ -60,8 +60,12 @@ function MainApp() {
     date: string;
   } | null>(null);
 
-  const [selectedFromStation, setSelectedFromStation] = useState<Station | null>(null);
-  const [selectedToStation, setSelectedToStation] = useState<Station | null>(null);
+  const [selectedFromStation, setSelectedFromStation] = useState<Station | null>(() => {
+    return STATIONS_DATABASE.find((s) => s.code === 'NDLS') || null;
+  });
+  const [selectedToStation, setSelectedToStation] = useState<Station | null>(() => {
+    return STATIONS_DATABASE.find((s) => s.code === 'LKO') || null;
+  });
 
   // Handle hardware and UI back action
   const handleBack = useCallback((): boolean => {
@@ -122,13 +126,20 @@ function MainApp() {
   }, [navigateTo, searchParams, selectedFromStation, selectedToStation]);
 
   const handleSelectTab = useCallback((tab: TabKey) => {
-    if (tab === activeTab && !isSearching) return;
-    if (tab === 'live') {
-      navigateTo('home', false, '22436');
+    if (tab === 'track' || tab === 'home' || tab === 'live') {
+      if (trackingTrainNumber) {
+        navigateTo('home', false, trackingTrainNumber);
+      } else {
+        navigateTo('home', false, null);
+      }
       return;
     }
-    navigateTo(tab, false);
-  }, [activeTab, isSearching, navigateTo]);
+    if (tab === 'departures' || tab === 'schedule') {
+      navigateTo('schedule', false, null);
+      return;
+    }
+    navigateTo(tab, false, null);
+  }, [trackingTrainNumber, navigateTo]);
 
   // Compute header props based on active screen
   const getHeaderProps = () => {

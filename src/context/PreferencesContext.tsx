@@ -2,7 +2,9 @@ import React, { createContext, useContext, useState, useEffect, useMemo, ReactNo
 import { Platform } from 'react-native';
 import { Colors } from '../theme/colors';
 
-// Universal Safe Storage (works without requiring native pod/async-storage build)
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// Universal Safe Storage (persists on native via AsyncStorage and web via localStorage)
 const memoryStore: Record<string, string> = {};
 export const SafeStorage = {
   getItem: async (key: string): Promise<string | null> => {
@@ -10,19 +12,35 @@ export const SafeStorage = {
       if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
         return window.localStorage.getItem(key);
       }
+      const val = await AsyncStorage.getItem(key);
+      if (val !== null) return val;
       return memoryStore[key] || null;
     } catch {
       return memoryStore[key] || null;
     }
   },
   setItem: async (key: string, value: string): Promise<void> => {
+    memoryStore[key] = value;
     try {
       if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
         window.localStorage.setItem(key, value);
+        return;
       }
-      memoryStore[key] = value;
+      await AsyncStorage.setItem(key, value);
     } catch {
-      memoryStore[key] = value;
+      // memory fallback maintained
+    }
+  },
+  removeItem: async (key: string): Promise<void> => {
+    delete memoryStore[key];
+    try {
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.removeItem(key);
+        return;
+      }
+      await AsyncStorage.removeItem(key);
+    } catch {
+      // fallback
     }
   },
 };
@@ -114,6 +132,8 @@ export const translations = {
     recentSearches: 'Recent Searches',
     popularRoutes: 'Popular Routes',
     quickFeatures: 'Travel Features',
+    spotYourTrain: 'Spot Your Train',
+    trainNameOrNo: 'Train name / no.',
 
     // Search Results Screen
     trainsFound: 'Trains found',
@@ -196,6 +216,8 @@ export const translations = {
     recentSearches: 'हाल की खोजें',
     popularRoutes: 'लोकप्रिय मार्ग',
     quickFeatures: 'यात्रा सुविधाएं',
+    spotYourTrain: 'स्पॉट ट्रेन (लाइव)',
+    trainNameOrNo: 'ट्रेन नाम / नंबर',
 
     // Search Results Screen
     trainsFound: 'ट्रेनें उपलब्ध हैं',
@@ -325,9 +347,9 @@ export const PreferencesProvider: React.FC<{ children: ReactNode }> = ({ childre
         if (savedAlarmSnd === 'horn' || savedAlarmSnd === 'whistle' || savedAlarmSnd === 'chime' || savedAlarmSnd === 'bell') {
           setAlarmSoundState(savedAlarmSnd);
         }
-        // Show welcome language & theme selection on first launch
+        // Ensure first launch is flagged without blocking screen with popup
         if (!hasLaunched) {
-          setShowWelcomeModal(true);
+          await SafeStorage.setItem(PREF_FIRST_LAUNCH_KEY, 'true');
         }
       } catch {
         // Fallback default

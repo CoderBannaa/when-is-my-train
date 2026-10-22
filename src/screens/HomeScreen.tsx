@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Animat
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '../theme/colors';
 import { Station, STATIONS_DATABASE, POPULAR_STATIONS } from '../data/stations';
-import { CORRIDOR_TRAINS_MASTER } from '../data/trainsBetweenStations';
+import { CORRIDOR_TRAINS_MASTER, findOrGenerateTrain, CorridorTrain } from '../data/trainsBetweenStations';
 import { searchAndRankStations, searchAndRankTrains } from '../utils/searchRanker';
 import { usePreferences, SafeStorage } from '../context/PreferencesContext';
 
@@ -15,9 +15,55 @@ interface RecentSearchItem {
   sub: string;
 }
 
+export interface RecentlyTrackedItem {
+  id: string;
+  trainNumber: string;
+  trainName: string;
+  fromCode: string;
+  toCode: string;
+}
+
+export const DEFAULT_RECENTLY_TRACKED: RecentlyTrackedItem[] = [
+  {
+    id: 'track-12004',
+    trainNumber: '12004',
+    trainName: 'Lucknow Shatabdi Express',
+    fromCode: 'NDLS',
+    toCode: 'LKO',
+  },
+  {
+    id: 'track-12424',
+    trainNumber: '12424',
+    trainName: 'Dibrugarh Rajdhani Express',
+    fromCode: 'NDLS',
+    toCode: 'CNB',
+  },
+  {
+    id: 'track-22436',
+    trainNumber: '22436',
+    trainName: 'Vande Bharat Express',
+    fromCode: 'NDLS',
+    toCode: 'BSB',
+  },
+  {
+    id: 'track-12229',
+    trainNumber: '12229',
+    trainName: 'Lucknow Mail',
+    fromCode: 'LKO',
+    toCode: 'NDLS',
+  },
+];
+
 const DEFAULT_RECENT_SEARCHES: RecentSearchItem[] = [
   {
     id: 'rec-1',
+    from: { code: 'NDLS', name: 'New Delhi', city: 'Delhi', state: 'Delhi' },
+    to: { code: 'LKO', name: 'Lucknow Charbagh', city: 'Lucknow', state: 'Uttar Pradesh' },
+    route: 'NDLS ➔ LKO',
+    sub: 'New Delhi to Lucknow Charbagh',
+  },
+  {
+    id: 'rec-2',
     from: { code: 'NDLS', name: 'New Delhi', city: 'Delhi', state: 'Delhi' },
     to: { code: 'CNB', name: 'Kanpur Central', city: 'Kanpur', state: 'Uttar Pradesh' },
     route: 'NDLS ➔ CNB',
@@ -45,6 +91,7 @@ const DEFAULT_RECENT_SEARCHES: RecentSearchItem[] = [
     sub: 'Howrah Jn to New Delhi',
   },
 ];
+
 
 interface HomeScreenProps {
   onNavigateToTab: (tab: 'live' | 'pnr' | 'schedule') => void;
@@ -94,10 +141,25 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [sourceHasError, setSourceHasError] = useState(false);
   const [destHasError, setDestHasError] = useState(false);
   const [recentSearches, setRecentSearches] = useState<RecentSearchItem[]>(DEFAULT_RECENT_SEARCHES);
+  const [recentlyTracked, setRecentlyTracked] = useState<RecentlyTrackedItem[]>(DEFAULT_RECENTLY_TRACKED);
+
+  // Quick Action Modal States (matching 8-item grid in Screenshot 1)
+  const [showSpotTrainModal, setShowSpotTrainModal] = useState(false);
+  const [showDeparturesModal, setShowDeparturesModal] = useState(false);
+  const [showSeatAvailModal, setShowSeatAvailModal] = useState(false);
+  const [showSeatGapsModal, setShowSeatGapsModal] = useState(false);
+  const [showResChartModal, setShowResChartModal] = useState(false);
+  const [showFavoritesModal, setShowFavoritesModal] = useState(false);
+  const [departuresStation, setDeparturesStation] = useState<Station>(() => {
+    return fromStation || STATIONS_DATABASE.find((s) => s.code === 'NDLS') || STATIONS_DATABASE[0];
+  });
+  const [spotModalQuery, setSpotModalQuery] = useState('');
+  const [selectedSeatQuota, setSelectedSeatQuota] = useState<'GN' | 'TQ' | 'LD'>('GN');
+  const [selectedSeatClass, setSelectedSeatClass] = useState<'2S' | 'CC' | 'SL' | '3A' | '2A'>('2S');
 
   // Station Wake-up Alarm states (Reference App Feature)
   const [showAlarmModal, setShowAlarmModal] = useState(false);
-  const [alarmStation, setAlarmStation] = useState<string>('Kanpur Central (CNB)');
+  const [alarmStation, setAlarmStation] = useState<string>('Lucknow Charbagh (LKO)');
   const [alarmLeadMinutes, setAlarmLeadMinutes] = useState<number>(30);
   const [alarmActive, setAlarmActive] = useState<boolean>(false);
   const [alarmVibrate, setAlarmVibrate] = useState<boolean>(true);
@@ -128,10 +190,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   // Free text typing states (User has complete freedom to type any text, never blocked or cleared)
   const [fromText, setFromText] = useState(
-    fromStation ? `${fromStation.name}${fromStation.code ? ` (${fromStation.code})` : ''}` : ''
+    fromStation ? fromStation.name : 'New Delhi'
   );
   const [toText, setToText] = useState(
-    toStation ? `${toStation.name}${toStation.code ? ` (${toStation.code})` : ''}` : ''
+    toStation ? toStation.name : 'Lucknow Charbagh'
   );
 
   // Selected Travel Date Option (Today, Tomorrow, Day After)
@@ -159,7 +221,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   // Keep in sync with props (e.g. when user navigates back from search results or swaps)
   useEffect(() => {
     if (fromStation && fromStation.name) {
-      setFromText(`${fromStation.name}${fromStation.code ? ` (${fromStation.code})` : ''}`);
+      setFromText(fromStation.name);
       setSourceConfirmed(true);
     } else if (fromStation === null) {
       setFromText('');
@@ -169,7 +231,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   useEffect(() => {
     if (toStation && toStation.name) {
-      setToText(`${toStation.name}${toStation.code ? ` (${toStation.code})` : ''}`);
+      setToText(toStation.name);
       setDestConfirmed(true);
     } else if (toStation === null) {
       setToText('');
@@ -231,6 +293,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const screenSlideAnim = useRef(new Animated.Value(16)).current;
   const stationPulseAnim = useRef(new Animated.Value(1)).current;
   const findBtnScale = useRef(new Animated.Value(1)).current;
+  const spotBtnScale = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     Animated.parallel([
@@ -333,10 +396,66 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   }, [errorPopupAnim]);
 
   const [spotTrainQuery, setSpotTrainQuery] = useState('');
-  const spotRankedResults = useMemo(() => {
-    if (!spotTrainQuery.trim()) return [];
-    return searchAndRankTrains(spotTrainQuery, CORRIDOR_TRAINS_MASTER).slice(0, 5);
+  const [isSpotFocused, setIsSpotFocused] = useState(false);
+  const [onlineSearchResults, setOnlineSearchResults] = useState<CorridorTrain[]>([]);
+
+  // Real-time Internet / RailRadar search for queried train numbers
+  useEffect(() => {
+    const cleanNo = spotTrainQuery.trim().replace(/\D/g, '');
+    if (cleanNo.length >= 4) {
+      const abortCtrl = new AbortController();
+      const timer = setTimeout(async () => {
+        try {
+          const res = await fetch(`http://localhost:5001/api/train-search?query=${cleanNo}`, { signal: abortCtrl.signal });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.success && Array.isArray(data.trains) && data.trains.length > 0) {
+              setOnlineSearchResults(data.trains);
+            }
+          }
+        } catch {}
+      }, 200);
+      return () => {
+        clearTimeout(timer);
+        abortCtrl.abort();
+      };
+    } else {
+      setOnlineSearchResults([]);
+    }
   }, [spotTrainQuery]);
+
+  const spotRankedResults = useMemo(() => {
+    const query = spotTrainQuery.trim();
+    if (!query) return [];
+
+    // 1. Search in Corridor Trains Master
+    const ranked = searchAndRankTrains(query, CORRIDOR_TRAINS_MASTER);
+
+    // 2. Check if query is an exact match in results
+    const isExactMatch = ranked.some((t) => t.number.toLowerCase() === query.toLowerCase());
+
+    // 3. Merge online RailRadar results
+    const onlineMatched = onlineSearchResults.filter(
+      (ot) => ot.number.includes(query) || ot.name.toLowerCase().includes(query.toLowerCase())
+    );
+
+    const merged: CorridorTrain[] = [...onlineMatched];
+    for (const r of ranked) {
+      if (!merged.some((t) => t.number === r.number)) {
+        merged.push(r);
+      }
+    }
+
+    // 4. If user typed a train number/name with no match, dynamically resolve via findOrGenerateTrain
+    if (!isExactMatch && merged.length === 0 && (query.length >= 2 || !isNaN(Number(query)))) {
+      const direct = findOrGenerateTrain(query);
+      if (direct && !merged.some((t) => t.number === direct.number)) {
+        merged.unshift(direct);
+      }
+    }
+
+    return merged.slice(0, 8);
+  }, [spotTrainQuery, onlineSearchResults]);
 
   const handleSpotTrain = useCallback((trainNumber: string, trainName: string) => {
     if (onTrackTrain) {
@@ -345,6 +464,24 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       onNavigateToTab('live');
     }
   }, [onTrackTrain, onNavigateToTab]);
+
+  const handleSpotSubmit = useCallback(() => {
+    const query = spotTrainQuery.trim();
+    if (spotRankedResults.length > 0) {
+      const top = spotRankedResults[0];
+      handleSpotTrain(top.number, top.name);
+      setSpotTrainQuery('');
+      return;
+    }
+    if (query) {
+      const found = findOrGenerateTrain(query);
+      handleSpotTrain(found.number, found.name);
+      setSpotTrainQuery('');
+      return;
+    }
+    // Default fallback to popular Vande Bharat train
+    handleSpotTrain('22436', 'Vande Bharat Express');
+  }, [spotTrainQuery, spotRankedResults, handleSpotTrain]);
 
   // Matching suggestions generated ONLY when user has typed at least 1 character
   const fromRankedResults = useMemo(() => {
@@ -360,7 +497,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   // When user selects a suggestion from dropdown
   const handleSelectFrom = useCallback((station: Station) => {
     onSetFromStation(station);
-    setFromText(`${station.name} (${station.code})`);
+    setFromText(station.name);
     setSourceConfirmed(true);
     setActiveInlineSearch(null);
     setValidationError(null);
@@ -369,7 +506,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   const handleSelectTo = useCallback((station: Station) => {
     onSetToStation(station);
-    setToText(`${station.name} (${station.code})`);
+    setToText(station.name);
     setDestConfirmed(true);
     setActiveInlineSearch(null);
     setValidationError(null);
@@ -627,50 +764,77 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <Animated.View style={{ opacity: screenFadeAnim, transform: [{ translateY: screenSlideAnim }] }}>
         {/* Modern Clean Search Card - Single card, no nested boxes */}
+        {/* Modern Clean Search Card - Exact Layout Matching Screenshot 1 */}
         <View style={[styles.modernSearchCard, { backgroundColor: colors.surface, borderColor: isDarkMode ? '#1E293B' : '#E2E8F0' }]}>
           
-          {/* 1. FROM STATION ROW */}
-          <View style={[styles.stationRowContainer, sourceHasError && styles.stationRowError]}>
-            <View style={styles.stationIndicatorCol}>
-              <Animated.View style={[styles.sourceDotPulse, { transform: [{ scale: stationPulseAnim }] }]} />
-              <View style={styles.sourceDotInner} />
-            </View>
-            <View style={styles.stationDetailsCol}>
-              <Text style={[styles.stationMicroLabel, { color: colors.textSecondary }]}>{t('fromStation').toUpperCase()}</Text>
-              <View style={styles.stationInputLine}>
-                <TextInput
+          {/* Animated Dotted Track Column on Left Extreme */}
+          {!activeInlineSearch && (
+            <View style={[styles.leftTrackColumn, { pointerEvents: 'none' as const }]}>
+              {/* Source Station Dot (Green) */}
+              <View style={styles.stationDotSource} />
+
+              {/* Dotted Track with Moving Train */}
+              <View style={styles.dottedTrackLine}>
+                <View style={[styles.trackDot, { backgroundColor: isDarkMode ? '#475569' : '#94A3B8' }]} />
+                <View style={[styles.trackDot, { backgroundColor: isDarkMode ? '#475569' : '#94A3B8' }]} />
+                <View style={[styles.trackDot, { backgroundColor: isDarkMode ? '#475569' : '#94A3B8' }]} />
+                <View style={[styles.trackDot, { backgroundColor: isDarkMode ? '#475569' : '#94A3B8' }]} />
+                <View style={[styles.trackDot, { backgroundColor: isDarkMode ? '#475569' : '#94A3B8' }]} />
+
+                {/* Animated Moving Train Badge */}
+                <Animated.View
                   style={[
-                    styles.stationModernInput,
+                    styles.movingTrainBadge,
                     {
-                      color: colors.textPrimary,
+                      transform: [{ translateY: trainTranslateY }],
+                      opacity: trainOpacity,
                     },
                   ]}
-                  value={fromText}
-                  onChangeText={handleFromChangeText}
-                  onFocus={() => {
-                    setActiveInlineSearch('from');
-                    setValidationError(null);
-                    setSourceHasError(false);
-                  }}
-                  placeholder="Enter source station"
-                  placeholderTextColor={colors.textMuted}
-                />
-                {fromStation && sourceConfirmed && (
-                  <View style={[styles.stationCodeBadge, { backgroundColor: isDarkMode ? '#1E3A5F' : '#E0F2FE' }]}>
-                    <Text style={styles.stationCodeBadgeText}>{fromStation.code}</Text>
-                  </View>
-                )}
-                {fromText.length > 0 && (
-                  <TouchableOpacity
-                    onPress={handleClearFrom}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                    style={styles.clearStationBtn}
-                  >
-                    <Ionicons name="close-circle" size={18} color={colors.textMuted} />
-                  </TouchableOpacity>
-                )}
+                >
+                  <MaterialCommunityIcons name="train" size={12} color={Colors.primary} />
+                </Animated.View>
               </View>
+
+              {/* Destination Station Dot (Red) */}
+              <View style={styles.stationDotDest} />
             </View>
+          )}
+
+          {/* 1. FROM STATION ROW */}
+          <View style={[styles.stationRowContainer, sourceHasError && styles.stationRowError]}>
+            <View style={styles.stationCodeBadgeSolid}>
+              <Text style={styles.stationCodeBadgeSolidText}>
+                {fromStation ? fromStation.code : 'NDLS'}
+              </Text>
+            </View>
+
+            <TextInput
+              style={[
+                styles.stationModernInput,
+                {
+                  color: colors.textPrimary,
+                },
+              ]}
+              value={fromText}
+              onChangeText={handleFromChangeText}
+              onFocus={() => {
+                setActiveInlineSearch('from');
+                setValidationError(null);
+                setSourceHasError(false);
+              }}
+              placeholder="Enter source station"
+              placeholderTextColor={colors.textMuted}
+            />
+
+            {fromText.length > 0 && (
+              <TouchableOpacity
+                onPress={handleClearFrom}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                style={styles.clearStationBtn}
+              >
+                <Ionicons name="close" size={20} color={colors.textMuted} />
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* DROPDOWN FOR FROM STATION (Shows only when typing & matching) */}
@@ -706,15 +870,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             </View>
           )}
 
-          {/* DIVIDER ROW WITH RIGHT-SHIFTED SWAP BUTTON */}
+          {/* DIVIDER ROW WITH SWAP BUTTON */}
           <View style={styles.modernDividerRow}>
             <View style={[styles.modernDividerLine, { backgroundColor: isDarkMode ? '#334155' : '#E2E8F0' }]} />
             <TouchableOpacity
               style={[
                 styles.modernSwapBtn,
                 {
-                  backgroundColor: colors.primary,
-                  borderColor: isDarkMode ? colors.surface : '#FFFFFF',
+                  backgroundColor: '#FFFFFF',
+                  borderColor: isDarkMode ? '#334155' : '#CBD5E1',
                 },
               ]}
               activeOpacity={0.75}
@@ -722,53 +886,46 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
               <Animated.View style={{ transform: [{ rotate: swapAnim.interpolate({ inputRange: [0, 360], outputRange: ['0deg', '360deg'] }) }] }}>
-                <Ionicons name="swap-vertical" size={18} color="#FFFFFF" />
+                <Ionicons name="swap-vertical" size={19} color={Colors.primary} />
               </Animated.View>
             </TouchableOpacity>
           </View>
 
           {/* 2. TO STATION ROW */}
           <View style={[styles.stationRowContainer, destHasError && styles.stationRowError]}>
-            <View style={styles.stationIndicatorCol}>
-              <Animated.View style={[styles.destDotPulse, { transform: [{ scale: stationPulseAnim }] }]} />
-              <View style={styles.destDotInner} />
+            <View style={styles.stationCodeBadgeSolid}>
+              <Text style={styles.stationCodeBadgeSolidText}>
+                {toStation ? toStation.code : 'LKO'}
+              </Text>
             </View>
-            <View style={styles.stationDetailsCol}>
-              <Text style={[styles.stationMicroLabel, { color: colors.textSecondary }]}>{t('toStation').toUpperCase()}</Text>
-              <View style={styles.stationInputLine}>
-                <TextInput
-                  style={[
-                    styles.stationModernInput,
-                    {
-                      color: colors.textPrimary,
-                    },
-                  ]}
-                  value={toText}
-                  onChangeText={handleToChangeText}
-                  onFocus={() => {
-                    setActiveInlineSearch('to');
-                    setValidationError(null);
-                    setDestHasError(false);
-                  }}
-                  placeholder="Enter destination station"
-                  placeholderTextColor={colors.textMuted}
-                />
-                {toStation && destConfirmed && (
-                  <View style={[styles.stationCodeBadge, { backgroundColor: isDarkMode ? '#1E3A5F' : '#E0F2FE' }]}>
-                    <Text style={styles.stationCodeBadgeText}>{toStation.code}</Text>
-                  </View>
-                )}
-                {toText.length > 0 && (
-                  <TouchableOpacity
-                    onPress={handleClearTo}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                    style={styles.clearStationBtn}
-                  >
-                    <Ionicons name="close-circle" size={18} color={colors.textMuted} />
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
+
+            <TextInput
+              style={[
+                styles.stationModernInput,
+                {
+                  color: colors.textPrimary,
+                },
+              ]}
+              value={toText}
+              onChangeText={handleToChangeText}
+              onFocus={() => {
+                setActiveInlineSearch('to');
+                setValidationError(null);
+                setDestHasError(false);
+              }}
+              placeholder="Enter destination station"
+              placeholderTextColor={colors.textMuted}
+            />
+
+            {toText.length > 0 && (
+              <TouchableOpacity
+                onPress={handleClearTo}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                style={styles.clearStationBtn}
+              >
+                <Ionicons name="close" size={20} color={colors.textMuted} />
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* DROPDOWN FOR TO STATION (Shows only when typing & matching) */}
@@ -819,221 +976,365 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               onPressOut={() => Animated.spring(findBtnScale, { toValue: 1, friction: 4, useNativeDriver: true }).start()}
               onPress={() => handleFindTrains()}
             >
-              <Ionicons name="search" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
               <Text style={styles.modernFindTrainsText}>{t('findTrains')}</Text>
             </TouchableOpacity>
           </Animated.View>
         </View>
 
-      {/* 2. Spot Your Train Card */}
-      <View style={[styles.spotTrainCard, { backgroundColor: colors.surface, borderColor: isDarkMode ? '#1E293B' : '#E2E8F0' }]}>
-        <View style={styles.spotCardHeader}>
-          <View style={[styles.spotHeaderIconBox, { backgroundColor: isDarkMode ? '#1E3A5F' : '#EFF6FF' }]}>
-            <MaterialCommunityIcons name="train" size={20} color={colors.primary} />
+        {/* SPOT YOUR TRAIN CARD (Clean, Optimized & Direct) */}
+        <View
+          style={[
+            styles.spotTrainCard,
+            {
+              backgroundColor: colors.surface,
+              borderColor: isSpotFocused ? colors.primary : (isDarkMode ? '#334155' : '#E2E8F0'),
+              shadowColor: isSpotFocused ? colors.primary : '#0F172A',
+            },
+          ]}
+        >
+          {/* Header */}
+          <View style={styles.spotCardHeader}>
+            <Text style={[styles.spotCardTitle, { color: colors.textPrimary }]}>
+              {t('spotYourTrain') || 'Spot Your Train'}
+            </Text>
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.spotCardTitle, { color: colors.textPrimary }]}>Spot Your Train</Text>
-            <Text style={[styles.spotCardSubtitle, { color: colors.textSecondary }]}>Live GPS & platform status</Text>
-          </View>
-          <View style={styles.liveSideBadge}>
-            <Animated.View style={[styles.liveBlinkDot, { opacity: liveBlinkAnim }]} />
-            <Text style={styles.liveSideText}>LIVE</Text>
-          </View>
-        </View>
 
-        <View style={[styles.spotInputContainer, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', borderColor: isDarkMode ? '#334155' : '#E2E8F0' }]}>
-          <Ionicons name="search-outline" size={18} color={colors.textMuted} style={{ marginLeft: 6, marginRight: 8 }} />
-          <TextInput
+          {/* Search Input Row with Train Name/No. and Green Search Icon */}
+          <View
             style={[
-              styles.spotTextInput,
+              styles.spotInputContainer,
               {
-                color: colors.textPrimary,
+                backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
+                borderColor: isSpotFocused ? colors.primary : (isDarkMode ? '#334155' : '#CBD5E1'),
               },
             ]}
-            value={spotTrainQuery}
-            onChangeText={setSpotTrainQuery}
-            placeholder="Train No. / Train Name"
-            placeholderTextColor={colors.textMuted}
-            onSubmitEditing={() => {
-              const num = spotTrainQuery.trim() || '22436';
-              handleSpotTrain(num, `Train ${num}`);
-            }}
-          />
-          {spotTrainQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSpotTrainQuery('')} style={{ padding: 4, marginRight: 6 }}>
-              <Ionicons name="close-circle" size={18} color={colors.textMuted} />
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity
-            style={styles.greenSearchBox}
-            activeOpacity={0.8}
-            onPress={() => {
-              const num = spotTrainQuery.trim() || '22436';
-              handleSpotTrain(num, `Train ${num}`);
-            }}
           >
-            <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
-          </TouchableOpacity>
+            <View style={styles.spotInputTrainIcon}>
+              <MaterialCommunityIcons name="train" size={20} color={colors.primary} />
+            </View>
+
+            <TextInput
+              style={[
+                styles.spotTextInput,
+                {
+                  color: colors.textPrimary,
+                },
+              ]}
+              value={spotTrainQuery}
+              onChangeText={setSpotTrainQuery}
+              onFocus={() => setIsSpotFocused(true)}
+              onBlur={() => setIsSpotFocused(false)}
+              placeholder={t('trainNameOrNo') || 'Train name / no.'}
+              placeholderTextColor={colors.textMuted}
+              returnKeyType="search"
+              onSubmitEditing={handleSpotSubmit}
+            />
+
+            {spotTrainQuery.length > 0 && (
+              <TouchableOpacity
+                onPress={() => setSpotTrainQuery('')}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={styles.spotClearBtn}
+              >
+                <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+              </TouchableOpacity>
+            )}
+
+            <Animated.View style={{ transform: [{ scale: spotBtnScale }] }}>
+              <TouchableOpacity
+                style={[
+                  styles.greenSearchBox,
+                  {
+                    backgroundColor: isDarkMode ? '#059669' : colors.searchBtnGreen,
+                    shadowColor: isDarkMode ? '#10B981' : colors.searchBtnGreen,
+                  },
+                ]}
+                activeOpacity={0.85}
+                onPressIn={() => Animated.spring(spotBtnScale, { toValue: 0.9, useNativeDriver: true }).start()}
+                onPressOut={() => Animated.spring(spotBtnScale, { toValue: 1, friction: 4, useNativeDriver: true }).start()}
+                onPress={handleSpotSubmit}
+              >
+                <Ionicons name="search" size={19} color="#FFFFFF" />
+              </TouchableOpacity>
+            </Animated.View>
+          </View>
+
+          {/* Dynamic Ranked Dropdown Suggestions with Smooth Scroll */}
+          {spotRankedResults.length > 0 && (
+            <View style={[styles.spotDropdown, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <ScrollView
+                style={{ maxHeight: 240 }}
+                nestedScrollEnabled={true}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={true}
+              >
+                {spotRankedResults.map((t) => (
+                  <TouchableOpacity
+                    key={t.id}
+                    style={[styles.dropdownItem, { borderBottomColor: colors.border }]}
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      setSpotTrainQuery('');
+                      handleSpotTrain(t.number, t.name);
+                    }}
+                  >
+                    <View
+                      style={[
+                        styles.dropdownBadge,
+                        {
+                          backgroundColor: t.isLocalEmu
+                            ? (isDarkMode ? '#0C4A6E' : '#E0F2FE')
+                            : (isDarkMode ? '#312E81' : '#EDE9FE'),
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.dropdownBadgeText,
+                          {
+                            color: t.isLocalEmu
+                              ? (isDarkMode ? '#38BDF8' : '#0284C7')
+                              : (isDarkMode ? '#A78BFA' : '#7C3AED'),
+                          },
+                        ]}
+                      >
+                        {t.number}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.dropdownItemName, { color: colors.textPrimary }]} numberOfLines={1}>
+                        {t.name}
+                      </Text>
+                      <Text style={[styles.dropdownItemLocation, { color: colors.textSecondary }]}>
+                        {t.originCode} ➔ {t.destCode} • {t.type}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
         </View>
 
-        {/* Dynamic ranked dropdown */}
-        {spotRankedResults.length > 0 && (
-          <View style={[styles.spotDropdown, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            {spotRankedResults.map((t) => (
-              <TouchableOpacity
-                key={t.id}
-                style={styles.dropdownItem}
-                onPress={() => {
-                  setSpotTrainQuery('');
-                  handleSpotTrain(t.number, t.name);
-                }}
-              >
-                <View style={[styles.dropdownBadge, t.isLocalEmu && { backgroundColor: colors.primarySoft }]}>
-                  <Text style={[styles.dropdownBadgeText, t.isLocalEmu && { color: colors.primary }]}>{t.number}</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.dropdownItemName, { color: colors.textPrimary }]}>{t.name}</Text>
-                  <Text style={[styles.dropdownItemLocation, { color: colors.textSecondary }]}>{t.originCode} ➔ {t.destCode} • {t.type}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={16} color={colors.primary} />
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-      </View>
-
-      {/* Quick Services Grid */}
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Quick Railway Services</Text>
+        {/* 4 LARGE QUICK RAILWAY CARDS (2x2 GRID IN SIGNATURE BLUE) */}
         <View style={styles.grid}>
-          <TouchableOpacity
-            style={[styles.gridItem, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            activeOpacity={0.7}
-            onPress={() => onNavigateToTab('live')}
-          >
-            <View style={[styles.gridIconCircle, { backgroundColor: colors.primarySoft }]}>
-              <Ionicons name="navigate" size={24} color={colors.primary} />
-            </View>
-            <Text style={[styles.gridItemTitle, { color: colors.textPrimary }]}>Live Status</Text>
-            <Text style={[styles.gridItemSubtitle, { color: colors.textSecondary }]}>Spot your train</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.gridItem, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            activeOpacity={0.7}
-            onPress={() => onNavigateToTab('pnr')}
-          >
-            <View style={[styles.gridIconCircle, { backgroundColor: colors.secondaryLight }]}>
-              <MaterialCommunityIcons name="ticket-confirmation-outline" size={24} color={colors.secondary} />
-            </View>
-            <Text style={[styles.gridItemTitle, { color: colors.textPrimary }]}>PNR Status</Text>
-            <Text style={[styles.gridItemSubtitle, { color: colors.textSecondary }]}>Seat & berth info</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.gridItem, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            activeOpacity={0.7}
-            onPress={() => onNavigateToTab('schedule')}
-          >
-            <View style={[styles.gridIconCircle, { backgroundColor: colors.primarySoft }]}>
-              <Ionicons name="time-outline" size={24} color={colors.primary} />
-            </View>
-            <Text style={[styles.gridItemTitle, { color: colors.textPrimary }]}>Timetable</Text>
-            <Text style={[styles.gridItemSubtitle, { color: colors.textSecondary }]}>Offline schedule</Text>
-          </TouchableOpacity>
-
+          {/* 1. Live Status Card */}
           <TouchableOpacity
             style={[
               styles.gridItem,
-              { backgroundColor: colors.surface, borderColor: alarmActive ? Colors.secondary : colors.border },
-              alarmActive && { borderWidth: 1.5 },
+              {
+                backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
+                borderColor: isDarkMode ? '#334155' : '#BAE6FD',
+              },
+            ]}
+            activeOpacity={0.7}
+            onPress={() => setShowSpotTrainModal(true)}
+          >
+            <View style={styles.cardHeaderRow}>
+              <View style={[styles.gridIconCircle, { backgroundColor: isDarkMode ? '#0C4A6E' : Colors.primarySoft }]}>
+                <Ionicons name="navigate" size={24} color={Colors.primary} />
+              </View>
+              <View style={styles.liveIndicatorPill}>
+                <View style={styles.livePulseDot} />
+                <Text style={styles.liveIndicatorText}>LIVE</Text>
+              </View>
+            </View>
+            <Text style={[styles.gridItemTitle, { color: colors.textPrimary }]}>Live Status</Text>
+            <Text style={[styles.gridItemSubtitle, { color: colors.textSecondary }]}>Spot train location</Text>
+          </TouchableOpacity>
+
+          {/* 2. PNR Status Card */}
+          <TouchableOpacity
+            style={[
+              styles.gridItem,
+              {
+                backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
+                borderColor: isDarkMode ? '#334155' : '#BAE6FD',
+              },
+            ]}
+            activeOpacity={0.7}
+            onPress={() => onNavigateToTab('pnr')}
+          >
+            <View style={styles.cardHeaderRow}>
+              <View style={[styles.gridIconCircle, { backgroundColor: isDarkMode ? '#0C4A6E' : Colors.primarySoft }]}>
+                <Ionicons name="ticket" size={24} color={Colors.primary} />
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={isDarkMode ? '#64748B' : '#94A3B8'} />
+            </View>
+            <Text style={[styles.gridItemTitle, { color: colors.textPrimary }]}>PNR Status</Text>
+            <Text style={[styles.gridItemSubtitle, { color: colors.textSecondary }]}>Check confirmation & chart</Text>
+          </TouchableOpacity>
+
+          {/* 3. Time Table Card */}
+          <TouchableOpacity
+            style={[
+              styles.gridItem,
+              {
+                backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
+                borderColor: isDarkMode ? '#334155' : '#BAE6FD',
+              },
+            ]}
+            activeOpacity={0.7}
+            onPress={() => onNavigateToTab('schedule')}
+          >
+            <View style={styles.cardHeaderRow}>
+              <View style={[styles.gridIconCircle, { backgroundColor: isDarkMode ? '#0C4A6E' : Colors.primarySoft }]}>
+                <Ionicons name="calendar" size={24} color={Colors.primary} />
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={isDarkMode ? '#64748B' : '#94A3B8'} />
+            </View>
+            <Text style={[styles.gridItemTitle, { color: colors.textPrimary }]}>Time Table</Text>
+            <Text style={[styles.gridItemSubtitle, { color: colors.textSecondary }]}>Offline train schedule</Text>
+          </TouchableOpacity>
+
+          {/* 4. Station Alarm Card (side me station alarm) */}
+          <TouchableOpacity
+            style={[
+              styles.gridItem,
+              {
+                backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
+                borderColor: alarmActive ? '#16A34A' : (isDarkMode ? '#334155' : '#BAE6FD'),
+              },
             ]}
             activeOpacity={0.7}
             onPress={() => setShowAlarmModal(true)}
           >
-            <View style={[styles.gridIconCircle, { backgroundColor: alarmActive ? Colors.secondaryLight : colors.accentLight }]}>
-              <Ionicons name={alarmActive ? "alarm" : "alarm-outline"} size={24} color={alarmActive ? Colors.secondary : colors.accent} />
+            <View style={styles.cardHeaderRow}>
+              <View
+                style={[
+                  styles.gridIconCircle,
+                  {
+                    backgroundColor: alarmActive
+                      ? '#DCFCE7'
+                      : (isDarkMode ? '#0C4A6E' : Colors.primarySoft),
+                  },
+                ]}
+              >
+                <Ionicons
+                  name="alarm"
+                  size={24}
+                  color={alarmActive ? '#16A34A' : Colors.primary}
+                />
+              </View>
+              {alarmActive ? (
+                <View style={styles.alarmActivePill}>
+                  <Text style={styles.alarmActivePillText}>ARMED</Text>
+                </View>
+              ) : (
+                <Ionicons name="chevron-forward" size={18} color={isDarkMode ? '#64748B' : '#94A3B8'} />
+              )}
             </View>
             <Text style={[styles.gridItemTitle, { color: colors.textPrimary }]}>Station Alarm</Text>
-            <Text style={[styles.gridItemSubtitle, { color: alarmActive ? Colors.secondary : colors.textSecondary }]}>
-              {alarmActive ? `Active (${alarmLeadMinutes}m)` : 'Wake-up alert'}
+            <Text
+              style={[
+                styles.gridItemSubtitle,
+                { color: alarmActive ? '#16A34A' : colors.textSecondary, fontWeight: alarmActive ? '700' : '500' },
+              ]}
+              numberOfLines={1}
+            >
+              {alarmActive ? `Active (${alarmLeadMinutes}m before)` : 'Wake-up alert'}
             </Text>
           </TouchableOpacity>
         </View>
-      </View>
 
-      {/* Active Station Alarm Banner */}
-      {alarmActive && (
-        <View style={styles.alarmActiveBanner}>
-          <View style={styles.alarmBannerIcon}>
-            <Ionicons name="alarm" size={20} color="#FFFFFF" />
+        {/* Active Station Alarm Banner */}
+        {alarmActive && (
+          <View style={styles.alarmActiveBanner}>
+            <View style={styles.alarmBannerIcon}>
+              <Ionicons name="alarm" size={20} color="#FFFFFF" />
+            </View>
+            <View style={{ flex: 1, marginHorizontal: 10 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={styles.alarmBannerTitle}>Station Alarm Active</Text>
+                <View style={styles.alarmLivePill}>
+                  <Text style={styles.alarmLivePillText}>GPS ARMED</Text>
+                </View>
+              </View>
+              <Text style={styles.alarmBannerSub} numberOfLines={1}>
+                Wake up {alarmLeadMinutes}m before reaching {alarmStation}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={() => setAlarmActive(false)} style={styles.alarmDismissBtn}>
+              <Text style={styles.alarmDismissText}>Turn Off</Text>
+            </TouchableOpacity>
           </View>
-          <View style={{ flex: 1, marginHorizontal: 10 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Text style={styles.alarmBannerTitle}>Station Alarm Active</Text>
-              <View style={styles.alarmLivePill}>
-                <Text style={styles.alarmLivePillText}>GPS ARMED</Text>
+        )}
+
+        {/* RECENTLY TRACKED SECTION (Matching Screenshot 1) */}
+        <View style={styles.recentlyTrackedSection}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={[styles.recentlyTrackedTitle, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+              RECENTLY TRACKED
+            </Text>
+            <TouchableOpacity
+              onPress={() => setRecentlyTracked([])}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text style={[styles.clearText, { color: Colors.primary }]}>Clear</Text>
+            </TouchableOpacity>
+          </View>
+
+          {recentlyTracked.length === 0 ? (
+            <View style={[styles.emptyRecentBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Text style={[styles.emptyRecentText, { color: colors.textMuted }]}>No recently tracked trains</Text>
+            </View>
+          ) : (
+            recentlyTracked.map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                style={[styles.trackedRowCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                activeOpacity={0.7}
+                onPress={() => handleSpotTrain(item.trainNumber, item.trainName)}
+              >
+                <View style={styles.trackedRowLeft}>
+                  <Text style={[styles.trackedTrainTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+                    <Text style={styles.trackedTrainBoldNum}>{item.trainNumber} </Text>
+                    {item.trainName}
+                  </Text>
+                </View>
+
+                <View style={styles.trackedRowRight}>
+                  <Text style={[styles.trackedRouteBadgeText, { color: colors.textSecondary }]}>
+                    {item.fromCode} - {item.toCode}
+                  </Text>
+                  <Ionicons name="chevron-forward" size={17} color="#94A3B8" style={{ marginLeft: 4 }} />
+                </View>
+              </TouchableOpacity>
+            ))
+          )}
+        </View>
+
+        {/* BOTTOM PROMO CARD (Matching Screenshot 1) */}
+        <View style={[styles.promoCard, { backgroundColor: colors.surface, borderColor: isDarkMode ? '#1E293B' : '#E2E8F0' }]}>
+          <View style={styles.promoContentRow}>
+            <View style={[styles.promoIconContainer, { backgroundColor: isDarkMode ? '#1E3A5F' : '#E0F2FE' }]}>
+              <Ionicons name="car-sport" size={24} color={Colors.primary} />
+            </View>
+            <View style={styles.promoTextCol}>
+              <Text style={[styles.promoTitle, { color: colors.textPrimary }]}>Compare & book the cheapest ride</Text>
+              <View style={styles.promoStatsRow}>
+                <View style={styles.promoStatBadge}>
+                  <Text style={styles.promoStatText}>1M+ Users</Text>
+                </View>
+                <Text style={styles.promoDotSeparator}>•</Text>
+                <View style={styles.promoRatingBadge}>
+                  <Text style={styles.promoRatingText}>4.6 ★</Text>
+                </View>
               </View>
             </View>
-            <Text style={styles.alarmBannerSub} numberOfLines={1}>
-              Wake up {alarmLeadMinutes}m before reaching {alarmStation}
-            </Text>
-          </View>
-          <TouchableOpacity onPress={() => setAlarmActive(false)} style={styles.alarmDismissBtn}>
-            <Text style={styles.alarmDismissText}>Turn Off</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Recent Searches (Guaranteed 4+ items) */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeaderRow}>
-          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Recent Searches</Text>
-          <TouchableOpacity
-            onPress={() => {
-              setRecentSearches([]);
-              SafeStorage.setItem('@user_recent_searches', JSON.stringify([])).catch(() => {});
-            }}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Text style={[styles.clearText, { color: colors.primary }]}>Clear</Text>
-          </TouchableOpacity>
-        </View>
-
-        {recentSearches.length === 0 ? (
-          <View style={[styles.emptyRecentBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.emptyRecentText, { color: colors.textMuted }]}>No recent searches</Text>
-          </View>
-        ) : (
-          recentSearches.slice(0, 4).map((rec) => (
             <TouchableOpacity
-              key={rec.id}
-              style={[styles.recentItem, { backgroundColor: colors.surface, borderColor: colors.border }]}
-              activeOpacity={0.7}
+              style={styles.promoActionBtn}
+              activeOpacity={0.8}
               onPress={() => {
-                onSetFromStation(rec.from);
-                onSetToStation(rec.to);
-                setFromText(`${rec.from.name} (${rec.from.code})`);
-                setToText(`${rec.to.name} (${rec.to.code})`);
-                setSourceConfirmed(true);
-                setDestConfirmed(true);
-                handleFindTrains(rec.from, rec.to);
+                showErrorPopup('Cab comparison loaded for your destination station.');
               }}
             >
-              <View style={styles.recentLeft}>
-                <View style={[styles.recentIconBox, { backgroundColor: colors.primarySoft }]}>
-                  <Ionicons name="time-outline" size={17} color={colors.primary} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.recentRoute, { color: colors.textPrimary }]}>{rec.route}</Text>
-                  <Text style={[styles.recentSub, { color: colors.textSecondary }]} numberOfLines={1}>{rec.sub}</Text>
-                </View>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+              <Text style={styles.promoActionBtnText}>Check Rides</Text>
+              <Ionicons name="arrow-forward" size={13} color="#FFFFFF" style={{ marginLeft: 3 }} />
             </TouchableOpacity>
-          ))
-        )}
-      </View>
+          </View>
+        </View>
 
         <View style={{ height: 24 }} />
         </Animated.View>
@@ -1166,6 +1467,434 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </View>
       </View>
     </Modal>
+
+    {/* 1. SPOT TRAIN MODAL */}
+    <Modal
+      visible={showSpotTrainModal}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={() => setShowSpotTrainModal(false)}
+    >
+      <View style={styles.modalBackdrop}>
+        <View style={[styles.modalSheet, { backgroundColor: colors.surface }]}>
+          <View style={styles.modalSheetHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+              <View style={[styles.alarmIconCircle, { backgroundColor: '#EFF6FF' }]}>
+                <Ionicons name="train" size={20} color={Colors.primary} />
+              </View>
+              <View style={{ marginLeft: 10, flex: 1 }}>
+                <Text style={[styles.modalSheetTitle, { color: colors.textPrimary }]}>Spot Train by Number / Name</Text>
+                <Text style={[styles.modalSheetSub, { color: colors.textSecondary }]}>Enter train number to track live GPS position</Text>
+              </View>
+            </View>
+            <TouchableOpacity onPress={() => setShowSpotTrainModal(false)} style={styles.modalCloseBtn}>
+              <Ionicons name="close" size={20} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+            <Text style={[styles.inputFieldLabel, { color: colors.textSecondary }]}>ENTER TRAIN NO. OR NAME</Text>
+            <TextInput
+              style={[
+                styles.modalTextInput,
+                {
+                  color: colors.textPrimary,
+                  borderColor: colors.border,
+                  backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC',
+                },
+              ]}
+              value={spotModalQuery}
+              onChangeText={setSpotModalQuery}
+              placeholder="e.g. 64076 or New Delhi EMU"
+              placeholderTextColor={colors.textMuted}
+            />
+
+            <Text style={[styles.inputFieldLabel, { color: colors.textSecondary, marginTop: 8 }]}>POPULAR ROUTE TRAINS</Text>
+            <View style={{ gap: 8 }}>
+              {[
+                { number: '64076', name: 'New Delhi - Palwal EMU' },
+                { number: '64074', name: 'New Delhi - Kosi Kalan EMU' },
+                { number: '64082', name: 'New Delhi - Palwal EMU' },
+                { number: '64904', name: 'Ghaziabad - Mathura EMU' },
+                { number: '12002', name: 'New Delhi - Bhopal Shatabdi' },
+                { number: '22436', name: 'Vande Bharat Express' },
+              ].map((t) => (
+                <TouchableOpacity
+                  key={t.number}
+                  style={[styles.trackedRowCard, { backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC', borderColor: colors.border }]}
+                  onPress={() => {
+                    setShowSpotTrainModal(false);
+                    handleSpotTrain(t.number, t.name);
+                  }}
+                >
+                  <Text style={[styles.trackedTrainTitle, { color: colors.textPrimary }]}>
+                    <Text style={styles.trackedTrainBoldNum}>{t.number} </Text>
+                    {t.name}
+                  </Text>
+                  <Ionicons name="chevron-forward" size={17} color={Colors.primary} />
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <TouchableOpacity
+              style={[styles.activateAlarmBtn, { backgroundColor: Colors.primary, marginTop: 16 }]}
+              onPress={() => {
+                const q = spotModalQuery.trim() || '64076';
+                setShowSpotTrainModal(false);
+                handleSpotTrain(q, `Train ${q}`);
+              }}
+            >
+              <Ionicons name="navigate" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+              <Text style={styles.activateAlarmText}>TRACK TRAIN NOW</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+
+    {/* 2. STATION DEPARTURES MODAL */}
+    <Modal
+      visible={showDeparturesModal}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={() => setShowDeparturesModal(false)}
+    >
+      <View style={styles.modalBackdrop}>
+        <View style={[styles.modalSheet, { backgroundColor: colors.surface }]}>
+          <View style={styles.modalSheetHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+              <View style={[styles.alarmIconCircle, { backgroundColor: '#EFF6FF' }]}>
+                <Ionicons name="time" size={20} color={Colors.primary} />
+              </View>
+              <View style={{ marginLeft: 10, flex: 1 }}>
+                <Text style={[styles.modalSheetTitle, { color: colors.textPrimary }]}>Live Station Departures</Text>
+                <Text style={[styles.modalSheetSub, { color: colors.textSecondary }]}>Platform numbers and live train status</Text>
+              </View>
+            </View>
+            <TouchableOpacity onPress={() => setShowDeparturesModal(false)} style={styles.modalCloseBtn}>
+              <Ionicons name="close" size={20} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+            <Text style={[styles.inputFieldLabel, { color: colors.textSecondary }]}>SELECT STATION</Text>
+            <View style={styles.quickAlarmStationsRow}>
+              {[
+                { code: 'NDLS', name: 'New Delhi' },
+                { code: 'LKO', name: 'Lucknow' },
+                { code: 'CNB', name: 'Kanpur' },
+                { code: 'BSB', name: 'Varanasi' },
+              ].map((st) => (
+                <TouchableOpacity
+                  key={st.code}
+                  style={[styles.quickAlarmChip, departuresStation.code === st.code && styles.quickAlarmChipActive]}
+                  onPress={() => {
+                    const found = STATIONS_DATABASE.find((s) => s.code === st.code);
+                    if (found) setDeparturesStation(found);
+                  }}
+                >
+                  <Text style={[styles.quickAlarmChipText, departuresStation.code === st.code && styles.quickAlarmChipTextActive]}>
+                    {st.name} ({st.code})
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={[styles.inputFieldLabel, { color: colors.textSecondary, marginTop: 12 }]}>UPCOMING DEPARTURES</Text>
+            <View style={{ gap: 8 }}>
+              {[
+                { num: '64076', name: 'NDLS - PWL EMU', expTime: '01:06 AM', plat: 'PF 4', status: 'On Time', isDelay: false },
+                { num: '64074', name: 'NDLS - KSV EMU', expTime: '05:32 AM', plat: 'PF 2', status: '+12m Late', isDelay: true },
+                { num: '64062', name: 'Delhi - Palwal EMU', expTime: '06:15 AM', plat: 'PF 3', status: 'On Time', isDelay: false },
+                { num: '64078', name: 'NDLS - PWL EMU', expTime: '08:45 AM', plat: 'PF 4', status: '+5m Late', isDelay: true },
+                { num: '12002', name: 'Bhopal Shatabdi', expTime: '06:40 AM', plat: 'PF 1', status: 'On Time', isDelay: false },
+              ].map((item) => (
+                <TouchableOpacity
+                  key={item.num}
+                  style={[styles.trackedRowCard, { backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC', borderColor: colors.border }]}
+                  onPress={() => {
+                    setShowDeparturesModal(false);
+                    handleSpotTrain(item.num, item.name);
+                  }}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.trackedTrainTitle, { color: colors.textPrimary }]}>
+                      <Text style={styles.trackedTrainBoldNum}>{item.num} </Text>
+                      {item.name}
+                    </Text>
+                    <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 2 }}>
+                      Departure: <Text style={{ fontWeight: '700' }}>{item.expTime}</Text> • Platform: <Text style={{ fontWeight: '700', color: Colors.primary }}>{item.plat}</Text>
+                    </Text>
+                  </View>
+                  <View style={{ paddingHorizontal: 7, paddingVertical: 3, borderRadius: 5, backgroundColor: item.isDelay ? '#FEE2E2' : '#DCFCE7' }}>
+                    <Text style={{ fontSize: 10.5, fontWeight: '800', color: item.isDelay ? '#DC2626' : '#15803D' }}>{item.status}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+
+    {/* 3. SEAT AVAILABILITY MODAL */}
+    <Modal
+      visible={showSeatAvailModal}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={() => setShowSeatAvailModal(false)}
+    >
+      <View style={styles.modalBackdrop}>
+        <View style={[styles.modalSheet, { backgroundColor: colors.surface }]}>
+          <View style={styles.modalSheetHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+              <View style={[styles.alarmIconCircle, { backgroundColor: '#EFF6FF' }]}>
+                <Ionicons name="grid" size={20} color={Colors.primary} />
+              </View>
+              <View style={{ marginLeft: 10, flex: 1 }}>
+                <Text style={[styles.modalSheetTitle, { color: colors.textPrimary }]}>Seat Availability</Text>
+                <Text style={[styles.modalSheetSub, { color: colors.textSecondary }]}>
+                  {fromStation ? fromStation.code : 'NDLS'} ➔ {toStation ? toStation.code : 'LKO'} • Real-time quotas
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity onPress={() => setShowSeatAvailModal(false)} style={styles.modalCloseBtn}>
+              <Ionicons name="close" size={20} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+            <Text style={[styles.inputFieldLabel, { color: colors.textSecondary }]}>QUOTA</Text>
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
+              {(['GN', 'TQ', 'LD'] as const).map((q) => (
+                <TouchableOpacity
+                  key={q}
+                  style={[styles.quickAlarmChip, selectedSeatQuota === q && styles.quickAlarmChipActive, { flex: 1, alignItems: 'center' }]}
+                  onPress={() => setSelectedSeatQuota(q)}
+                >
+                  <Text style={[styles.quickAlarmChipText, selectedSeatQuota === q && styles.quickAlarmChipTextActive]}>
+                    {q === 'GN' ? 'General' : q === 'TQ' ? 'Tatkal' : 'Ladies'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={[styles.inputFieldLabel, { color: colors.textSecondary }]}>TRAVEL CLASS</Text>
+            <View style={{ flexDirection: 'row', gap: 6, marginBottom: 12 }}>
+              {(['2S', 'CC', 'SL', '3A', '2A'] as const).map((cls) => (
+                <TouchableOpacity
+                  key={cls}
+                  style={[styles.quickAlarmChip, selectedSeatClass === cls && styles.quickAlarmChipActive, { flex: 1, alignItems: 'center' }]}
+                  onPress={() => setSelectedSeatClass(cls)}
+                >
+                  <Text style={[styles.quickAlarmChipText, selectedSeatClass === cls && styles.quickAlarmChipTextActive]}>{cls}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={[styles.inputFieldLabel, { color: colors.textSecondary }]}>CONFIRMATION STATUS</Text>
+            <View style={{ gap: 8 }}>
+              {[
+                { num: '64076', name: 'New Delhi - Palwal EMU', status: 'AVAILABLE-0248', fare: '₹30', color: '#16A34A', bg: '#DCFCE7' },
+                { num: '64074', name: 'New Delhi - Kosi Kalan EMU', status: 'AVAILABLE-0185', fare: '₹30', color: '#16A34A', bg: '#DCFCE7' },
+                { num: '64082', name: 'New Delhi - Palwal EMU', status: 'AVAILABLE-0312', fare: '₹30', color: '#16A34A', bg: '#DCFCE7' },
+                { num: '12002', name: 'Bhopal Shatabdi Express', status: 'AVAILABLE-0042', fare: '₹385', color: '#16A34A', bg: '#DCFCE7' },
+              ].map((item) => (
+                <View
+                  key={item.num}
+                  style={[styles.trackedRowCard, { backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC', borderColor: colors.border }]}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.trackedTrainTitle, { color: colors.textPrimary }]}>
+                      <Text style={styles.trackedTrainBoldNum}>{item.num} </Text>
+                      {item.name}
+                    </Text>
+                    <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 2 }}>
+                      Class: <Text style={{ fontWeight: '700' }}>{selectedSeatClass}</Text> • Fare: <Text style={{ fontWeight: '700', color: Colors.primary }}>{item.fare}</Text>
+                    </Text>
+                  </View>
+                  <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: item.bg }}>
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: item.color }}>{item.status}</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+
+    {/* 4. SEAT GAPS / SPLIT JOURNEY MODAL */}
+    <Modal
+      visible={showSeatGapsModal}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={() => setShowSeatGapsModal(false)}
+    >
+      <View style={styles.modalBackdrop}>
+        <View style={[styles.modalSheet, { backgroundColor: colors.surface }]}>
+          <View style={styles.modalSheetHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+              <View style={[styles.alarmIconCircle, { backgroundColor: '#EFF6FF' }]}>
+                <Ionicons name="swap-horizontal" size={20} color={Colors.primary} />
+              </View>
+              <View style={{ marginLeft: 10, flex: 1 }}>
+                <Text style={[styles.modalSheetTitle, { color: colors.textPrimary }]}>Seat Gaps & Split Journey</Text>
+                <Text style={[styles.modalSheetSub, { color: colors.textSecondary }]}>Find confirmed seats by split-booking vacant legs</Text>
+              </View>
+            </View>
+            <TouchableOpacity onPress={() => setShowSeatGapsModal(false)} style={styles.modalCloseBtn}>
+              <Ionicons name="close" size={20} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+            <View style={[styles.gpsInfoBox, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' }]}>
+              <Ionicons name="checkmark-circle" size={18} color="#16A34A" style={{ marginRight: 6, marginTop: 2 }} />
+              <Text style={[styles.gpsInfoText, { color: '#15803D' }]}>
+                Direct tickets showing Waiting List? Our smart algorithm combines vacant legs on the same train so you get 100% confirmed berths!
+              </Text>
+            </View>
+
+            <Text style={[styles.inputFieldLabel, { color: colors.textSecondary }]}>OPTIMIZED ROUTE SPLIT</Text>
+            <View style={[styles.trackedRowCard, { backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC', borderColor: colors.border, flexDirection: 'column', alignItems: 'stretch' }]}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <Text style={[styles.trackedTrainBoldNum, { color: colors.textPrimary }]}>Leg 1: New Delhi ➔ Kanpur Central</Text>
+                <Text style={{ fontSize: 11, fontWeight: '800', color: '#16A34A' }}>CONFIRMED (C1-32)</Text>
+              </View>
+              <View style={{ height: 1, backgroundColor: colors.border, marginVertical: 4 }} />
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+                <Text style={[styles.trackedTrainBoldNum, { color: colors.textPrimary }]}>Leg 2: Kanpur Central ➔ Lucknow Charbagh</Text>
+                <Text style={{ fontSize: 11, fontWeight: '800', color: '#16A34A' }}>CONFIRMED (C1-32)</Text>
+              </View>
+            </View>
+
+            <View style={{ marginTop: 12, padding: 12, borderRadius: 10, backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9' }}>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textPrimary }}>Benefit of Seat Gaps:</Text>
+              <Text style={{ fontSize: 11.5, color: colors.textSecondary, marginTop: 4 }}>• Same coach and same berth across both legs</Text>
+              <Text style={{ fontSize: 11.5, color: colors.textSecondary, marginTop: 2 }}>• No need to shift luggage or change trains</Text>
+              <Text style={{ fontSize: 11.5, color: colors.textSecondary, marginTop: 2 }}>• 100% compliant with IRCTC multi-ticket rules</Text>
+            </View>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+
+    {/* 5. RESERVATION CHART STATUS MODAL */}
+    <Modal
+      visible={showResChartModal}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={() => setShowResChartModal(false)}
+    >
+      <View style={styles.modalBackdrop}>
+        <View style={[styles.modalSheet, { backgroundColor: colors.surface }]}>
+          <View style={styles.modalSheetHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+              <View style={[styles.alarmIconCircle, { backgroundColor: '#EFF6FF' }]}>
+                <Ionicons name="reader" size={20} color={Colors.primary} />
+              </View>
+              <View style={{ marginLeft: 10, flex: 1 }}>
+                <Text style={[styles.modalSheetTitle, { color: colors.textPrimary }]}>IRCTC Reservation Chart Status</Text>
+                <Text style={[styles.modalSheetSub, { color: colors.textSecondary }]}>Vacant berths and charting timetable</Text>
+              </View>
+            </View>
+            <TouchableOpacity onPress={() => setShowResChartModal(false)} style={styles.modalCloseBtn}>
+              <Ionicons name="close" size={20} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+            <View style={[styles.gpsInfoBox, { backgroundColor: '#EFF6FF', borderColor: '#BAE6FD' }]}>
+              <Ionicons name="information-circle" size={18} color="#0284C7" style={{ marginRight: 6, marginTop: 2 }} />
+              <Text style={[styles.gpsInfoText, { color: '#0369A1' }]}>
+                First chart is prepared 4 hours prior to origin departure. Second chart is finalized 30 minutes before departure for current booking.
+              </Text>
+            </View>
+
+            <Text style={[styles.inputFieldLabel, { color: colors.textSecondary }]}>CURRENT CHARTING STATUS</Text>
+            <View style={{ gap: 8 }}>
+              {[
+                { num: '64076', name: 'New Delhi - Palwal EMU', chartStatus: 'CHART PREPARED', berths: '92 Vacant Berths' },
+                { num: '64074', name: 'New Delhi - Kosi Kalan EMU', chartStatus: 'CHART NOT PREPARED', berths: 'Chart in 2h 45m' },
+                { num: '12002', name: 'Bhopal Shatabdi', chartStatus: 'CHART PREPARED', berths: '14 Vacant Berths (CC)' },
+              ].map((item) => (
+                <View
+                  key={item.num}
+                  style={[styles.trackedRowCard, { backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC', borderColor: colors.border }]}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.trackedTrainTitle, { color: colors.textPrimary }]}>
+                      <Text style={styles.trackedTrainBoldNum}>{item.num} </Text>
+                      {item.name}
+                    </Text>
+                    <Text style={{ fontSize: 11, color: Colors.primary, fontWeight: '700', marginTop: 2 }}>
+                      {item.berths}
+                    </Text>
+                  </View>
+                  <View style={{ paddingHorizontal: 7, paddingVertical: 3, borderRadius: 5, backgroundColor: item.chartStatus.includes('NOT') ? '#FEF3C7' : '#DCFCE7' }}>
+                    <Text style={{ fontSize: 10, fontWeight: '800', color: item.chartStatus.includes('NOT') ? '#D97706' : '#15803D' }}>
+                      {item.chartStatus}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+
+    {/* 6. FAVORITES MODAL */}
+    <Modal
+      visible={showFavoritesModal}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={() => setShowFavoritesModal(false)}
+    >
+      <View style={styles.modalBackdrop}>
+        <View style={[styles.modalSheet, { backgroundColor: colors.surface }]}>
+          <View style={styles.modalSheetHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+              <View style={[styles.alarmIconCircle, { backgroundColor: '#EFF6FF' }]}>
+                <Ionicons name="star" size={20} color="#EAB308" />
+              </View>
+              <View style={{ marginLeft: 10, flex: 1 }}>
+                <Text style={[styles.modalSheetTitle, { color: colors.textPrimary }]}>Saved Trains & Routes</Text>
+                <Text style={[styles.modalSheetSub, { color: colors.textSecondary }]}>One-tap live tracking for your daily commute</Text>
+              </View>
+            </View>
+            <TouchableOpacity onPress={() => setShowFavoritesModal(false)} style={styles.modalCloseBtn}>
+              <Ionicons name="close" size={20} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+            <View style={{ gap: 8 }}>
+              {DEFAULT_RECENTLY_TRACKED.map((t) => (
+                <TouchableOpacity
+                  key={t.id}
+                  style={[styles.trackedRowCard, { backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC', borderColor: colors.border }]}
+                  onPress={() => {
+                    setShowFavoritesModal(false);
+                    handleSpotTrain(t.trainNumber, t.trainName);
+                  }}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.trackedTrainTitle, { color: colors.textPrimary }]}>
+                      <Text style={styles.trackedTrainBoldNum}>{t.trainNumber} </Text>
+                      {t.trainName}
+                    </Text>
+                    <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 2 }}>{t.fromCode} ➔ {t.toCode} • Daily Commute</Text>
+                  </View>
+                  <Ionicons name="navigate-circle" size={24} color={Colors.primary} />
+                </TouchableOpacity>
+              ))}
+            </View>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
   </View>
 );
 };
@@ -1229,109 +1958,66 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   spotTrainCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    borderRadius: 14,
+    padding: 13,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 3,
-    marginBottom: 16,
-  },
-  spotCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    shadowRadius: 6,
+    elevation: 2,
     marginBottom: 12,
   },
-  spotHeaderIconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
+  spotCardHeader: {
+    marginBottom: 8,
   },
   spotCardTitle: {
-    fontSize: 15,
+    fontSize: 14.5,
     fontWeight: '800',
-    color: '#0F172A',
     letterSpacing: -0.2,
-  },
-  spotCardSubtitle: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: '#64748B',
-    marginTop: 1,
-  },
-  liveSideBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    marginLeft: 8,
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-  },
-  liveBlinkDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#16A34A',
-    marginRight: 4,
-  },
-  liveSideText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#15803D',
-    letterSpacing: 0.5,
   },
   spotInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    paddingLeft: 6,
-    paddingRight: 6,
-    paddingVertical: 5,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    paddingLeft: 10,
+    paddingRight: 4,
+    paddingVertical: 3,
+  },
+  spotInputTrainIcon: {
+    marginRight: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   spotTextInput: {
     flex: 1,
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontSize: 14.5,
+    fontWeight: '600',
     paddingVertical: 6,
     paddingHorizontal: 0,
     borderWidth: 0,
     backgroundColor: 'transparent',
-    ...(Platform.OS === 'web' ? { outline: 'none', outlineWidth: 0, outlineStyle: 'none' } : {}),
+    ...(Platform.OS === 'web' ? { outlineWidth: 0, outlineStyle: 'none' } : {}),
   } as any,
+  spotClearBtn: {
+    padding: 6,
+    marginRight: 4,
+  },
   greenSearchBox: {
-    backgroundColor: '#16A34A',
-    borderRadius: 10,
+    borderRadius: 9,
     width: 38,
     height: 38,
     alignItems: 'center',
     justifyContent: 'center',
     elevation: 3,
-    shadowColor: '#16A34A',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3,
+    shadowOpacity: 0.28,
+    shadowRadius: 4,
   },
   spotDropdown: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 6,
+    padding: 4,
     marginTop: 8,
     elevation: 4,
     shadowColor: '#000',
@@ -1345,35 +2031,126 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     paddingHorizontal: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
   },
   dropdownBadge: {
-    backgroundColor: '#F1F5F9',
     borderRadius: 6,
     paddingHorizontal: 7,
     paddingVertical: 3,
     marginRight: 10,
+    minWidth: 48,
+    alignItems: 'center',
   },
   dropdownBadgeText: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#334155',
   },
   dropdownItemName: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#0F172A',
   },
   dropdownItemLocation: {
-    fontSize: 11,
-    color: '#64748B',
+    fontSize: 10.5,
+    fontWeight: '500',
     marginTop: 1,
   },
   stationRowContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 6,
+    paddingVertical: 8,
+    paddingLeft: 30,
     borderRadius: 12,
+  },
+  leftTrackColumn: {
+    position: 'absolute',
+    left: 14,
+    top: 26,
+    height: 78,
+    width: 20,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    zIndex: 5,
+  },
+  stationDotSource: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#16A34A',
+    borderWidth: 2,
+    borderColor: '#DCFCE7',
+  },
+  stationDotDest: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#DC2626',
+    borderWidth: 2,
+    borderColor: '#FEE2E2',
+  },
+  dottedTrackLine: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    paddingVertical: 3,
+    width: 20,
+    position: 'relative',
+  },
+  trackDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: '#94A3B8',
+  },
+  movingTrainBadge: {
+    position: 'absolute',
+    top: 0,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#93C5FD',
+    elevation: 3,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    zIndex: 10,
+  },
+  stationIndicatorCircleBlue: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  stationIndicatorCircleBlack: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  stationCodeBadgeSolid: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 7,
+    paddingVertical: 3.5,
+    borderRadius: 6,
+    marginRight: 10,
+    minWidth: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stationCodeBadgeSolidText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
   },
   stationRowError: {
     backgroundColor: '#FEF2F2',
@@ -1439,7 +2216,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
     borderWidth: 0,
     backgroundColor: 'transparent',
-    ...(Platform.OS === 'web' ? { outline: 'none', outlineWidth: 0, outlineStyle: 'none' } : {}),
+    ...(Platform.OS === 'web' ? { outlineWidth: 0, outlineStyle: 'none' } : {}),
   } as any,
   stationCodeBadge: {
     backgroundColor: '#E0F2FE',
@@ -1661,6 +2438,141 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 0.5,
   },
+  quickServicesMasterContainer: {
+    marginVertical: 14,
+  },
+  quickRowFour: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  quickTile: {
+    width: '23%',
+    alignItems: 'center',
+  },
+  quickTileIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  quickTileLabel: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  recentlyTrackedSection: {
+    marginBottom: 16,
+  },
+  recentlyTrackedTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  trackedRowCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 8,
+  },
+  trackedRowLeft: {
+    flex: 1,
+    paddingRight: 8,
+  },
+  trackedTrainTitle: {
+    fontSize: 13.5,
+    fontWeight: '600',
+  },
+  trackedTrainBoldNum: {
+    fontWeight: '800',
+  },
+  trackedRowRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  trackedRouteBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  promoCard: {
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    marginBottom: 16,
+  },
+  promoContentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  promoIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  promoTextCol: {
+    flex: 1,
+  },
+  promoTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    marginBottom: 3,
+  },
+  promoStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  promoStatBadge: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+  },
+  promoStatText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  promoDotSeparator: {
+    marginHorizontal: 4,
+    color: '#94A3B8',
+    fontSize: 10,
+  },
+  promoRatingBadge: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+  },
+  promoRatingText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#D97706',
+  },
+  promoActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+    marginLeft: 8,
+  },
+  promoActionBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
   section: {
     marginBottom: 20,
   },
@@ -1686,20 +2598,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
+    marginVertical: 14,
   },
   gridItem: {
-    width: '48%',
+    width: '48.5%',
     backgroundColor: '#FFFFFF',
     borderRadius: 18,
-    padding: 16,
+    padding: 15,
     marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#0F172A',
+    borderWidth: 1.5,
+    borderColor: '#BAE6FD',
+    shadowColor: Colors.primary,
     shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.08,
     shadowRadius: 8,
-    elevation: 2,
+    elevation: 3,
+  },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
   },
   gridIconCircle: {
     width: 44,
@@ -1707,19 +2626,51 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 10,
   },
   gridItemTitle: {
-    fontSize: 14.5,
+    fontSize: 15,
     fontWeight: '800',
     color: '#0F172A',
     letterSpacing: -0.2,
-    marginBottom: 2,
+    marginBottom: 3,
   },
   gridItemSubtitle: {
     fontSize: 11.5,
     fontWeight: '500',
     color: Colors.textSecondary,
+    lineHeight: 15,
+  },
+  liveIndicatorPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 10,
+  },
+  livePulseDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#16A34A',
+    marginRight: 4,
+  },
+  liveIndicatorText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#16A34A',
+    letterSpacing: 0.3,
+  },
+  alarmActivePill: {
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 10,
+  },
+  alarmActivePillText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#16A34A',
   },
   recentItem: {
     flexDirection: 'row',

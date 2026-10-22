@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../theme/colors';
 import { usePreferences } from '../context/PreferencesContext';
 
-export type TabKey = 'home' | 'live' | 'pnr' | 'schedule';
+export type TabKey = 'track' | 'pnr' | 'departures' | 'home' | 'live' | 'schedule';
 
 interface BottomTabBarProps {
   activeTab: TabKey;
@@ -14,17 +14,17 @@ interface BottomTabBarProps {
 export const BottomTabBar: React.FC<BottomTabBarProps> = ({ activeTab, onSelectTab }) => {
   const { colors, t } = usePreferences();
 
+  // Unified 3-Tab Architecture: Track, PNR, Departures
   const tabs: { key: TabKey; label: string; iconName: keyof typeof Ionicons.glyphMap; activeIcon: keyof typeof Ionicons.glyphMap }[] = [
-    { key: 'home', label: t('tabHome'), iconName: 'search-outline', activeIcon: 'search' },
-    { key: 'live', label: t('tabLive'), iconName: 'navigate-outline', activeIcon: 'navigate' },
-    { key: 'pnr', label: t('tabPnr'), iconName: 'receipt-outline', activeIcon: 'receipt' },
-    { key: 'schedule', label: t('tabSchedule'), iconName: 'calendar-outline', activeIcon: 'calendar' },
+    { key: 'track', label: 'Track', iconName: 'navigate-outline', activeIcon: 'navigate' },
+    { key: 'pnr', label: t('tabPnr') || 'PNR', iconName: 'receipt-outline', activeIcon: 'receipt' },
+    { key: 'departures', label: 'Departures', iconName: 'calendar-outline', activeIcon: 'calendar' },
   ];
 
   return (
     <View style={[styles.tabBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
       {tabs.map((tab) => {
-        const isActive = activeTab === tab.key;
+        const isActive = activeTab === tab.key || (tab.key === 'track' && (activeTab === 'home' || activeTab === 'live')) || (tab.key === 'departures' && activeTab === 'schedule');
         return (
           <TouchableOpacity
             key={tab.key}

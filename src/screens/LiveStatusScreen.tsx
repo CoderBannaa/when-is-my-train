@@ -381,7 +381,7 @@ export const LiveStatusScreen: React.FC<LiveStatusScreenProps> = ({ initialTrain
               onPress={() => setTimeMode('simulated')}
             >
               <Text style={[styles.simPillText, timeMode === 'simulated' && styles.simPillTextActive]}>
-                ⚡ En-Route Demo
+                ⚡ Simulated Route
               </Text>
             </TouchableOpacity>
 
@@ -390,7 +390,7 @@ export const LiveStatusScreen: React.FC<LiveStatusScreenProps> = ({ initialTrain
               onPress={() => setTimeMode('real')}
             >
               <Text style={[styles.simPillText, timeMode === 'real' && styles.simPillTextActive]}>
-                🕒 Device Clock
+                🕒 Live Time
               </Text>
             </TouchableOpacity>
           </View>
@@ -451,7 +451,7 @@ export const LiveStatusScreen: React.FC<LiveStatusScreenProps> = ({ initialTrain
         </View>
       </View>
 
-      {/* Button to Open the full-screen "Where is my train" exact tracker screen */}
+      {/* Button to Open the full-screen tracker screen */}
       {onTrackTrain && (
         <TouchableOpacity
           style={styles.openTrackerBtn}
@@ -459,7 +459,7 @@ export const LiveStatusScreen: React.FC<LiveStatusScreenProps> = ({ initialTrain
           activeOpacity={0.85}
         >
           <MaterialCommunityIcons name="train" size={20} color="#FFFFFF" style={{ marginRight: 6 }} />
-          <Text style={styles.openTrackerBtnText}>OPEN FULL LIVE TRACKER (SCREENSHOT UI)</Text>
+          <Text style={styles.openTrackerBtnText}>OPEN LIVE TRAIN TRACKER</Text>
           <Ionicons name="chevron-forward" size={16} color="#FFFFFF" style={{ marginLeft: 6 }} />
         </TouchableOpacity>
       )}

@@ -17,7 +17,8 @@ import { Colors } from '../theme/colors';
 import { CorridorTrain, findOrGenerateTrain } from '../data/trainsBetweenStations';
 import { calculateLiveStatus, parseTimeToMinutes, StationLiveDetail } from '../utils/liveStatusEngine';
 import { LiveTrainApi, TrainCache, LiveTrainTrackingData } from '../services/liveTrainApiService';
-import { usePreferences } from '../context/PreferencesContext';
+import { usePreferences, SafeStorage } from '../context/PreferencesContext';
+import { STORAGE_KEYS } from '../config/env';
 
 function calculateDurationText(depStr: string, arrStr: string): string {
   try {
@@ -352,9 +353,11 @@ export const LiveTrainTrackerScreen: React.FC<LiveTrainTrackerScreenProps> = ({
   const [selectedCoach, setSelectedCoach] = useState<string>('C3');
   const [trackingSource, setTrackingSource] = useState<'cell' | 'gps'>('cell');
   const [selectedMapStationCode, setSelectedMapStationCode] = useState<string | null>(null);
-  const [isTelemetryDeckExpanded, setIsTelemetryDeckExpanded] = useState<boolean>(true);
+  const [isTelemetryDeckExpanded, setIsTelemetryDeckExpanded] = useState<boolean>(false);
   const [alarmInterval, setAlarmInterval] = useState<'10m' | '15m' | '30m' | '5km' | '10km'>('15m');
   const [isAlarmActive, setIsAlarmActive] = useState<boolean>(false);
+  const [selectedStationDetail, setSelectedStationDetail] = useState<StationLiveDetail | null>(null);
+  const [isSavedTrain, setIsSavedTrain] = useState<boolean>(false);
 
   // In-between / passing stations accordion expand state: { [groupKey: string]: boolean }
   const [expandedPassingGroups, setExpandedPassingGroups] = useState<{ [key: string]: boolean }>({});
@@ -394,6 +397,90 @@ export const LiveTrainTrackerScreen: React.FC<LiveTrainTrackerScreenProps> = ({
     }
     return train;
   }, [trainNumber, fromStationCode, toStationCode]);
+
+  // Load saved train status
+  useEffect(() => {
+    SafeStorage.getItem(STORAGE_KEYS.SAVED_TRAINS).then((val) => {
+      if (val) {
+        try {
+          const list = JSON.parse(val);
+          if (Array.isArray(list) && list.includes(activeTrain.number)) {
+            setIsSavedTrain(true);
+          }
+        } catch {}
+      }
+    });
+  }, [activeTrain.number]);
+
+  const toggleSaveTrain = useCallback(async () => {
+    try {
+      const val = await SafeStorage.getItem(STORAGE_KEYS.SAVED_TRAINS);
+      let list: string[] = [];
+      if (val) {
+        try { list = JSON.parse(val); } catch {}
+      }
+      const nextSaved = !isSavedTrain;
+      setIsSavedTrain(nextSaved);
+      if (nextSaved) {
+        if (!list.includes(activeTrain.number)) list.push(activeTrain.number);
+      } else {
+        list = list.filter((n) => n !== activeTrain.number);
+      }
+      await SafeStorage.setItem(STORAGE_KEYS.SAVED_TRAINS, JSON.stringify(list));
+    } catch {}
+  }, [isSavedTrain, activeTrain.number]);
+
+  // Authentic coach composition dynamically based on train type & classes
+  const trainCoaches = useMemo(() => {
+    if (activeTrain.isLocalEmu) {
+      return [
+        { code: 'ENG', label: 'Motor' },
+        { code: 'GEN', label: 'General' },
+        { code: 'D1', label: 'General' },
+        { code: 'D2', label: 'Ladies' },
+        { code: 'D3', label: 'General' },
+        { code: 'D4', label: 'General' },
+        { code: 'GEN', label: 'Guard' },
+      ];
+    }
+    const hasCC = activeTrain.classes?.some((c) => c.type === 'CC');
+    const hasEC = activeTrain.classes?.some((c) => c.type === 'EC');
+    if (hasCC || hasEC) {
+      const list = [{ code: 'ENG', label: 'Engine' }, { code: 'GEN', label: 'General' }];
+      if (hasEC) list.push({ code: 'E1', label: 'Exec AC' });
+      list.push(
+        { code: 'C1', label: 'CC' },
+        { code: 'C2', label: 'CC' },
+        { code: 'C3', label: 'CC' },
+        { code: 'C4', label: 'CC' },
+        { code: 'C5', label: 'CC' },
+        { code: 'C6', label: 'CC' },
+      );
+      list.push({ code: 'GEN', label: 'General' });
+      return list;
+    }
+    const list = [{ code: 'ENG', label: 'Engine' }, { code: 'GEN', label: 'General' }];
+    if (activeTrain.classes?.some((c) => c.type === 'SL')) {
+      list.push({ code: 'S1', label: 'Sleeper' }, { code: 'S2', label: 'Sleeper' }, { code: 'S3', label: 'Sleeper' }, { code: 'S4', label: 'Sleeper' });
+    }
+    if (activeTrain.classes?.some((c) => c.type === '3A')) {
+      list.push({ code: 'B1', label: '3-Tier AC' }, { code: 'B2', label: '3-Tier AC' }, { code: 'B3', label: '3-Tier AC' });
+    }
+    if (activeTrain.classes?.some((c) => c.type === '2A')) {
+      list.push({ code: 'A1', label: '2-Tier AC' }, { code: 'A2', label: '2-Tier AC' });
+    }
+    if (activeTrain.classes?.some((c) => c.type === '1A')) {
+      list.push({ code: 'H1', label: '1st AC' });
+    }
+    list.push({ code: 'GEN', label: 'General' }, { code: 'SLR', label: 'Guard' });
+    return list;
+  }, [activeTrain]);
+
+  useEffect(() => {
+    if (trainCoaches.length > 2) {
+      setSelectedCoach(trainCoaches[2].code);
+    }
+  }, [trainCoaches]);
 
   // Load Real-time Live Status from Railway API with dynamic timely updates
   const fetchLiveTracking = useCallback(async (forceRefresh: boolean = false) => {
@@ -471,38 +558,8 @@ export const LiveTrainTrackerScreen: React.FC<LiveTrainTrackerScreenProps> = ({
     return mins;
   }, [activeTrain, fromStationCode]);
 
-  // Live data calculation
+  // Live data calculation based on authentic train stops and API/simulation engine
   const liveData = useMemo(() => {
-    // If train is 22436 on the default Delhi-Mathura-Kanpur corridor, format station details to match the screenshot verbatim
-    const isDelhiCorridor = activeTrain.originCode === 'NDLS' && (activeTrain.destCode === 'CNB' || activeTrain.destCode === 'AGC' || activeTrain.destCode === 'MTJ' || activeTrain.destCode === 'PRYJ' || activeTrain.destCode === 'BSB');
-    if (activeTrain.number === '22436' && isDelhiCorridor && !fromStationCode) {
-      return {
-        trainNumber: '22436',
-        trainName: 'Vande Bharat Express',
-        type: 'Superfast',
-        isLocalEmu: false,
-        state: 'RUNNING_BETWEEN_STATIONS' as any,
-        currentPlatform: 'Platform 4',
-        currentStationName: 'Mathura Jn',
-        currentStationCode: 'MTJ',
-        nextStationName: 'Agra Cantt',
-        nextStationCode: 'AGC',
-        distanceToNextKm: 15,
-        currentSpeed: 96,
-        distanceRemainingKm: 253,
-        totalDistanceKm: 440,
-        distanceCoveredKm: 187,
-        expectedArrivalAtDestination: '10:20 AM',
-        lastUpdatedText: 'Day 0 - Sat, 20 Sep',
-        etaNextStopMinutes: 55,
-        delayMinutes: 2,
-        isDelayed: true,
-        activeStopIndex: 4,
-        bannerStatusText: '15 km to Agra Cantt',
-        bannerSubText: 'Speed 96 km/h • Next: Agra Cantt',
-        stationDetails: VANDE_BHARAT_22436_STOPS,
-      };
-    }
 
     if (liveApiResponse && liveApiResponse.stations && liveApiResponse.stations.length > 0) {
       const apiStations = liveApiResponse.stations;
@@ -560,18 +617,18 @@ export const LiveTrainTrackerScreen: React.FC<LiveTrainTrackerScreenProps> = ({
       }
 
       return {
-        trainNumber: activeTrain.number,
-        trainName: activeTrain.name,
+        trainNumber: liveApiResponse.trainNumber || activeTrain.number,
+        trainName: liveApiResponse.trainName || trainName || activeTrain.name,
         type: activeTrain.type,
         isLocalEmu: activeTrain.isLocalEmu,
         state: 'RUNNING_BETWEEN_STATIONS' as any,
-        currentPlatform: stationDetails[activeIdx]?.platform || 'Platform 4',
+        currentPlatform: (liveApiResponse as any).currentPlatform || stationDetails[activeIdx]?.platform || 'Platform 1',
         currentStationName: liveApiResponse.currentStationName,
         currentStationCode: liveApiResponse.currentStationCode,
         nextStationName: liveApiResponse.nextStationName,
         nextStationCode: liveApiResponse.nextStationCode,
         distanceToNextKm: distNext,
-        currentSpeed: liveApiResponse.currentSpeedKmH || 92,
+        currentSpeed: liveApiResponse.currentSpeedKmH ?? (liveApiResponse as any).currentSpeed ?? 0,
         distanceRemainingKm: remainingDist,
         totalDistanceKm: totalDist,
         distanceCoveredKm: covered,
@@ -581,8 +638,8 @@ export const LiveTrainTrackerScreen: React.FC<LiveTrainTrackerScreenProps> = ({
         delayMinutes: liveApiResponse.totalDelayMinutes || 0,
         isDelayed: (liveApiResponse.totalDelayMinutes || 0) > 0,
         activeStopIndex: activeIdx,
-        bannerStatusText: liveApiResponse.statusBanner,
-        bannerSubText: `Speed ${liveApiResponse.currentSpeedKmH || 92} km/h • Next: ${liveApiResponse.nextStationName}`,
+        bannerStatusText: liveApiResponse.statusBanner || (liveApiResponse as any).statusTitle || 'Right Time',
+        bannerSubText: (liveApiResponse as any).statusSubtitle || `Speed ${liveApiResponse.currentSpeedKmH || 0} km/h • Next: ${liveApiResponse.nextStationName}`,
         stationDetails,
       };
     }
@@ -723,7 +780,7 @@ Tracked on When is my train App`;
     } catch {}
   }, [activeTrain, liveData]);
 
-  // Formatted date string matching screenshot: Day 0 - Sat, 20 Sep
+  // Formatted date string matching screenshot: Day 1 - Oct 17, Sat
   const formattedDayText = useMemo(() => {
     const now = new Date();
     if (selectedDateMode === 'yesterday') now.setDate(now.getDate() - 1);
@@ -731,7 +788,7 @@ Tracked on When is my train App`;
 
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return `Day 0 - ${days[now.getDay()]}, ${now.getDate()} ${months[now.getMonth()]}`;
+    return `Day 1 - ${months[now.getMonth()]} ${now.getDate()}, ${days[now.getDay()]}`;
   }, [selectedDateMode]);
 
   const datePillLabel = useMemo(() => {
@@ -751,10 +808,10 @@ Tracked on When is my train App`;
 
           <View style={styles.headerTitleCol}>
             <Text style={styles.headerTitleText} numberOfLines={1}>
-              {activeTrain.number} - {activeTrain.name}
+              {liveData.trainNumber || activeTrain.number} - {liveData.trainName || activeTrain.name}
             </Text>
             <Text style={styles.headerSubText} numberOfLines={1}>
-              {activeTrain.originCode} ➔ {routeDestCode} ({activeTrain.originName} to {activeTrain.destName})
+              {routeOriginCode} ➔ {routeDestCode} ({routeOriginStation?.name || activeTrain.originName} to {routeDestStation?.name || activeTrain.destName})
             </Text>
           </View>
 
@@ -773,7 +830,7 @@ Tracked on When is my train App`;
           </View>
         </View>
 
-        {/* ================= 2. ACTION CHIPS BAR (Today ▾, Alarm, Coach, Share) ================= */}
+        {/* ================= 2. ACTION CHIPS BAR (Today ▾, Alarm, Coach, Map, Share) ================= */}
         <View style={[styles.actionPillsBar, isDarkMode && { backgroundColor: '#0B192C' }]}>
           <TouchableOpacity
             style={styles.todayActionPill}
@@ -804,6 +861,24 @@ Tracked on When is my train App`;
 
           <TouchableOpacity
             style={styles.outlinedActionPill}
+            onPress={() => setActiveTab('live_map')}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="map-outline" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
+            <Text style={styles.outlinedActionPillText}>Map</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.outlinedActionPill, isSavedTrain && { backgroundColor: '#D97706', borderColor: '#D97706' }]}
+            onPress={toggleSaveTrain}
+            activeOpacity={0.75}
+          >
+            <Ionicons name={isSavedTrain ? 'bookmark' : 'bookmark-outline'} size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
+            <Text style={styles.outlinedActionPillText}>{isSavedTrain ? 'Saved' : 'Save'}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.outlinedActionPill}
             onPress={handleShare}
             activeOpacity={0.75}
           >
@@ -825,7 +900,7 @@ Tracked on When is my train App`;
           <View style={styles.squeezedCenterTrackCol}>
             <View style={styles.squeezedDurationPill}>
               <Text style={styles.squeezedDurationText}>
-                {routeDuration} • {routeCommercialHalts > 0 && activeTrain.number !== '22436' ? `${routeCommercialHalts} stops` : 'Non-stop'}
+                {routeDuration} • {routeCommercialHalts > 0 ? `${routeCommercialHalts} stops` : 'Non-stop'}
               </Text>
             </View>
             <View style={styles.squeezedTrackLineRow}>
@@ -922,39 +997,31 @@ Tracked on When is my train App`;
       {/* ================= TAB 1: JOURNEY (TIMELINE VIEW) ================= */}
       {activeTab === 'journey' && (
         <View style={{ flex: 1, backgroundColor: colors.background }}>
-          {/* Hero Departed Status Banner (Reference App Screenshot 1) */}
-          <View style={[styles.heroStatusBanner, { backgroundColor: isDarkMode ? '#1E293B' : '#EFF6FF', borderColor: isDarkMode ? '#334155' : '#BFDBFE' }]}>
-            <View style={styles.heroStatusLeft}>
-              <View style={[styles.heroStatusIconCircle, { backgroundColor: liveData.isDelayed ? '#FEE2E2' : '#DCFCE7' }]}>
-                <MaterialCommunityIcons
-                  name={liveData.state === 'HALTED_AT_STATION' ? 'bus-stop' : 'train'}
-                  size={18}
-                  color={liveData.isDelayed ? '#DC2626' : '#16A34A'}
-                />
-              </View>
-              <View style={{ flex: 1, marginLeft: 10 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
-                  <Text style={[styles.heroStatusTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-                    Departed {liveData.currentStationName}
-                  </Text>
-                  <View style={[styles.heroDelayPill, { backgroundColor: liveData.isDelayed ? '#FEE2E2' : '#DCFCE7' }]}>
-                    <Text style={[styles.heroDelayText, { color: liveData.isDelayed ? '#DC2626' : '#15803D' }]}>
-                      {liveData.isDelayed ? `+${liveData.delayMinutes}m` : 'ON TIME'}
-                    </Text>
-                  </View>
-                </View>
-                <Text style={[styles.heroStatusSub, { color: colors.textSecondary }]} numberOfLines={1}>
-                  Next stop: {liveData.nextStationName} ({liveData.distanceToNextKm ?? 56} km away)
-                </Text>
-              </View>
+          {/* Status Banner (Exact from Screenshot 2) */}
+          <View style={[styles.screenshot2StatusBanner, isDarkMode && { backgroundColor: '#1E293B', borderBottomColor: '#334155' }]}>
+            <View style={styles.screenshot2StatusLeft}>
+              <Text style={[styles.screenshot2StatusTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+                {liveData.currentStationName ? `Arrived ${liveData.currentStationName}` : 'Arrived Faridabad'}
+              </Text>
+              <Text style={[styles.screenshot2StatusSub, { color: colors.textSecondary }]} numberOfLines={1}>
+                {liveData.currentPlatform || 'Platform 3'} • Scheduled: {liveData.stationDetails[liveData.activeStopIndex]?.scheduledArr || '06:38 PM'}
+              </Text>
+            </View>
+            <View style={styles.screenshot2StatusRight}>
+              <Text style={[styles.screenshot2DelayNumber, { color: liveData.isDelayed ? '#DC2626' : '#16A34A' }]}>
+                {liveData.isDelayed ? `+${liveData.delayMinutes || 52}m` : 'On Time'}
+              </Text>
+              <Text style={[styles.screenshot2DelaySub, { color: liveData.isDelayed ? '#DC2626' : '#16A34A' }]}>
+                {liveData.isDelayed ? 'Late' : 'Right Time'}
+              </Text>
             </View>
           </View>
 
-          {/* Timeline Column Headers Strip */}
-          <View style={[styles.timelineHeaderStrip, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', borderBottomColor: colors.border }]}>
-            <Text style={[styles.stripColText, { color: colors.textSecondary }]}>Arrival</Text>
-            <Text style={[styles.stripTitleText, { color: colors.textPrimary }]}>{formattedDayText}</Text>
-            <Text style={[styles.stripColText, { color: colors.textSecondary }]}>Departure</Text>
+          {/* Solid Black Column Header Bar (Exact from Screenshot 2) */}
+          <View style={styles.screenshot2BlackHeaderBar}>
+            <Text style={styles.screenshot2HeaderColText}>Arrival</Text>
+            <Text style={styles.screenshot2HeaderDayText}>{formattedDayText}</Text>
+            <Text style={styles.screenshot2HeaderColText}>Departure</Text>
           </View>
 
           {/* ================= REAL-TIME GPS / TELEMETRY & SPEEDOMETER DECK (find.mytrain.where signature feature) ================= */}
@@ -1158,8 +1225,10 @@ Tracked on When is my train App`;
                 const schedDepText = st.scheduledDep !== '--' ? st.scheduledDep : st.scheduledArr;
 
                 return (
-                  <View
+                  <TouchableOpacity
                     key={`${st.code}-${index}`}
+                    activeOpacity={0.7}
+                    onPress={() => setSelectedStationDetail(st)}
                     style={[
                       styles.stationTimelineRow,
                       { backgroundColor: colors.surface, borderBottomColor: colors.border },
@@ -1168,12 +1237,7 @@ Tracked on When is my train App`;
                   >
                     {/* 1. Left Arrival Column */}
                     <View style={styles.timeColLeft}>
-                      {isUpcoming && index === 5 ? (
-                        <>
-                          <Text style={styles.expectedLabelText}>Expected</Text>
-                          <Text style={[styles.expectedTimeText, { color: isDarkMode ? '#38BDF8' : '#0284C7' }]}>09:07 AM</Text>
-                        </>
-                      ) : isUpcoming ? (
+                      {isUpcoming ? (
                         <>
                           <Text style={[styles.schedTimeText, { color: colors.textSecondary }]}>{schedArrText}</Text>
                           <Text style={[styles.expectedTimeText, { color: isDarkMode ? '#38BDF8' : '#0284C7' }]}>{st.actualArr || schedArrText}</Text>
@@ -1246,9 +1310,18 @@ Tracked on When is my train App`;
                         {st.name}
                       </Text>
 
-                      <Text style={[styles.stationSubText, { color: colors.textSecondary }]}>
-                        {st.distanceKm} km  {st.platform}
-                      </Text>
+                      <View style={styles.screenshot2StationMetaRow}>
+                        <Text style={[styles.screenshot2DistanceText, { color: colors.textSecondary }]}>
+                          {st.distanceKm} km
+                        </Text>
+                        {st.platform ? (
+                          <View style={[styles.screenshot2PlatformPill, isDarkMode && { backgroundColor: '#334155', borderColor: '#475569' }]}>
+                            <Text style={[styles.screenshot2PlatformPillText, { color: colors.textPrimary }]}>
+                              {st.platform.replace(/Platform\s*/i, '').trim() || '1'}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
 
                       {/* Status Badges */}
                       {isCurrent ? (
@@ -1291,7 +1364,7 @@ Tracked on When is my train App`;
                         </>
                       )}
                     </View>
-                  </View>
+                  </TouchableOpacity>
                 );
               })}
 
@@ -1403,57 +1476,41 @@ Tracked on When is my train App`;
             </View>
           )}
 
-          {/* Floating ETA & Speed Capsule (Reference Screenshots 1 & 8) */}
-          <View style={[styles.floatingEtaCapsule, { backgroundColor: isDarkMode ? '#1E293B' : '#0F172A' }]}>
-            <View style={styles.floatingEtaLeft}>
-              <MaterialCommunityIcons name="speedometer" size={17} color="#38BDF8" style={{ marginRight: 6 }} />
-              <Text style={styles.floatingEtaText} numberOfLines={1}>
-                {liveData.distanceToNextKm ?? 15} km to {liveData.nextStationName} • Speed {liveData.currentSpeed || 96} km/h
-              </Text>
-            </View>
-            <View style={styles.floatingEtaRight}>
+          {/* Floating Action Pill & Circular Blue Refresh Button (Exact from Screenshot 2) */}
+          <View style={styles.screenshot2FloatingBottomBar}>
+            <View style={[styles.screenshot2FloatingPill, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: isDarkMode ? '#334155' : '#E2E8F0' }]}>
+              <View style={styles.screenshot2FloatingPillIcon}>
+                <MaterialCommunityIcons name="train" size={18} color={Colors.primary} />
+              </View>
+              <View style={styles.screenshot2FloatingPillTextCol}>
+                <Text style={[styles.screenshot2FloatingPillTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+                  {liveData.distanceToNextKm ?? 4} km to {liveData.nextStationName || 'Faridabad New Town'}
+                </Text>
+                <Text style={[styles.screenshot2FloatingPillSub, { color: colors.textSecondary }]}>
+                  Updated {lastUpdatedSec || 45}s ago • {liveData.currentSpeed || 68} km/h
+                </Text>
+              </View>
               <TouchableOpacity
-                style={styles.floatingWhistleBtn}
+                style={styles.screenshot2WhistleBtn}
                 onPress={handlePlayHorn}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 activeOpacity={0.8}
               >
                 <Animated.View style={{ transform: [{ scale: whistleBounce }] }}>
-                  <MaterialCommunityIcons name="bullhorn-outline" size={16} color="#FBBF24" />
+                  <MaterialCommunityIcons name="bullhorn-outline" size={17} color={isDarkMode ? '#FBBF24' : '#D97706'} />
                 </Animated.View>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.floatingWhistleBtn, { marginLeft: 8 }]}
-                onPress={handleShare}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="share-social-outline" size={16} color="#FFFFFF" />
-              </TouchableOpacity>
             </View>
-          </View>
-
-          {/* ================= BOTTOM ACTION BAR (Exact from Screenshot 1) ================= */}
-          <View style={[styles.journeyBottomBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-            <TouchableOpacity
-              style={[styles.journeyMapBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
-              onPress={() => setActiveTab('live_map')}
-              activeOpacity={0.8}
-            >
-              <MaterialCommunityIcons name="map-outline" size={18} color="#007AFF" style={{ marginRight: 6 }} />
-              <Text style={styles.journeyMapBtnText}>View on Map</Text>
-            </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.journeyRefreshBtn}
+              style={styles.screenshot2CircularRefreshBtn}
               onPress={handleManualRefresh}
-              activeOpacity={0.8}
+              activeOpacity={0.85}
               disabled={isRefreshing}
             >
               <Animated.View style={{ transform: [{ rotate: spin }] }}>
-                <Ionicons name="refresh" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Ionicons name="refresh" size={22} color="#FFFFFF" />
               </Animated.View>
-              <Text style={styles.journeyRefreshBtnText}>Refresh Status</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1464,36 +1521,18 @@ Tracked on When is my train App`;
         const isVandeBharat = activeTrain.number === '22436';
         const displayStops = liveData.stationDetails.filter((s) => !s.isPassing);
         const activeCurrentStop = displayStops[liveData.activeStopIndex] || displayStops[0];
-        const currentStop = (selectedMapStationCode ? displayStops.find(s => s.code === selectedMapStationCode) : null) || activeCurrentStop || {
-          code: 'MTJ',
-          name: 'Mathura Jn',
-          scheduledArr: '08:10 AM',
-          actualArr: '08:12 AM',
-          scheduledDep: '08:12 AM',
-          actualDep: '08:14 AM',
-          platform: 'Platform 4',
-          distanceKm: 187,
-          delayAtStopMinutes: 2,
-        };
+        const currentStop = (selectedMapStationCode ? displayStops.find(s => s.code === selectedMapStationCode) : null) || activeCurrentStop || displayStops[0];
 
-        const stopsOnMap = isVandeBharat
-          ? [
-              { code: 'NDLS', name: 'New Delhi (NDLS)', time: '06:00 AM', x: 16, y: 18, isOrigin: true },
-              { code: 'MTJ', name: 'Mathura (MTJ)', time: '08:10 AM', x: 42, y: 36, isCurrent: true },
-              { code: 'AGC', name: 'Agra Cantt (AGC)', time: '09:07 AM', x: 48, y: 56 },
-              { code: 'ETW', name: 'Etawah (ETW)', time: '10:04 AM', x: 68, y: 68 },
-              { code: 'CNB', name: 'Kanpur Central (CNB)', time: '10:20 AM', x: 86, y: 80, isDest: true },
-            ]
-          : displayStops.slice(0, 5).map((st, i, arr) => ({
-              code: st.code,
-              name: `${st.name} (${st.code})`,
-              time: st.scheduledArr || st.scheduledDep || '--:--',
-              x: 16 + Math.round((i / Math.max(1, arr.length - 1)) * 68),
-              y: 18 + Math.round((i / Math.max(1, arr.length - 1)) * 62),
-              isOrigin: i === 0,
-              isDest: i === arr.length - 1,
-              isCurrent: i === Math.min(liveData.activeStopIndex, arr.length - 1),
-            }));
+        const stopsOnMap = displayStops.map((st, i, arr) => ({
+          code: st.code,
+          name: `${st.name} (${st.code})`,
+          time: st.scheduledArr !== '--' ? st.scheduledArr : st.scheduledDep,
+          x: 16 + Math.round((i / Math.max(1, arr.length - 1)) * 68),
+          y: 18 + Math.round((i / Math.max(1, arr.length - 1)) * 62),
+          isOrigin: i === 0,
+          isDest: i === arr.length - 1,
+          isCurrent: i === Math.min(liveData.activeStopIndex, arr.length - 1),
+        }));
 
         const cardStnName = `${currentStop.name} (${currentStop.code})`;
         const cardArrSched = currentStop.scheduledArr || '--';
@@ -1712,17 +1751,7 @@ Tracked on When is my train App`;
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.coachSelectorChipsScroll}
               >
-                {[
-                  { code: 'ENG', label: 'Engine' },
-                  { code: 'GEN', label: 'General' },
-                  { code: 'C1', label: 'CC' },
-                  { code: 'C2', label: 'CC' },
-                  { code: 'C3', label: 'CC' },
-                  { code: 'C4', label: 'CC' },
-                  { code: 'C5', label: 'CC' },
-                  { code: 'C6', label: 'CC' },
-                  { code: 'C7', label: 'CC' },
-                ].map((c) => {
+                {trainCoaches.map((c) => {
                   const isSelected = selectedCoach === c.code;
                   return (
                     <View key={c.code} style={styles.coachChipWrapper}>
@@ -1763,45 +1792,32 @@ Tracked on When is my train App`;
               </TouchableOpacity>
             </View>
 
-            {/* Coach Composition (22436) */}
+            {/* Coach Composition */}
             <View style={styles.compositionSection}>
               <View style={styles.compositionHeaderRow}>
                 <MaterialCommunityIcons name="train-car" size={16} color="#16A34A" style={{ marginRight: 6 }} />
-                <Text style={[styles.compositionTitle, { color: colors.textPrimary }]}>Coach Composition (22436)</Text>
+                <Text style={[styles.compositionTitle, { color: colors.textPrimary }]}>Coach Composition ({activeTrain.number})</Text>
               </View>
 
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 8 }}>
                 <View style={styles.compositionRakeBar}>
-                  <View style={[styles.miniRakeBlock, { backgroundColor: '#94A3B8' }]}>
-                    <Text style={styles.miniRakeText}>ENG</Text>
-                  </View>
-                  <View style={[styles.miniRakeBlock, { backgroundColor: '#A855F7' }]}>
-                    <Text style={styles.miniRakeText}>GEN</Text>
-                  </View>
-                  <View style={[styles.miniRakeBlock, { backgroundColor: '#93C5FD' }]}>
-                    <Text style={styles.miniRakeText}>C1</Text>
-                  </View>
-                  <View style={[styles.miniRakeBlock, { backgroundColor: '#93C5FD' }]}>
-                    <Text style={styles.miniRakeText}>C2</Text>
-                  </View>
-                  <View style={[styles.miniRakeBlock, { backgroundColor: '#007AFF', borderWidth: 1.5, borderColor: '#0284C7' }]}>
-                    <Text style={[styles.miniRakeText, { fontWeight: '900', color: '#FFFFFF' }]}>C3</Text>
-                  </View>
-                  <View style={[styles.miniRakeBlock, { backgroundColor: '#93C5FD' }]}>
-                    <Text style={styles.miniRakeText}>C4</Text>
-                  </View>
-                  <View style={[styles.miniRakeBlock, { backgroundColor: '#93C5FD' }]}>
-                    <Text style={styles.miniRakeText}>C5</Text>
-                  </View>
-                  <View style={[styles.miniRakeBlock, { backgroundColor: '#93C5FD' }]}>
-                    <Text style={styles.miniRakeText}>C6</Text>
-                  </View>
-                  <View style={[styles.miniRakeBlock, { backgroundColor: '#93C5FD' }]}>
-                    <Text style={styles.miniRakeText}>C7</Text>
-                  </View>
-                  <View style={[styles.miniRakeBlock, { backgroundColor: '#93C5FD' }]}>
-                    <Text style={styles.miniRakeText}>C8</Text>
-                  </View>
+                  {trainCoaches.map((c, i) => {
+                    const isSelected = selectedCoach === c.code;
+                    const bg = c.code === 'ENG' ? '#94A3B8' : c.code === 'GEN' || c.code === 'SLR' ? '#A855F7' : isSelected ? '#007AFF' : '#93C5FD';
+                    return (
+                      <TouchableOpacity
+                        key={`${c.code}-${i}`}
+                        onPress={() => setSelectedCoach(c.code)}
+                        style={[
+                          styles.miniRakeBlock,
+                          { backgroundColor: bg },
+                          isSelected && { borderWidth: 1.5, borderColor: '#0284C7' },
+                        ]}
+                      >
+                        <Text style={[styles.miniRakeText, isSelected && { fontWeight: '900', color: '#FFFFFF' }]}>{c.code}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
               </ScrollView>
 
@@ -1809,29 +1825,25 @@ Tracked on When is my train App`;
               <View style={styles.compositionLegendRow}>
                 <View style={styles.legendBadge}>
                   <View style={[styles.legendColorBox, { backgroundColor: '#0284C7' }]} />
-                  <Text style={[styles.legendBadgeText, { color: colors.textSecondary }]}>Chair Car (C1-C8)</Text>
-                </View>
-                <View style={styles.legendBadge}>
-                  <View style={[styles.legendColorBox, { backgroundColor: '#16A34A' }]} />
-                  <Text style={[styles.legendBadgeText, { color: colors.textSecondary }]}>End on Generator</Text>
+                  <Text style={[styles.legendBadgeText, { color: colors.textSecondary }]}>Passenger Coaches</Text>
                 </View>
                 <View style={styles.legendBadge}>
                   <View style={[styles.legendColorBox, { backgroundColor: '#A855F7' }]} />
-                  <Text style={[styles.legendBadgeText, { color: colors.textSecondary }]}>General</Text>
+                  <Text style={[styles.legendBadgeText, { color: colors.textSecondary }]}>General / Guard</Text>
                 </View>
                 <View style={styles.legendBadge}>
-                  <View style={[styles.legendColorBox, { backgroundColor: '#EAB308' }]} />
-                  <Text style={[styles.legendBadgeText, { color: colors.textSecondary }]}>Engine</Text>
+                  <View style={[styles.legendColorBox, { backgroundColor: '#94A3B8' }]} />
+                  <Text style={[styles.legendBadgeText, { color: colors.textSecondary }]}>Loco / Engine</Text>
                 </View>
               </View>
             </View>
           </View>
 
-          {/* Card 2: Platform Position (at Mathura Jn) */}
+          {/* Card 2: Platform Position */}
           <View style={[styles.platformPositionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.platformPositionHeader}>
               <MaterialCommunityIcons name="train-car" size={18} color="#007AFF" style={{ marginRight: 6 }} />
-              <Text style={[styles.platformPositionTitle, { color: colors.textPrimary }]}>Platform Position (at Mathura Jn)</Text>
+              <Text style={[styles.platformPositionTitle, { color: colors.textPrimary }]}>Platform Position (at {liveData.currentStationName})</Text>
             </View>
 
             <View style={styles.platformPositionContentRow}>
@@ -1899,11 +1911,28 @@ Tracked on When is my train App`;
             {[
               { label: 'Train Number', val: activeTrain.number },
               { label: 'Train Name', val: activeTrain.name },
-              { label: 'Running Days', val: 'Sun, Mon, Tue, Thu, Fri, Sat' },
-              { label: 'Type', val: 'Vande Bharat Superfast' },
-              { label: 'Rake Zone', val: 'NR (Northern Railway)' },
-              { label: 'Total Distance', val: `${liveData.totalDistanceKm || 440} km` },
-              { label: 'Top Operating Speed', val: '130 km/h' },
+              {
+                label: 'Running Days',
+                val: activeTrain.runsOn.every(Boolean)
+                  ? 'Daily (All 7 Days)'
+                  : activeTrain.runsOn
+                      .map((r, i) => (r ? ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][i] : null))
+                      .filter(Boolean)
+                      .join(', '),
+              },
+              { label: 'Type', val: activeTrain.type || 'Express' },
+              { label: 'Rake Zone', val: activeTrain.originCode === 'NDLS' ? 'NR (Northern Railway)' : 'IR (Indian Railways)' },
+              { label: 'Total Distance', val: `${liveData.totalDistanceKm || activeTrain.totalDistanceKm || 500} km` },
+              {
+                label: 'Top Operating Speed',
+                val: activeTrain.type.includes('Vande') || activeTrain.type.includes('Gatimaan')
+                  ? '130 - 160 km/h'
+                  : activeTrain.type.includes('Rajdhani') || activeTrain.type.includes('Shatabdi')
+                  ? '130 km/h'
+                  : activeTrain.isLocalEmu
+                  ? '80 - 100 km/h'
+                  : '110 km/h',
+              },
             ].map((row, rIdx) => (
               <View key={rIdx} style={[styles.infoDataRow, { borderBottomColor: colors.border }]}>
                 <Text style={[styles.infoDataLabel, { color: colors.textSecondary }]}>{row.label}</Text>
@@ -1922,7 +1951,7 @@ Tracked on When is my train App`;
             {[
               { label: 'Source Station', val: `${activeTrain.originName} (${routeOriginCode})` },
               { label: 'Destination Station', val: `${activeTrain.destName} (${routeDestCode})` },
-              { label: 'Total Halts', val: `${liveData.stationDetails.filter(s => !s.isPassing).length} Major Stops (${liveData.stationDetails.length} total stations)` },
+              { label: 'Total Halts', val: `${liveData.stationDetails.filter(s => !s.isPassing).length} Commercial Stops (${liveData.stationDetails.length} Total Stations)` },
               { label: 'Total Duration', val: routeDuration },
               { label: 'Scheduled Departure', val: routeOriginDepTime },
               { label: 'Scheduled Arrival', val: routeDestArrTime },
@@ -1942,7 +1971,12 @@ Tracked on When is my train App`;
             </View>
 
             <View style={styles.facilitiesGrid}>
-              {['AC Chair Car', 'Executive Class', 'Onboard Catering', 'Wi-Fi Infotainment', 'Mobile Charging', 'Bio Vacuum Toilets'].map((fac) => (
+              {(activeTrain.isLocalEmu
+                ? ['Daily Suburban EMU', 'General Unreserved Seating', 'Ventilated Coaches', 'Digital Displays']
+                : activeTrain.classes.some((c) => c.type.includes('A') || c.type.includes('C'))
+                ? ['Air Conditioned', 'Onboard Catering', 'Mobile Charging', 'Clean Bio-Toilets']
+                : ['Reserved Seating', 'Pantry / E-Catering', 'Mobile Charging', 'Clean Toilets']
+              ).map((fac) => (
                 <View key={fac} style={[styles.facilityChip, { backgroundColor: isDarkMode ? '#1E293B' : '#F0FDF4', borderColor: isDarkMode ? colors.border : '#BBF7D0' }]}>
                   <Ionicons name="checkmark-circle" size={14} color="#16A34A" style={{ marginRight: 4 }} />
                   <Text style={[styles.facilityChipText, { color: isDarkMode ? '#F8FAFC' : '#166534' }]}>{fac}</Text>
@@ -2287,6 +2321,103 @@ Tracked on When is my train App`;
               <Ionicons name="refresh-outline" size={18} color="#007AFF" style={{ marginRight: 10 }} />
               <Text style={[styles.menuOptionText, { color: colors.textPrimary }]}>Refresh Live GPS Location</Text>
             </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* ================= MODAL: STATION DETAIL SHEET ================= */}
+      <Modal visible={!!selectedStationDetail} transparent animationType="slide">
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setSelectedStationDetail(null)}
+        >
+          <View style={[styles.stationDetailSheetCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={[styles.sheetDragHandle, { backgroundColor: isDarkMode ? '#475569' : '#CBD5E1' }]} />
+            {selectedStationDetail && (
+              <>
+                <View style={styles.sheetHeaderRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.sheetStationTitle, { color: colors.textPrimary }]}>
+                      {selectedStationDetail.name} ({selectedStationDetail.code})
+                    </Text>
+                    <Text style={[styles.sheetStationSubtitle, { color: colors.textSecondary }]}>
+                      {selectedStationDetail.distanceKm} km from origin · {selectedStationDetail.platform || 'Platform 1'}
+                    </Text>
+                  </View>
+                  <TouchableOpacity onPress={() => setSelectedStationDetail(null)} style={styles.sheetCloseBtn}>
+                    <Ionicons name="close" size={20} color={colors.textPrimary} />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Arrival & Departure Comparison */}
+                <View style={[styles.sheetMetricsRow, { backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC', borderColor: colors.border }]}>
+                  <View style={styles.sheetMetricCol}>
+                    <Text style={[styles.sheetMetricLabel, { color: colors.textSecondary }]}>Scheduled Arrival</Text>
+                    <Text style={[styles.sheetMetricVal, { color: colors.textPrimary }]}>{selectedStationDetail.scheduledArr || '--'}</Text>
+                    <Text style={[styles.sheetActualVal, { color: selectedStationDetail.isDelayed ? '#DC2626' : '#16A34A' }]}>
+                      Actual: {selectedStationDetail.actualArr || selectedStationDetail.scheduledArr || '--'}
+                    </Text>
+                  </View>
+                  <View style={[styles.sheetMetricDivider, { backgroundColor: colors.border }]} />
+                  <View style={styles.sheetMetricCol}>
+                    <Text style={[styles.sheetMetricLabel, { color: colors.textSecondary }]}>Scheduled Departure</Text>
+                    <Text style={[styles.sheetMetricVal, { color: colors.textPrimary }]}>{selectedStationDetail.scheduledDep || '--'}</Text>
+                    <Text style={[styles.sheetActualVal, { color: selectedStationDetail.isDelayed ? '#DC2626' : '#16A34A' }]}>
+                      Actual: {selectedStationDetail.actualDep || selectedStationDetail.scheduledDep || '--'}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.sheetInfoGrid}>
+                  <View style={styles.sheetInfoItem}>
+                    <Ionicons name="timer-outline" size={16} color={Colors.primary} />
+                    <Text style={[styles.sheetInfoText, { color: colors.textSecondary }]}>
+                      Halt: {selectedStationDetail.haltDuration || '2 mins'}
+                    </Text>
+                  </View>
+                  <View style={styles.sheetInfoItem}>
+                    <Ionicons name="git-commit-outline" size={16} color={Colors.primary} />
+                    <Text style={[styles.sheetInfoText, { color: colors.textSecondary }]}>
+                      Status: {selectedStationDetail.status}
+                    </Text>
+                  </View>
+                  <View style={styles.sheetInfoItem}>
+                    <Ionicons name="speedometer-outline" size={16} color={selectedStationDetail.delayMinutes ? '#DC2626' : '#16A34A'} />
+                    <Text style={[styles.sheetInfoText, { color: selectedStationDetail.delayMinutes ? '#DC2626' : '#16A34A' }]}>
+                      {selectedStationDetail.delayMinutes ? `${selectedStationDetail.delayMinutes} min late` : 'On Schedule'}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Quick Actions */}
+                <View style={styles.sheetActionRow}>
+                  <TouchableOpacity
+                    style={[styles.sheetActionBtn, { backgroundColor: isDarkMode ? '#1E3A5F' : '#EFF6FF' }]}
+                    onPress={() => {
+                      setAlarmStation(selectedStationDetail.name);
+                      setSelectedStationDetail(null);
+                      setShowAlarmModal(true);
+                    }}
+                  >
+                    <Ionicons name="alarm-outline" size={16} color="#007AFF" style={{ marginRight: 6 }} />
+                    <Text style={styles.sheetActionBtnText}>Set Alarm</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.sheetActionBtn, { backgroundColor: isDarkMode ? '#1E3A5F' : '#EFF6FF' }]}
+                    onPress={() => {
+                      setSelectedMapStationCode(selectedStationDetail.code);
+                      setSelectedStationDetail(null);
+                      setActiveTab('live_map');
+                    }}
+                  >
+                    <Ionicons name="map-outline" size={16} color="#007AFF" style={{ marginRight: 6 }} />
+                    <Text style={styles.sheetActionBtnText}>View on Map</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
           </View>
         </TouchableOpacity>
       </Modal>
@@ -3313,7 +3444,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#007AFF',
     marginTop: 2,
-    width: 65,
+    paddingHorizontal: 4,
     textAlign: 'center',
   },
 
@@ -4130,6 +4261,329 @@ const styles = StyleSheet.create({
   alarmTestSoundText: {
     fontSize: 11.5,
     fontWeight: '700',
+  },
+
+  // Sticky Next-Station Strip Styles
+  stickyNextStationStrip: {
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 6,
+    borderBottomWidth: 1,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+  },
+  stickyStripMainRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  stickyStripLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 8,
+  },
+  stickyTrainIconCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stickyNextStationName: {
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+  },
+  stickyNextDistanceText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  stickyFromText: {
+    fontSize: 10.5,
+    fontWeight: '500',
+    marginTop: 1,
+  },
+  stickyStripRight: {
+    alignItems: 'flex-end',
+  },
+  stickyLiveBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+  },
+  stickyLiveBadgeText: {
+    fontSize: 8.5,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
+  },
+  stickyProgressTrack: {
+    height: 3,
+    backgroundColor: 'rgba(0, 0, 0, 0.08)',
+    borderRadius: 2,
+    marginTop: 6,
+    overflow: 'hidden',
+  },
+  stickyProgressFill: {
+    height: '100%',
+    backgroundColor: '#16A34A',
+    borderRadius: 2,
+  },
+
+  // Station Detail Bottom Sheet Modal Styles
+  stationDetailSheetCard: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    borderWidth: 1,
+    borderBottomWidth: 0,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 28,
+    maxHeight: '65%',
+  },
+  sheetDragHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 12,
+  },
+  sheetHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  sheetStationTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  sheetStationSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  sheetCloseBtn: {
+    padding: 4,
+  },
+  sheetMetricsRow: {
+    flexDirection: 'row',
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 12,
+    marginBottom: 12,
+  },
+  sheetMetricCol: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  sheetMetricLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginBottom: 3,
+  },
+  sheetMetricVal: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  sheetActualVal: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+  sheetMetricDivider: {
+    width: 1,
+    height: '100%',
+    marginHorizontal: 8,
+  },
+  sheetInfoGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    gap: 8,
+  },
+  sheetInfoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  sheetInfoText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+  },
+  sheetActionRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  sheetActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  sheetActionBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#007AFF',
+  },
+
+  // ================= SCREENSHOT 2 EXACT STYLES =================
+  screenshot2StatusBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  screenshot2StatusLeft: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  screenshot2StatusTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+  },
+  screenshot2StatusSub: {
+    fontSize: 11.5,
+    fontWeight: '500',
+    marginTop: 3,
+  },
+  screenshot2StatusRight: {
+    alignItems: 'flex-end',
+  },
+  screenshot2DelayNumber: {
+    fontSize: 26,
+    fontWeight: '900',
+    letterSpacing: -0.5,
+  },
+  screenshot2DelaySub: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 1,
+  },
+  screenshot2BlackHeaderBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#18181B', // solid high contrast black/dark bar
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+  },
+  screenshot2HeaderColText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94A3B8',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  screenshot2HeaderDayText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.2,
+  },
+  screenshot2StationMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 3,
+    gap: 6,
+  },
+  screenshot2DistanceText: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  screenshot2PlatformPill: {
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  screenshot2PlatformPillText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+  },
+  screenshot2FloatingBottomBar: {
+    position: 'absolute',
+    bottom: 14,
+    left: 12,
+    right: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    zIndex: 99,
+  },
+  screenshot2FloatingPill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 24,
+    borderWidth: 1,
+    marginRight: 10,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 5,
+  },
+  screenshot2FloatingPillIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  screenshot2FloatingPillTextCol: {
+    flex: 1,
+    marginRight: 6,
+  },
+  screenshot2FloatingPillTitle: {
+    fontSize: 12.5,
+    fontWeight: '800',
+  },
+  screenshot2FloatingPillSub: {
+    fontSize: 10.5,
+    fontWeight: '500',
+    marginTop: 1,
+  },
+  screenshot2WhistleBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  screenshot2CircularRefreshBtn: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
   },
 });
 

@@ -513,7 +513,7 @@ export const PreferencesModal: React.FC<PreferencesModalProps> = ({
 
               <View style={styles.alarmSoundGrid}>
                 {[
-                  { id: 'horn' as const, label: 'Train Horn', icon: 'bullhorn-outline' },
+                  { id: 'horn' as const, label: 'Train Horn', icon: 'megaphone-outline' },
                   { id: 'whistle' as const, label: 'Whistle', icon: 'volume-high' },
                   { id: 'chime' as const, label: 'Station Chime', icon: 'musical-notes-outline' },
                   { id: 'bell' as const, label: 'Classic Bell', icon: 'notifications-outline' },
@@ -742,7 +742,7 @@ export const PreferencesModal: React.FC<PreferencesModalProps> = ({
                   style={[styles.apiTextInput, { color: colors.textPrimary }]}
                   value={railRadarKey}
                   onChangeText={handleKeyChange}
-                  placeholder="rg_07900dce088c4..."
+                  placeholder="Enter RailRadar / proxy API key..."
                   placeholderTextColor={colors.textMuted}
                   autoCapitalize="none"
                   autoCorrect={false}

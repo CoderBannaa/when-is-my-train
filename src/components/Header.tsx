@@ -39,15 +39,16 @@ export const Header: React.FC<HeaderProps> = ({
             <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
           </TouchableOpacity>
         ) : (
-          <View style={styles.iconCircle}>
-            <MaterialCommunityIcons name="train" size={24} color="#FFFFFF" />
-          </View>
+          <TouchableOpacity
+            style={styles.menuBtn}
+            activeOpacity={0.7}
+            onPress={onOpenPreferences}
+          >
+            <Ionicons name="menu" size={26} color="#FFFFFF" />
+          </TouchableOpacity>
         )}
         <View style={styles.titleWrapper}>
           <Text style={styles.title} numberOfLines={1}>{title}</Text>
-          <Text style={styles.subtitle} numberOfLines={1}>
-            {showBack ? t('tapToBack') : subtitle}
-          </Text>
         </View>
       </View>
 
@@ -96,6 +97,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
+  },
+  menuBtn: {
+    padding: 6,
+    marginRight: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   iconCircle: {
     width: 42,

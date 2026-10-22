@@ -1,5 +1,5 @@
 import { calculateLiveStatus, parseTimeToMinutes } from '../utils/liveStatusEngine';
-import { CorridorTrain, findOrGenerateTrain, getTrainsBetweenStations, TrainBetweenStation } from '../data/trainsBetweenStations';
+import { CorridorTrain, findOrGenerateTrain, getTrainsBetweenStations, registerTrainsIntoCatalog, TrainBetweenStation } from '../data/trainsBetweenStations';
 import { SafeStorage } from '../context/PreferencesContext';
 
 // ==========================================
@@ -147,23 +147,29 @@ function formatIsoTimeTo12h(isoStr?: string): string {
   return isoStr;
 }
 
+import { API_CONFIG, STORAGE_KEYS } from '../config/env';
+
 class LiveTrainApiService {
-  // Configured RapidAPI credentials
-  private rapidApiKey: string = '644e6eab74msh9616f5afdf7ff08p10b955jsnec38d6b31581';
-  private pnrHost: string = 'irctc-indian-railway-pnr-status.p.rapidapi.com';
-  private liveTrainHost: string = 'indian-railway-irctc.p.rapidapi.com';
+  // RapidAPI credentials from env or user settings
+  private rapidApiKey: string = API_CONFIG.rapidApiKey;
+  private pnrHost: string = API_CONFIG.pnrHost;
+  private liveTrainHost: string = API_CONFIG.liveTrainHost;
   private indianRailApiKey: string = '';
-  // RailRadar.in API credentials (primary live status provider)
-  private railRadarApiKey: string = 'rg_07900dce088c4df3882b99483d2b03ac';
+  // RailRadar API credentials from env or user settings
+  private railRadarApiKey: string = API_CONFIG.railRadarApiKey;
 
   constructor() {
-    SafeStorage.getItem('@railradar_api_key')
+    SafeStorage.getItem(STORAGE_KEYS.RAILRADAR_API_KEY)
       .then((saved) => {
         if (saved && saved.trim()) {
           this.railRadarApiKey = saved.trim();
-        } else {
-          // Persist the verified default user key
-          SafeStorage.setItem('@railradar_api_key', this.railRadarApiKey).catch(() => {});
+        }
+      })
+      .catch(() => {});
+    SafeStorage.getItem(STORAGE_KEYS.RAPIDAPI_KEY)
+      .then((saved) => {
+        if (saved && saved.trim()) {
+          this.rapidApiKey = saved.trim();
         }
       })
       .catch(() => {});
@@ -174,7 +180,7 @@ class LiveTrainApiService {
    */
   public setRailRadarApiKey(key: string) {
     this.railRadarApiKey = key.trim();
-    SafeStorage.setItem('@railradar_api_key', key.trim()).catch(() => {});
+    SafeStorage.setItem(STORAGE_KEYS.RAILRADAR_API_KEY, key.trim()).catch(() => {});
   }
 
   /**
@@ -190,6 +196,7 @@ class LiveTrainApiService {
   public setApiKey(key: string, host?: string) {
     this.rapidApiKey = key.trim();
     if (host) this.liveTrainHost = host.trim();
+    SafeStorage.setItem(STORAGE_KEYS.RAPIDAPI_KEY, key.trim()).catch(() => {});
   }
 
   /**
@@ -284,7 +291,24 @@ class LiveTrainApiService {
       } catch {}
     }
 
-    // 2. RailRadar.in Real-Time Live Status (Priority Provider)
+    // 2. RailRadar Local Proxy Bridge (Tareeqa 2 - Real Live Data Without API Key)
+    try {
+      const localProxyUrl = `http://localhost:5001/api/live-train/${cleanTrainNo}`;
+      const proxyRes = await fetch(localProxyUrl, { method: 'GET' });
+      if (proxyRes.ok) {
+        const proxyJson = await proxyRes.json();
+        if (proxyJson && proxyJson.success && Array.isArray(proxyJson.stations) && proxyJson.stations.length > 0) {
+          TrainCache.set(cacheKey, proxyJson, 60 * 1000, 'api');
+          SafeStorage.setItem(`@cache_status_${cleanTrainNo}`, JSON.stringify({ data: proxyJson, savedAt: Date.now() })).catch(() => {});
+          this.lastKnownLiveStatus.set(cleanTrainNo, proxyJson);
+          return proxyJson;
+        }
+      }
+    } catch {
+      // Local proxy not active, fall through to direct API or simulated engine
+    }
+
+    // 2.1 RailRadar.in Real-Time Live Status (Direct Provider if Key Present)
     if (this.railRadarApiKey && cleanTrainNo.length >= 4) {
       try {
         const url = `https://api.railradar.in/v1/trains/${cleanTrainNo}/live`;
@@ -766,6 +790,54 @@ class LiveTrainApiService {
       stations: stationItems,
       isCached: false,
     };
+  }
+
+  /**
+   * Fetches authentic Trains Between Stations from local proxy backend (eRail scraper),
+   * with automatic fallback to dynamically seeded realistic route trains.
+   */
+  public async getTrainsBetweenStations(
+    fromCode: string,
+    toCode: string,
+    forceRefresh: boolean = false
+  ): Promise<TrainBetweenStation[]> {
+    const normFrom = (fromCode || '').trim().toUpperCase();
+    const normTo = (toCode || '').trim().toUpperCase();
+    const cacheKey = `tbs_${normFrom}__${normTo}`;
+
+    if (!forceRefresh) {
+      const cached = TrainCache.get<TrainBetweenStation[]>(cacheKey);
+      if (cached && cached.data && cached.data.length > 0) {
+        return cached.data;
+      }
+    }
+
+    // 1. Try local proxy server (port 5001) for 100% authentic real Indian Railway trains
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4500);
+
+      const res = await fetch(`http://localhost:5001/api/trains-between-stations?from=${normFrom}&to=${normTo}`, {
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      if (res.ok) {
+        const json = await res.json();
+        if (json && json.success && Array.isArray(json.trains) && json.trains.length > 0) {
+          registerTrainsIntoCatalog(json.trains);
+          TrainCache.set(cacheKey, json.trains, 10 * 60 * 1000, 'api');
+          return json.trains;
+        }
+      }
+    } catch {
+      // Proxy unavailable or timed out; smoothly continue to fallback
+    }
+
+    // 2. Fallback to procedural route-seeded trains (each pair has distinct trains)
+    const fallbackList = getTrainsBetweenStations(normFrom, normTo);
+    TrainCache.set(cacheKey, fallbackList, 5 * 60 * 1000, 'fallback');
+    return fallbackList;
   }
 }
 

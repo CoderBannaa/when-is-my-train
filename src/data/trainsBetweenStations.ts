@@ -24,7 +24,7 @@ export interface CorridorTrain {
   id: string;
   number: string;
   name: string;
-  type: 'EMU Local' | 'Intercity' | 'Gatimaan' | 'Shatabdi' | 'Rajdhani' | 'Superfast' | 'Express';
+  type: 'EMU Local' | 'Intercity' | 'Gatimaan' | 'Shatabdi' | 'Rajdhani' | 'Superfast' | 'Express' | 'Special';
   isLocalEmu: boolean;
   originCode: string;
   originName: string;
@@ -44,7 +44,7 @@ export interface TrainBetweenStation {
   id: string;
   number: string;
   name: string;
-  type: 'EMU Local' | 'Intercity' | 'Gatimaan' | 'Shatabdi' | 'Rajdhani' | 'Superfast' | 'Express';
+  type: 'EMU Local' | 'Intercity' | 'Gatimaan' | 'Shatabdi' | 'Rajdhani' | 'Superfast' | 'Express' | 'Special';
   isLocalEmu: boolean;
   fromStationCode: string;
   fromStationName: string;
@@ -228,6 +228,155 @@ export const CORRIDOR_TRAINS_MASTER: CorridorTrain[] = [
       { code: 'BVH', name: 'Ballabhgarh', arr: '06:45 PM', dep: '06:46 PM' },
       { code: 'AST', name: 'Asaoti', arr: '06:56 PM', dep: '06:57 PM' },
       { code: 'PWL', name: 'Palwal', arr: '07:20 PM', dep: '--' },
+    ],
+  },
+  {
+    id: 'emu-64076',
+    number: '64076',
+    name: 'New Delhi - Palwal EMU',
+    type: 'EMU Local',
+    isLocalEmu: true,
+    originCode: 'NDLS',
+    originName: 'New Delhi',
+    destCode: 'PWL',
+    destName: 'Palwal',
+    runsOn: [true, true, true, true, true, true, true],
+    classes: [{ type: 'GN (Unreserved)', price: 10, status: 'DAILY LOCAL', statusType: 'unreserved', updatedText: 'Midnight' }],
+    stops: [
+      { code: 'NDLS', name: 'New Delhi', arr: '--', dep: '12:15 AM' },
+      { code: 'NZM', name: 'Hazrat Nizamuddin', arr: '12:28 AM', dep: '12:29 AM' },
+      { code: 'FDB', name: 'Faridabad', arr: '12:50 AM', dep: '12:51 AM' },
+      { code: 'BVH', name: 'Ballabhgarh', arr: '01:05 AM', dep: '01:06 AM' },
+      { code: 'AST', name: 'Asaoti', arr: '01:14 AM', dep: '01:15 AM' },
+      { code: 'PWL', name: 'Palwal', arr: '01:35 AM', dep: '--' },
+    ],
+  },
+  {
+    id: 'emu-64074',
+    number: '64074',
+    name: 'New Delhi - Dholpur EMU',
+    type: 'EMU Local',
+    isLocalEmu: true,
+    originCode: 'NDLS',
+    originName: 'New Delhi',
+    destCode: 'AGC',
+    destName: 'Dholpur Junction',
+    runsOn: [true, true, true, true, true, true, true],
+    classes: [{ type: 'GN (Unreserved)', price: 30, status: 'DAILY LOCAL', statusType: 'unreserved', updatedText: 'Early Morning' }],
+    stops: [
+      { code: 'NDLS', name: 'New Delhi', arr: '--', dep: '04:15 AM' },
+      { code: 'NZM', name: 'Hazrat Nizamuddin', arr: '04:29 AM', dep: '04:30 AM' },
+      { code: 'FDB', name: 'Faridabad', arr: '04:54 AM', dep: '04:55 AM' },
+      { code: 'BVH', name: 'Ballabhgarh', arr: '05:09 AM', dep: '05:10 AM' },
+      { code: 'AST', name: 'Asaoti', arr: '05:18 AM', dep: '05:19 AM' },
+      { code: 'PWL', name: 'Palwal', arr: '05:40 AM', dep: '05:42 AM' },
+    ],
+  },
+  {
+    id: 'emu-64062',
+    number: '64062',
+    name: 'Delhi - Palwal EMU',
+    type: 'EMU Local',
+    isLocalEmu: true,
+    originCode: 'DLI',
+    originName: 'Old Delhi Junction',
+    destCode: 'PWL',
+    destName: 'Palwal',
+    runsOn: [true, true, true, true, true, true, true],
+    classes: [{ type: 'GN (Unreserved)', price: 15, status: 'DAILY LOCAL', statusType: 'unreserved', updatedText: 'Morning Local' }],
+    stops: [
+      { code: 'DLI', name: 'Old Delhi Junction', arr: '--', dep: '06:05 AM' },
+      { code: 'NDLS', name: 'New Delhi', arr: '06:17 AM', dep: '06:20 AM' },
+      { code: 'FDB', name: 'Faridabad', arr: '06:48 AM', dep: '06:49 AM' },
+      { code: 'BVH', name: 'Ballabhgarh', arr: '07:03 AM', dep: '07:04 AM' },
+      { code: 'AST', name: 'Asaoti', arr: '07:12 AM', dep: '07:13 AM' },
+      { code: 'PWL', name: 'Palwal', arr: '07:35 AM', dep: '--' },
+    ],
+  },
+  {
+    id: 'emu-64078',
+    number: '64078',
+    name: 'New Delhi - Palwal EMU',
+    type: 'EMU Local',
+    isLocalEmu: true,
+    originCode: 'NDLS',
+    originName: 'New Delhi',
+    destCode: 'PWL',
+    destName: 'Palwal',
+    runsOn: [true, true, true, true, true, true, true],
+    classes: [{ type: 'GN (Unreserved)', price: 10, status: 'DAILY LOCAL', statusType: 'unreserved', updatedText: 'Morning' }],
+    stops: [
+      { code: 'NDLS', name: 'New Delhi', arr: '--', dep: '08:45 AM' },
+      { code: 'FDB', name: 'Faridabad', arr: '09:20 AM', dep: '09:21 AM' },
+      { code: 'BVH', name: 'Ballabhgarh', arr: '09:35 AM', dep: '09:36 AM' },
+      { code: 'AST', name: 'Asaoti', arr: '09:44 AM', dep: '09:45 AM' },
+      { code: 'PWL', name: 'Palwal', arr: '10:05 AM', dep: '--' },
+    ],
+  },
+  {
+    id: 'emu-64012',
+    number: '64012',
+    name: 'Shakurbasti - Palwal EMU',
+    type: 'EMU Local',
+    isLocalEmu: true,
+    originCode: 'NDLS',
+    originName: 'Shakurbasti',
+    destCode: 'PWL',
+    destName: 'Palwal',
+    runsOn: [true, true, true, true, true, true, true],
+    classes: [{ type: 'GN (Unreserved)', price: 15, status: 'DAILY LOCAL', statusType: 'unreserved', updatedText: 'Midday' }],
+    stops: [
+      { code: 'NDLS', name: 'New Delhi', arr: '10:35 AM', dep: '10:40 AM' },
+      { code: 'FDB', name: 'Faridabad', arr: '11:18 AM', dep: '11:19 AM' },
+      { code: 'BVH', name: 'Ballabhgarh', arr: '11:32 AM', dep: '11:33 AM' },
+      { code: 'AST', name: 'Asaoti', arr: '11:42 AM', dep: '11:43 AM' },
+      { code: 'PWL', name: 'Palwal', arr: '12:05 PM', dep: '--' },
+    ],
+  },
+  {
+    id: 'emu-64016',
+    number: '64016',
+    name: 'Shakurbasti - Mathura EMU',
+    type: 'EMU Local',
+    isLocalEmu: true,
+    originCode: 'NDLS',
+    originName: 'Shakurbasti',
+    destCode: 'MTJ',
+    destName: 'Mathura Junction',
+    runsOn: [true, true, true, true, true, true, true],
+    classes: [{ type: 'GN (Unreserved)', price: 30, status: 'DAILY LOCAL', statusType: 'unreserved', updatedText: 'Evening' }],
+    stops: [
+      { code: 'NDLS', name: 'New Delhi', arr: '03:10 PM', dep: '03:15 PM' },
+      { code: 'FDB', name: 'Faridabad', arr: '03:48 PM', dep: '03:49 PM' },
+      { code: 'BVH', name: 'Ballabhgarh', arr: '04:01 PM', dep: '04:02 PM' },
+      { code: 'AST', name: 'Asaoti', arr: '04:10 PM', dep: '04:11 PM' },
+      { code: 'PWL', name: 'Palwal', arr: '04:30 PM', dep: '04:32 PM' },
+      { code: 'MTJ', name: 'Mathura Junction', arr: '06:10 PM', dep: '--' },
+    ],
+  },
+  {
+    id: 'emu-64082',
+    number: '64082',
+    name: 'New Delhi - Kosi Kalan EMU',
+    type: 'EMU Local',
+    isLocalEmu: true,
+    originCode: 'NDLS',
+    originName: 'New Delhi',
+    destCode: 'KSV',
+    destName: 'Kosi Kalan',
+    runsOn: [true, true, true, true, true, true, true],
+    classes: [{ type: 'GN (Unreserved)', price: 25, status: 'DAILY LOCAL', statusType: 'unreserved', updatedText: 'Evening Peak' }],
+    stops: [
+      { code: 'NDLS', name: 'New Delhi', arr: '--', dep: '05:40 PM' },
+      { code: 'NZM', name: 'Hazrat Nizamuddin', arr: '05:54 PM', dep: '05:55 PM' },
+      { code: 'OKA', name: 'Okhla', arr: '06:02 PM', dep: '06:03 PM' },
+      { code: 'TKD', name: 'Tuglakabad', arr: '06:26 PM', dep: '06:27 PM' },
+      { code: 'FDB', name: 'Faridabad', arr: '06:38 PM', dep: '06:39 PM' },
+      { code: 'FDN', name: 'Faridabad New Town', arr: '06:43 PM', dep: '06:44 PM' },
+      { code: 'BVH', name: 'Ballabhgarh', arr: '06:50 PM', dep: '06:51 PM' },
+      { code: 'AST', name: 'Asaoti', arr: '06:59 PM', dep: '07:00 PM' },
+      { code: 'PWL', name: 'Palwal', arr: '07:40 PM', dep: '07:45 PM' },
+      { code: 'KSV', name: 'Kosi Kalan', arr: '08:45 PM', dep: '--' },
     ],
   },
   {
@@ -1639,6 +1788,15 @@ function getRouteProfile(fromCode: string, toCode: string): {
   };
 }
 
+function getRouteSeed(from: string, to: string): number {
+  let h = 5381;
+  const s = `${from}:${to}`;
+  for (let i = 0; i < s.length; i++) {
+    h = ((h << 5) + h) + s.charCodeAt(i);
+  }
+  return Math.abs(h);
+}
+
 export function generateDynamicTrainsForRoute(fromCode: string, toCode: string): TrainBetweenStation[] {
   const normFrom = (fromCode || '').trim().toUpperCase();
   const normTo = (toCode || '').trim().toUpperCase();
@@ -1646,14 +1804,23 @@ export function generateDynamicTrainsForRoute(fromCode: string, toCode: string):
   const toMeta = findStationMeta(normTo);
   const profile = getRouteProfile(normFrom, normTo);
   const dist = profile.distanceKm;
+  const seed = getRouteSeed(normFrom, normTo);
+
+  // Generate 12 distinct, route-specific blueprints dynamically seeded by the route
+  const numBase = 12000 + (seed % 7000);
+  const vandeNum = 22400 + (seed % 500);
+  const s1 = (seed >> 1) % 900;
+  const s2 = (seed >> 2) % 900;
+  const s3 = (seed >> 3) % 900;
+  const s4 = (seed >> 4) % 900;
 
   const blueprints = [
     {
-      num: '22436',
+      num: String(vandeNum),
       name: `${fromMeta.city} - ${toMeta.city} Vande Bharat Express`,
       type: 'Superfast' as const,
       depHour: 6,
-      depMin: 0,
+      depMin: (seed % 30),
       speedKmh: 95,
       skipIntermediates: 2,
       classes: [
@@ -1663,11 +1830,11 @@ export function generateDynamicTrainsForRoute(fromCode: string, toCode: string):
       runsOn: [true, true, true, false, true, true, true],
     },
     {
-      num: '12004',
-      name: `${fromMeta.city} Swarna Shatabdi Express`,
+      num: String(numBase + 10),
+      name: `${fromMeta.city} Swarna Shatabdi`,
       type: 'Shatabdi' as const,
       depHour: 6,
-      depMin: 40,
+      depMin: 45,
       speedKmh: 85,
       skipIntermediates: 1,
       classes: [
@@ -1677,11 +1844,11 @@ export function generateDynamicTrainsForRoute(fromCode: string, toCode: string):
       runsOn: [true, true, true, true, true, true, true],
     },
     {
-      num: '12452',
-      name: 'Shram Shakti Superfast Express',
+      num: String(numBase + 24),
+      name: `${toMeta.city} Superfast Express`,
       type: 'Superfast' as const,
       depHour: 7,
-      depMin: 15,
+      depMin: 15 + (seed % 30),
       speedKmh: 75,
       skipIntermediates: 0,
       classes: [
@@ -1693,11 +1860,11 @@ export function generateDynamicTrainsForRoute(fromCode: string, toCode: string):
       runsOn: [true, true, true, true, true, true, true],
     },
     {
-      num: '12034',
+      num: String(numBase + 45),
       name: `${fromMeta.city} - ${toMeta.city} Jan Shatabdi`,
       type: 'Intercity' as const,
       depHour: 8,
-      depMin: 0,
+      depMin: 10 + (s1 % 40),
       speedKmh: 72,
       skipIntermediates: 0,
       classes: [
@@ -1707,11 +1874,11 @@ export function generateDynamicTrainsForRoute(fromCode: string, toCode: string):
       runsOn: [true, true, true, true, true, true, true],
     },
     {
-      num: '12402',
-      name: 'Magadh Superfast Express',
+      num: String(numBase + 62),
+      name: `${toMeta.city} SF Intercity`,
       type: 'Superfast' as const,
-      depHour: 9,
-      depMin: 15,
+      depHour: 10,
+      depMin: 20 + (s2 % 35),
       speedKmh: 74,
       skipIntermediates: 1,
       classes: [
@@ -1722,10 +1889,10 @@ export function generateDynamicTrainsForRoute(fromCode: string, toCode: string):
       runsOn: [true, true, true, true, true, true, true],
     },
     {
-      num: '12276',
-      name: `${fromMeta.city} Humsafar Express`,
+      num: String(22800 + (seed % 400)),
+      name: `${fromMeta.city} Humsafar SF`,
       type: 'Superfast' as const,
-      depHour: 10,
+      depHour: 12,
       depMin: 30,
       speedKmh: 78,
       skipIntermediates: 2,
@@ -1735,11 +1902,11 @@ export function generateDynamicTrainsForRoute(fromCode: string, toCode: string):
       runsOn: [true, true, false, true, true, false, true],
     },
     {
-      num: '12878',
-      name: 'Garib Rath Express',
+      num: String(numBase + 88),
+      name: `${toMeta.city} Garib Rath Express`,
       type: 'Superfast' as const,
-      depHour: 11,
-      depMin: 45,
+      depHour: 14,
+      depMin: 15 + (s3 % 40),
       speedKmh: 76,
       skipIntermediates: 2,
       classes: [
@@ -1748,56 +1915,26 @@ export function generateDynamicTrainsForRoute(fromCode: string, toCode: string):
       runsOn: [true, false, true, false, true, false, true],
     },
     {
-      num: '12420',
-      name: 'Gomti Superfast Express',
+      num: String(numBase + 104),
+      name: `${fromMeta.city} - ${toMeta.city} SF Express`,
       type: 'Express' as const,
-      depHour: 12,
+      depHour: 16,
       depMin: 20,
-      speedKmh: 65,
+      speedKmh: 68,
       skipIntermediates: 0,
       classes: [
         { type: '2S', price: Math.round(dist * 0.19 + 55), status: 'AVL 240', statusType: 'available' as const, updatedText: 'Live' },
-        { type: 'CC', price: Math.round(dist * 0.80 + 210), status: 'AVL 38', statusType: 'available' as const, updatedText: 'Live' },
-        { type: '2A', price: Math.round(dist * 1.50 + 490), status: 'AVL 10', statusType: 'available' as const, updatedText: 'Live' },
+        { type: 'SL', price: Math.round(dist * 0.40 + 120), status: 'AVL 60', statusType: 'available' as const, updatedText: 'Live' },
+        { type: '3A', price: Math.round(dist * 1.05 + 320), status: 'AVL 20', statusType: 'available' as const, updatedText: 'Live' },
       ],
       runsOn: [true, true, true, true, true, true, true],
     },
     {
-      num: '12398',
-      name: 'Mahabodhi Express',
-      type: 'Superfast' as const,
-      depHour: 13,
-      depMin: 50,
-      speedKmh: 74,
-      skipIntermediates: 1,
-      classes: [
-        { type: '2S', price: Math.round(dist * 0.22 + 65), status: 'AVL 94', statusType: 'available' as const, updatedText: 'Live' },
-        { type: 'SL', price: Math.round(dist * 0.42 + 130), status: 'RAC 12', statusType: 'rac' as const, updatedText: 'Live' },
-        { type: '3A', price: Math.round(dist * 1.10 + 340), status: 'AVL 22', statusType: 'available' as const, updatedText: 'Live' },
-      ],
-      runsOn: [true, true, true, true, true, true, true],
-    },
-    {
-      num: '20802',
-      name: `${fromMeta.city} Intercity SF`,
-      type: 'Superfast' as const,
-      depHour: 15,
-      depMin: 10,
-      speedKmh: 76,
-      skipIntermediates: 0,
-      classes: [
-        { type: 'SL', price: Math.round(dist * 0.43 + 135), status: 'AVL 92', statusType: 'available' as const, updatedText: 'Live' },
-        { type: '3A', price: Math.round(dist * 1.12 + 350), status: 'AVL 24', statusType: 'available' as const, updatedText: 'Live' },
-        { type: '2A', price: Math.round(dist * 1.62 + 530), status: 'AVL 07', statusType: 'available' as const, updatedText: 'Live' },
-      ],
-      runsOn: [true, true, true, true, true, true, true],
-    },
-    {
-      num: '12424',
+      num: String(numBase + 130),
       name: `${toMeta.city} Rajdhani Express`,
       type: 'Rajdhani' as const,
-      depHour: 16,
-      depMin: 30,
+      depHour: 17,
+      depMin: 50,
       speedKmh: 88,
       skipIntermediates: 2,
       classes: [
@@ -1808,57 +1945,12 @@ export function generateDynamicTrainsForRoute(fromCode: string, toCode: string):
       runsOn: [true, true, true, true, true, true, true],
     },
     {
-      num: '12259',
-      name: `${toMeta.city} Duronto Express`,
-      type: 'Superfast' as const,
-      depHour: 17,
-      depMin: 40,
-      speedKmh: 85,
-      skipIntermediates: 3,
-      classes: [
-        { type: '3A', price: Math.round(dist * 1.30 + 480), status: 'AVL 50', statusType: 'available' as const, updatedText: 'Live' },
-        { type: '2A', price: Math.round(dist * 1.90 + 720), status: 'AVL 15', statusType: 'available' as const, updatedText: 'Live' },
-        { type: '1A', price: Math.round(dist * 2.90 + 1200), status: 'AVL 05', statusType: 'available' as const, updatedText: 'Live' },
-      ],
-      runsOn: [false, true, true, false, true, true, false],
-    },
-    {
-      num: '12582',
-      name: `${toMeta.city} SF Express`,
-      type: 'Superfast' as const,
-      depHour: 19,
-      depMin: 15,
-      speedKmh: 73,
-      skipIntermediates: 0,
-      classes: [
-        { type: '2S', price: Math.round(dist * 0.23 + 68), status: 'AVL 130', statusType: 'available' as const, updatedText: 'Live' },
-        { type: 'SL', price: Math.round(dist * 0.42 + 130), status: 'AVL 52', statusType: 'available' as const, updatedText: 'Live' },
-        { type: '3A', price: Math.round(dist * 1.10 + 340), status: 'WL 09', statusType: 'waiting' as const, updatedText: 'Live' },
-      ],
-      runsOn: [true, true, true, true, true, true, true],
-    },
-    {
-      num: '12560',
-      name: 'Shiv Ganga Superfast Express',
-      type: 'Superfast' as const,
-      depHour: 20,
-      depMin: 5,
-      speedKmh: 78,
-      skipIntermediates: 1,
-      classes: [
-        { type: 'SL', price: Math.round(dist * 0.41 + 125), status: 'AVL 45', statusType: 'available' as const, updatedText: 'Live' },
-        { type: '3A', price: Math.round(dist * 1.08 + 330), status: 'AVL 18', statusType: 'available' as const, updatedText: 'Live' },
-        { type: '2A', price: Math.round(dist * 1.58 + 510), status: 'AVL 06', statusType: 'available' as const, updatedText: 'Live' },
-      ],
-      runsOn: [true, true, true, true, true, true, true],
-    },
-    {
-      num: '14218',
-      name: 'Unchahar Mail Express',
+      num: String(numBase + 152),
+      name: `${fromMeta.city} Mail Express`,
       type: 'Express' as const,
-      depHour: 21,
-      depMin: 10,
-      speedKmh: 60,
+      depHour: 19,
+      depMin: 45,
+      speedKmh: 65,
       skipIntermediates: 0,
       classes: [
         { type: '2S', price: Math.round(dist * 0.18 + 50), status: 'AVL 180', statusType: 'available' as const, updatedText: 'Live' },
@@ -1868,11 +1960,11 @@ export function generateDynamicTrainsForRoute(fromCode: string, toCode: string):
       runsOn: [true, true, true, true, true, true, true],
     },
     {
-      num: '12418',
-      name: 'Prayagraj Superfast Express',
+      num: String(numBase + 178),
+      name: `${toMeta.city} Overnight Superfast`,
       type: 'Superfast' as const,
       depHour: 22,
-      depMin: 10,
+      depMin: 10 + (s4 % 45),
       speedKmh: 77,
       skipIntermediates: 1,
       classes: [
@@ -1884,26 +1976,12 @@ export function generateDynamicTrainsForRoute(fromCode: string, toCode: string):
       runsOn: [true, true, true, true, true, true, true],
     },
     {
-      num: '12952',
-      name: 'Tejas Rajdhani Express',
-      type: 'Rajdhani' as const,
-      depHour: 22,
-      depMin: 50,
-      speedKmh: 86,
-      skipIntermediates: 2,
-      classes: [
-        { type: '3A', price: Math.round(dist * 1.50 + 580), status: 'AVL 80', statusType: 'available' as const, updatedText: 'Live' },
-        { type: '2A', price: Math.round(dist * 2.15 + 880), status: 'AVL 25', statusType: 'available' as const, updatedText: 'Live' },
-      ],
-      runsOn: [true, true, true, true, true, true, true],
-    },
-    {
-      num: '12229',
-      name: 'Overnight Superfast Express',
-      type: 'Superfast' as const,
+      num: String(numBase + 196),
+      name: `${fromMeta.city} - ${toMeta.city} Special Fare Exp`,
+      type: 'Special' as const,
       depHour: 23,
-      depMin: 45,
-      speedKmh: 72,
+      depMin: 40,
+      speedKmh: 70,
       skipIntermediates: 0,
       classes: [
         { type: 'SL', price: Math.round(dist * 0.42 + 130), status: 'AVL 90', statusType: 'available' as const, updatedText: 'Live' },
@@ -2021,6 +2099,41 @@ export function generateDynamicTrainsForRoute(fromCode: string, toCode: string):
   return generatedList;
 }
 
+/**
+ * Register external trains (e.g. from eRail / Indian Railways API) into internal catalog
+ */
+export function registerTrainsIntoCatalog(trains: TrainBetweenStation[]): void {
+  for (const t of trains) {
+    if (!trainByNumberMap.has(t.number)) {
+      const corridorTrain: CorridorTrain = {
+        id: t.id,
+        number: t.number,
+        name: t.name,
+        type: t.type,
+        isLocalEmu: Boolean(t.isLocalEmu),
+        originCode: t.fromStationCode,
+        originName: t.fromStationName || t.fromStationCode,
+        destCode: t.toStationCode,
+        destName: t.toStationName || t.toStationCode,
+        depTime: t.depTime,
+        arrTime: t.arrTime,
+        duration: t.duration,
+        totalHaults: t.totalHaults || 5,
+        totalDistanceKm: 350,
+        runsOn: t.runsOn,
+        classes: t.classes,
+        stops: [
+          { code: t.fromStationCode, name: t.fromStationName || t.fromStationCode, arr: '--', dep: t.depTime, distanceKm: 0, platform: 'PF 1' },
+          { code: t.toStationCode, name: t.toStationName || t.toStationCode, arr: t.arrTime, dep: '--', distanceKm: 350, platform: 'PF 2' },
+        ],
+      };
+      trainByNumberMap.set(t.number, corridorTrain);
+      dynamicTrainCache.set(t.number, corridorTrain);
+      dynamicTrainCache.set(t.name.toUpperCase(), corridorTrain);
+    }
+  }
+}
+
 // Dynamic Corridor Route Matching Engine with caching
 export function getTrainsBetweenStations(fromCode: string, toCode: string): TrainBetweenStation[] {
   const normFrom = (fromCode || '').trim().toUpperCase();
@@ -2028,7 +2141,7 @@ export function getTrainsBetweenStations(fromCode: string, toCode: string): Trai
   const cacheKey = `${normFrom}__${normTo}`;
 
   const cached = routeMatchesCache.get(cacheKey);
-  if (cached) {
+  if (cached && cached.length > 0) {
     return cached;
   }
 
@@ -2072,23 +2185,11 @@ export function getTrainsBetweenStations(fromCode: string, toCode: string): Trai
     }
   }
 
-  // If corridor master trains matched at least 10 trains, use them.
-  // Otherwise, use dynamic route generator to supply all trains between the two stations.
-  let result: TrainBetweenStation[];
-  if (matchingTrains.length >= 10) {
-    result = matchingTrains;
-  } else {
-    const dynamicList = generateDynamicTrainsForRoute(normFrom, normTo);
-    // Combine any corridor matches with dynamic trains without duplicate train numbers
-    const existingNums = new Set(matchingTrains.map((m) => m.number));
-    const combined = [...matchingTrains];
-    for (let i = 0; i < dynamicList.length; i++) {
-      if (!existingNums.has(dynamicList[i].number)) {
-        combined.push(dynamicList[i]);
-      }
-    }
-    result = combined;
-  }
+  // If authentic corridor trains found, return them.
+  // Otherwise, procedurally generate route-seeded dynamic trains so every search produces distinct trains!
+  const result: TrainBetweenStation[] = matchingTrains.length > 0
+    ? matchingTrains
+    : generateDynamicTrainsForRoute(normFrom, normTo);
 
   if (routeMatchesCache.size >= MAX_ROUTE_CACHE_SIZE) {
     const firstKey = routeMatchesCache.keys().next().value;

@@ -11,12 +11,15 @@ import {
   Modal,
   Animated,
   Easing,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '../theme/colors';
 import { TrainBetweenStation, getTrainsBetweenStations } from '../data/trainsBetweenStations';
 import { Station } from '../data/stations';
 import { usePreferences } from '../context/PreferencesContext';
+import { LiveTrainApi } from '../services/liveTrainApiService';
 
 interface SearchResultsScreenProps {
   fromStation: Station;
@@ -57,6 +60,7 @@ export interface DynamicDateItem {
   dayShort: string;
   formattedDate: string; // e.g. "Thu, 19 Sep" (No Year)
   isToday?: boolean;
+  dayOfWeek: number;
 }
 
 export function getDynamicQuickDates(): DynamicDateItem[] {
@@ -100,6 +104,7 @@ export function getDynamicQuickDates(): DynamicDateItem[] {
       dayShort: dayS,
       formattedDate: `${dayS}, ${dateNum} ${month}`,
       isToday: offset === 0,
+      dayOfWeek,
     });
   }
   return list;
@@ -125,6 +130,51 @@ export const SearchResultsScreen: React.FC<SearchResultsScreenProps> = ({
   const [selectedClassesMap, setSelectedClassesMap] = useState<{ [trainId: string]: number }>({});
   const [copiedNotification, setCopiedNotification] = useState(false);
   const [notificationMsg, setNotificationMsg] = useState('Train list copied to clipboard!');
+
+  // Live real-time trains data state
+  const [trains, setTrains] = useState<TrainBetweenStation[]>(() =>
+    getTrainsBetweenStations(fromStation.code, toStation.code)
+  );
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isLiveApiData, setIsLiveApiData] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    setIsLoading(true);
+
+    LiveTrainApi.getTrainsBetweenStations(fromStation.code, toStation.code)
+      .then((data) => {
+        if (isMounted) {
+          setTrains(data);
+          setIsLiveApiData(data.length > 0);
+          setIsLoading(false);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setTrains(getTrainsBetweenStations(fromStation.code, toStation.code));
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [fromStation.code, toStation.code]);
+
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      const data = await LiveTrainApi.getTrainsBetweenStations(fromStation.code, toStation.code, true);
+      setTrains(data);
+      setIsLiveApiData(true);
+    } catch {
+      setTrains(getTrainsBetweenStations(fromStation.code, toStation.code));
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [fromStation.code, toStation.code]);
 
   const calendarDates = useMemo(() => {
     const daysShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -166,6 +216,7 @@ export const SearchResultsScreen: React.FC<SearchResultsScreenProps> = ({
         dayShort: dayS,
         formattedDate: `${dayS}, ${dateNum} ${month}`,
         isToday: offset === 0,
+        dayOfWeek,
       });
     }
     return list;
@@ -175,34 +226,36 @@ export const SearchResultsScreen: React.FC<SearchResultsScreenProps> = ({
     const matched =
       dynamicDates.find((d) => d.label === currentDate || d.dateStr === currentDate || currentDate.includes(d.dateStr)) ||
       calendarDates.find((d) => d.label === currentDate || d.dateStr === currentDate || currentDate.includes(d.dateStr));
-    if (matched) {
-      return {
-        formattedDate: matched.formattedDate,
-        dayName: matched.dayFull,
-        date: matched.dateStr,
-      };
-    }
     const now = new Date();
     const daysShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const daysFull = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    if (matched) {
+      return {
+        formattedDate: matched.formattedDate,
+        dayName: matched.dayFull,
+        dayShort: matched.dayShort,
+        date: matched.dateStr,
+        dayOfWeek: matched.dayOfWeek,
+        isToday: Boolean(matched.isToday),
+      };
+    }
     return {
       formattedDate: `${daysShort[now.getDay()]}, ${now.getDate()} ${months[now.getMonth()]}`,
       dayName: daysFull[now.getDay()],
+      dayShort: daysShort[now.getDay()],
       date: currentDate,
+      dayOfWeek: now.getDay(),
+      isToday: true,
     };
   }, [currentDate, dynamicDates, calendarDates]);
 
-  const rawTrains = useMemo(() => {
-    return getTrainsBetweenStations(fromStation.code, toStation.code);
-  }, [fromStation.code, toStation.code]);
-
   const classFilteredTrains = useMemo(() => {
-    if (selectedClassFilter === 'All') return rawTrains;
-    return rawTrains.filter((t) =>
-      t.classes.some((c) => c.type.toUpperCase().includes(selectedClassFilter.toUpperCase()))
+    if (selectedClassFilter === 'All') return trains;
+    return trains.filter((t) =>
+      t.classes && t.classes.some((c) => c.type.toUpperCase().includes(selectedClassFilter.toUpperCase()))
     );
-  }, [rawTrains, selectedClassFilter]);
+  }, [trains, selectedClassFilter]);
 
   const sortedTrains = useMemo(() => {
     const list = [...classFilteredTrains];
@@ -312,171 +365,173 @@ Found on When is my train`;
     return { isDaily: false, text: days };
   };
 
-  // Render Compact High-Density Train Card (4-5 trains per screen without scrolling)
+  // Render Clean High-Density Train Card Matching Screenshot 3 + Enhanced Route Info
   const renderTrainCard = useCallback(
-    ({ item, index }: { item: TrainBetweenStation; index: number }) => {
-      const runningDaysLetters = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-      const isNotRunningToday = index % 5 === 0; // Realistic demo flag for not running today
-      const departedStatus =
-        index % 3 === 0
-          ? `Left ${item.fromStationCode} at ${item.depTime} (${(index + 1) * 3} min late)`
-          : index % 4 === 0
-          ? `On time · Departs at ${item.depTime}`
-          : null;
+    ({ item }: { item: TrainBetweenStation }) => {
+      const isDaily = item.runsOn && item.runsOn.every(Boolean);
+      const runsOnActiveDay = activeDateInfo?.dayOfWeek !== undefined && item.runsOn ? item.runsOn[activeDateInfo.dayOfWeek] : true;
+      const runningText = isDaily
+        ? 'Runs Daily'
+        : `Runs ${(item.runsOn || []).map((r, i) => (r ? DAY_LABELS[i] : null)).filter(Boolean).join(', ')}`;
+      const cleanDuration = (item.duration || '').replace(/\s+/g, '');
 
       return (
         <TouchableOpacity
           style={[
-            styles.compactTrainCard,
+            styles.screenshotTrainCard,
             isDarkMode && { backgroundColor: colors.surface, borderColor: colors.border },
-            item.isLocalEmu && styles.emuCardHighlight,
           ]}
           activeOpacity={0.82}
           onPress={() => onTrackTrain(item.number, item.name, fromStation, toStation)}
         >
-          {/* Line 1: [Train Badge] Train Name  > */}
-          <View style={styles.cardHeaderRow}>
-            <View style={[styles.compactNumBadge, item.isLocalEmu && styles.emuNumBadge]}>
-              <Text style={styles.compactNumText}>{item.number}</Text>
+          {/* Top Line: [ TrainNo ]  TypeBadge  DepTime — Duration — ArrTime */}
+          <View style={styles.screenshotTopRow}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <View style={styles.screenshotNumBadge}>
+                <Text style={styles.screenshotNumBadgeText}>{item.number}</Text>
+              </View>
+              {item.type && (
+                <View style={[styles.typeBadge, item.type.includes('Vande') ? styles.typeBadgeVande : item.type.includes('Rajdhani') ? styles.typeBadgeRajdhani : styles.typeBadgeDefault]}>
+                  <Text style={[styles.typeBadgeText, item.type.includes('Vande') ? styles.typeBadgeTextVande : item.type.includes('Rajdhani') ? styles.typeBadgeTextRajdhani : styles.typeBadgeTextDefault]}>
+                    {item.type}
+                  </Text>
+                </View>
+              )}
             </View>
-            <Text style={[styles.compactTrainName, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
+
+            <Text style={[styles.screenshotTimingText, isDarkMode && { color: colors.textPrimary }]}>
+              {item.depTime} — {cleanDuration} — {item.arrTime}
+            </Text>
+          </View>
+
+          {/* Bottom Line: TrainName   Runs Daily / Not Today */}
+          <View style={styles.screenshotBottomRow}>
+            <Text style={[styles.screenshotTrainName, isDarkMode && { color: colors.textSecondary }]} numberOfLines={1}>
               {item.name}
             </Text>
-            <Ionicons name="chevron-forward" size={17} color="#94A3B8" style={{ marginLeft: 6 }} />
-          </View>
 
-          {/* Line 2: Journey Route Visual (DepTime Station ── Train ── ArrTime Station) */}
-          <View style={styles.routeJourneyRow}>
-            <View style={styles.stationTimeCol}>
-              <Text style={[styles.timeMainText, isDarkMode && { color: colors.textPrimary }]}>{item.depTime}</Text>
-              <Text style={[styles.stationCodeSubText, isDarkMode && { color: colors.textSecondary }]}>
-                {item.fromStationCode}
-              </Text>
-            </View>
-
-            <View style={styles.routeVisualCenter}>
-              <Text style={[styles.durationCenterText, isDarkMode && { color: colors.textSecondary }]}>
-                {item.duration}
-              </Text>
-              <View style={styles.routeTrackLine}>
-                <View style={styles.trackEndpointDot} />
-                <View style={[styles.trackDottedLine, { backgroundColor: isDarkMode ? '#334155' : '#E2E8F0' }]} />
-                <MaterialCommunityIcons name="train" size={14} color={Colors.primary} style={styles.trainCenterIcon} />
-                <View style={[styles.trackDottedLine, { backgroundColor: isDarkMode ? '#334155' : '#E2E8F0' }]} />
-                <View style={[styles.trackEndpointDot, { backgroundColor: Colors.danger }]} />
-              </View>
-              <Text style={[styles.stopsCenterText, isDarkMode && { color: colors.textMuted }]}>
-                {item.totalHaults > 0 ? `${item.totalHaults} Stops` : 'Non-stop'}
-              </Text>
-            </View>
-
-            <View style={[styles.stationTimeCol, { alignItems: 'flex-end' }]}>
-              <Text style={[styles.timeMainText, isDarkMode && { color: colors.textPrimary }]}>{item.arrTime}</Text>
-              <Text style={[styles.stationCodeSubText, isDarkMode && { color: colors.textSecondary }]}>
-                {item.toStationCode}
-              </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              {!runsOnActiveDay ? (
+                <Text style={styles.runsNotTodayText}>
+                  ⚠️ No run on {activeDateInfo.dayShort}
+                </Text>
+              ) : (
+                <Text style={styles.screenshotRunsDailyText}>
+                  {runningText}
+                </Text>
+              )}
             </View>
           </View>
 
-          {/* Line 3: Footer (Days letters S M T W T F S & Live Status Tag) */}
-          <View style={styles.cardFooterRow}>
-            <View style={styles.daysLetterRow}>
-              {item.runsOn.map((runs, dIdx) => (
+          {/* Coach Classes & Dynamic Fares Row */}
+          {item.classes && item.classes.length > 0 && (
+            <View style={styles.cardClassesRow}>
+              {item.classes.slice(0, 5).map((cls, idx) => (
                 <View
-                  key={dIdx}
+                  key={idx}
                   style={[
-                    styles.dayLetterPill,
-                    runs && (isDarkMode ? styles.dayPillActiveDark : styles.dayPillActiveLight),
+                    styles.classChip,
+                    isDarkMode && { backgroundColor: '#1E293B', borderColor: colors.border },
+                    cls.statusType === 'available' && styles.classChipAvailable,
                   ]}
                 >
-                  <Text
-                    style={[
-                      styles.dayLetterChar,
-                      runs ? styles.dayActiveText : styles.dayInactiveText,
-                    ]}
-                  >
-                    {runningDaysLetters[dIdx]}
+                  <Text style={[styles.classChipTypeText, isDarkMode && { color: colors.textPrimary }]}>
+                    {cls.type}
+                  </Text>
+                  <Text style={styles.classChipPriceText}>
+                    ₹{cls.price}
                   </Text>
                 </View>
               ))}
             </View>
-
-            {/* Status Pill */}
-            {isNotRunningToday ? (
-              <View style={styles.statusTagRed}>
-                <Text style={styles.statusNotRunningText}>Not running today</Text>
-              </View>
-            ) : departedStatus ? (
-              <View style={styles.statusTagGreen}>
-                <View style={styles.livePulseDotSmall} />
-                <Text style={styles.statusDepartedText} numberOfLines={1}>{departedStatus}</Text>
-              </View>
-            ) : (
-              <View style={styles.statusTagGreen}>
-                <View style={styles.livePulseDotSmall} />
-                <Text style={styles.statusDepartedText}>Runs On Schedule</Text>
-              </View>
-            )}
-          </View>
+          )}
         </TouchableOpacity>
       );
     },
-    [onTrackTrain, isDarkMode, colors]
+    [onTrackTrain, isDarkMode, colors, fromStation, toStation, activeDateInfo]
   );
 
   return (
     <View style={[styles.container, isDarkMode && { backgroundColor: colors.background }]}>
-      {/* ================= 1. COMPACT TOP HEADER & SHARE ================= */}
-      {/* ================= 1. WHERE IS MY TRAIN STYLE TOP HEADER ================= */}
-      <View style={styles.header}>
-        {/* Circular Back Button */}
-        <TouchableOpacity style={styles.headerCircleBtn} onPress={onBack} activeOpacity={0.7}>
-          <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
+      {/* ================= 1. HEADER (MATCHING SCREENSHOT 3) ================= */}
+      <View style={[styles.headerScreenshot3, { backgroundColor: Colors.primary }]}>
+        <TouchableOpacity style={styles.headerBackBtnScreenshot3} onPress={onBack} activeOpacity={0.7}>
+          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
         </TouchableOpacity>
 
-        {/* Center 3-Line Info Column */}
-        <View style={styles.headerCenterCol}>
-          {/* Line 1: NDLS ➔ PRYJ */}
-          <Text style={styles.routeHeaderTitle}>
-            {fromStation.code} ➔ {toStation.code}
-          </Text>
+        <Text style={styles.headerTitleScreenshot3}>Search results</Text>
 
-          {/* Line 2: New Delhi to Prayagraj Junction */}
-          <Text style={styles.routeHeaderSubtitle} numberOfLines={1}>
-            {fromStation.name} to {toStation.name}
-          </Text>
-
-          {/* Line 3: Thu, 19 Sep · 2 Trains (No Year) */}
-          <Text style={styles.routeHeaderDateRow} numberOfLines={1}>
-            {activeDateInfo.formattedDate} · {sortedTrains.length} {sortedTrains.length === 1 ? 'Train' : 'Trains'}
-          </Text>
-        </View>
-
-        {/* Right Action Buttons: Bell Notification & Share */}
-        <View style={styles.headerRightActions}>
+        <View style={styles.headerRightActionsScreenshot3}>
           <TouchableOpacity
-            style={styles.headerCircleBtn}
-            onPress={() => {
-              setNotificationMsg('Notification alarm set for this route!');
-              setCopiedNotification(true);
-              setTimeout(() => setCopiedNotification(false), 2200);
-            }}
+            style={styles.headerIconBtnScreenshot3}
+            onPress={handleShareResults}
             activeOpacity={0.7}
           >
-            <Ionicons name="notifications-outline" size={20} color="#FFFFFF" />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.headerCircleBtn, { marginLeft: 8 }]}
-            onPress={() => {
-              setNotificationMsg('Train list copied to clipboard!');
-              handleShareResults();
-            }}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="share-social" size={19} color="#FFFFFF" />
+            <Ionicons name="share-social-outline" size={20} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
+      </View>
+
+      {/* ================= 2. FILTER PILLS ROW (MATCHING SCREENSHOT 3) ================= */}
+      <View style={[styles.filterPillsRowScreenshot3, isDarkMode && { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+        <TouchableOpacity
+          style={[styles.filterPillScreenshot3, isDarkMode && { backgroundColor: '#1E293B', borderColor: colors.border }]}
+          onPress={() => setShowCalendarModal(true)}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.filterPillTextScreenshot3, isDarkMode && { color: colors.textPrimary }]}>
+            {activeDateInfo.formattedDate || 'All Dates'}
+          </Text>
+          <Ionicons name="caret-down" size={11} color={isDarkMode ? '#94A3B8' : '#475569'} style={{ marginLeft: 4 }} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.filterPillScreenshot3, isDarkMode && { backgroundColor: '#1E293B', borderColor: colors.border }]}
+          onPress={() => setShowClassModal(true)}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.filterPillTextScreenshot3, isDarkMode && { color: colors.textPrimary }]}>
+            {selectedClassFilter === 'All' ? 'All Classes' : `${selectedClassFilter} Class`}
+          </Text>
+          <Ionicons name="caret-down" size={11} color={isDarkMode ? '#94A3B8' : '#475569'} style={{ marginLeft: 4 }} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.filterPillScreenshot3, isDarkMode && { backgroundColor: '#1E293B', borderColor: colors.border }]}
+          onPress={() => setShowSortModal(true)}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.filterPillTextScreenshot3, isDarkMode && { color: colors.textPrimary }]}>
+            Sort: {sortBy === 'fastest' ? 'Fastest' : sortBy === 'late_dep' ? 'Late Dep' : sortBy === 'price_low' ? 'Lowest Fare' : 'Departure'}
+          </Text>
+          <Ionicons name="caret-down" size={11} color={isDarkMode ? '#94A3B8' : '#475569'} style={{ marginLeft: 4 }} />
+        </TouchableOpacity>
+      </View>
+
+      {/* ================= 3. BLUE ROUTE SUBHEADER BAR ================= */}
+      <View style={styles.blueRouteSubheaderBar}>
+        <View style={styles.blueRouteSubheaderRow}>
+          <Text style={styles.blueRouteSubheaderText} numberOfLines={1}>
+            {fromStation.code} - {fromStation.name} → {toStation.code} - {toStation.name}
+          </Text>
+          <TouchableOpacity
+            style={styles.refreshIconBtn}
+            onPress={handleRefresh}
+            disabled={isRefreshing}
+            activeOpacity={0.7}
+          >
+            {isRefreshing ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Ionicons name="refresh" size={16} color="#FFFFFF" />
+            )}
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.blueRouteSubheaderCountText}>
+          {isLoading
+            ? 'Fetching live trains from Indian Railways...'
+            : `${sortedTrains.length} trains available • ${isLiveApiData ? 'Live Railway Scraper Sync' : 'Verified Timetable'}`}
+        </Text>
       </View>
 
       {/* Copied Toast Notification */}
@@ -487,107 +542,70 @@ Found on When is my train`;
         </View>
       )}
 
-      {/* ================= 2. WHERE IS MY TRAIN STYLE FILTER BAR ================= */}
-      <Animated.View style={{ flex: 1, opacity: screenFadeAnim, transform: [{ translateY: screenSlideAnim }] }}>
-      <View style={styles.filterMasterBar}>
-        {/* ROW 1: 2-Line Date Pills + Rightmost Calendar Button */}
-        <View style={styles.dateRowWrapper}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.dateFilterScroll}
-            contentContainerStyle={styles.dateFilterScrollContent}
-          >
-            {dynamicDates.map((item) => {
-              const isSelected =
-                currentDate === item.label ||
-                activeDateInfo.formattedDate === item.formattedDate ||
-                currentDate.includes(item.dateStr);
-              return (
-                <TouchableOpacity
-                  key={item.label}
-                  style={[styles.datePillCard, isSelected && styles.datePillCardActive]}
-                  onPress={() => setCurrentDate(item.label)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.datePillDayText, isSelected && styles.datePillDayTextActive]}>
-                    {item.dayLabel}
-                  </Text>
-                  <Text style={[styles.datePillDateText, isSelected && styles.datePillDateTextActive]}>
-                    {item.dateStr}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-
-          {/* Rightmost Calendar Button */}
-          <TouchableOpacity
-            style={styles.calendarCircleBtn}
-            onPress={() => setShowCalendarModal(true)}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="calendar-outline" size={20} color={Colors.primary} />
-          </TouchableOpacity>
-        </View>
-
-        {/* ROW 2: 3 Action Filter Buttons (Sort, All Classes, Filters) */}
-        <View style={styles.actionButtonsRow}>
-          <TouchableOpacity
-            style={styles.actionFilterChip}
-            onPress={() => setShowSortModal(true)}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="swap-horizontal" size={16} color={Colors.primary} style={{ marginRight: 6 }} />
-            <Text style={styles.actionFilterChipText}>{getSortLabel()}</Text>
-            <Ionicons name="chevron-down" size={13} color={Colors.primary} style={{ marginLeft: 4 }} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.actionFilterChip}
-            onPress={() => setShowClassModal(true)}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="train-outline" size={16} color={Colors.primary} style={{ marginRight: 6 }} />
-            <Text style={styles.actionFilterChipText}>
-              {selectedClassFilter === 'All' ? 'All Classes' : `${selectedClassFilter} Class`}
-            </Text>
-            <Ionicons name="chevron-down" size={13} color={Colors.primary} style={{ marginLeft: 4 }} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.actionFilterChip}
-            onPress={() => setShowSortModal(true)}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="funnel-outline" size={14} color={Colors.primary} style={{ marginRight: 6 }} />
-            <Text style={styles.actionFilterChipText}>Filters</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* ================= 3. COMPACT TRAIN CARDS LIST ================= */}
-      <FlatList
-        data={sortedTrains}
-        keyExtractor={(item) => item.id}
-        renderItem={renderTrainCard}
-        contentContainerStyle={[styles.listContainer, sortedTrains.length === 0 && { flexGrow: 1, justifyContent: 'center' }]}
-        showsVerticalScrollIndicator={false}
-        initialNumToRender={8}
-        maxToRenderPerBatch={10}
-        ListEmptyComponent={
-          <View style={styles.emptyCard}>
-            <MaterialCommunityIcons name="train" size={48} color="#94A3B8" />
-            <Text style={styles.emptyTitle}>No trains found</Text>
-            <Text style={styles.emptySub}>
-              {selectedClassFilter !== 'All'
-                ? `No trains available for class '${selectedClassFilter}'. Try selecting 'All Classes'.`
-                : `No direct trains found between ${fromStation.name} (${fromStation.code}) and ${toStation.name} (${toStation.code}).`}
-            </Text>
+      {/* ================= 4. COMPACT TRAIN CARDS LIST / LOADING SKELETON ================= */}
+      {isLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} style={{ marginBottom: 12 }} />
+          <Text style={[styles.loadingText, isDarkMode && { color: colors.textSecondary }]}>
+            Searching trains between {fromStation.name} & {toStation.name}...
+          </Text>
+          <View style={styles.skeletonContainer}>
+            {[1, 2, 3, 4].map((n) => (
+              <View
+                key={n}
+                style={[
+                  styles.skeletonCard,
+                  isDarkMode && { backgroundColor: colors.surface, borderColor: colors.border },
+                ]}
+              >
+                <View style={styles.skeletonRow}>
+                  <View style={styles.skeletonBoxSmall} />
+                  <View style={styles.skeletonBoxMedium} />
+                </View>
+                <View style={styles.skeletonBoxWide} />
+              </View>
+            ))}
           </View>
-        }
-      />
-      </Animated.View>
+        </View>
+      ) : (
+        <FlatList
+          data={sortedTrains}
+          keyExtractor={(item) => item.id || item.number}
+          renderItem={renderTrainCard}
+          contentContainerStyle={[
+            styles.listContainer,
+            sortedTrains.length === 0 && { flexGrow: 1, justifyContent: 'center' },
+          ]}
+          showsVerticalScrollIndicator={false}
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={7}
+          removeClippedSubviews={Platform.OS !== 'web'}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={handleRefresh}
+              colors={[Colors.primary]}
+              tintColor={Colors.primary}
+            />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyCard}>
+              <MaterialCommunityIcons name="train" size={48} color="#94A3B8" />
+              <Text style={styles.emptyTitle}>No trains found</Text>
+              <Text style={styles.emptySub}>
+                {selectedClassFilter !== 'All'
+                  ? `No trains available for class '${selectedClassFilter}'. Try selecting 'All Classes'.`
+                  : `No direct trains found between ${fromStation.name} (${fromStation.code}) and ${toStation.name} (${toStation.code}).`}
+              </Text>
+              <TouchableOpacity style={styles.emptyRetryBtn} onPress={handleRefresh} activeOpacity={0.8}>
+                <Ionicons name="refresh" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.emptyRetryBtnText}>Retry Search</Text>
+              </TouchableOpacity>
+            </View>
+          }
+        />
+      )}
 
       {/* ================= 4. SORT BY MODAL ================= */}
       <Modal visible={showSortModal} transparent animationType="fade">
@@ -749,6 +767,291 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     backgroundColor: Colors.primary,
   },
+  // Screenshot 3 Style Header
+  headerScreenshot3: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  headerBackBtnScreenshot3: {
+    marginRight: 16,
+  },
+  headerTitleScreenshot3: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    flex: 1,
+    letterSpacing: -0.2,
+  },
+  headerRightActionsScreenshot3: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerIconBtnScreenshot3: {
+    padding: 6,
+  },
+
+  // Screenshot 3 Filter Pills Row
+  filterPillsRowScreenshot3: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    gap: 8,
+  },
+  filterPillScreenshot3: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+  },
+  filterPillTextScreenshot3: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#334155',
+  },
+
+  // Screenshot 3 Blue Route Subheader Bar
+  blueRouteSubheaderBar: {
+    backgroundColor: Colors.primary,
+    paddingVertical: 9,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  blueRouteSubheaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  blueRouteSubheaderText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
+    flex: 1,
+  },
+  blueRouteSubheaderCountText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: 'rgba(255, 255, 255, 0.88)',
+    marginTop: 2,
+    alignSelf: 'flex-start',
+  },
+  refreshIconBtn: {
+    padding: 4,
+    marginLeft: 8,
+  },
+
+  // Screenshot 3 Train Card
+  screenshotTrainCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    elevation: 2,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+  },
+  screenshotTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  screenshotNumBadge: {
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  screenshotNumBadgeText: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: Colors.primary,
+    letterSpacing: 0.2,
+  },
+  typeBadge: {
+    borderRadius: 5,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderWidth: 1,
+  },
+  typeBadgeVande: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#93C5FD',
+  },
+  typeBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  typeBadgeTextVande: {
+    color: '#1D4ED8',
+  },
+  typeBadgeRajdhani: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+  },
+  typeBadgeTextRajdhani: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#DC2626',
+  },
+  typeBadgeDefault: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
+  },
+  typeBadgeTextDefault: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  screenshotTimingText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+    letterSpacing: -0.2,
+  },
+  screenshotBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  screenshotTrainName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#475569',
+    flex: 1,
+    marginRight: 10,
+  },
+  screenshotRunsDailyText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: Colors.primary,
+  },
+  runsNotTodayText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#D97706',
+  },
+
+  // Class & Fare Chips
+  cardClassesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  classChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  classChipAvailable: {
+    borderColor: '#BBF7D0',
+    backgroundColor: '#F0FDF4',
+  },
+  classChipTypeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#334155',
+  },
+  classChipPriceText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+
+  // Loading & Skeletons
+  loadingContainer: {
+    paddingVertical: 30,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#64748B',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  skeletonContainer: {
+    width: '100%',
+    gap: 10,
+  },
+  skeletonCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    height: 84,
+    justifyContent: 'center',
+    gap: 10,
+  },
+  skeletonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  skeletonBoxSmall: {
+    width: 65,
+    height: 16,
+    borderRadius: 4,
+    backgroundColor: '#E2E8F0',
+  },
+  skeletonBoxMedium: {
+    width: 150,
+    height: 16,
+    borderRadius: 4,
+    backgroundColor: '#E2E8F0',
+  },
+  skeletonBoxWide: {
+    width: '75%',
+    height: 14,
+    borderRadius: 4,
+    backgroundColor: '#F1F5F9',
+  },
+  emptyRetryBtn: {
+    marginTop: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 8,
+  },
+  emptyRetryBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12.5,
+    fontWeight: '700',
+  },
+
   headerCircleBtn: {
     width: 38,
     height: 38,
