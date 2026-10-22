@@ -823,7 +823,7 @@ Tracked on When is my train App`;
           </View>
         </View>
 
-        {/* ================= 2. ACTION CHIPS BAR (Today ▾, Alarm, Coach, Map, Share) ================= */}
+        {/* ================= 2. ACTION CHIPS BAR (Today ▾, Track, Coach, Map, Alarm, Save) ================= */}
         <View style={[styles.actionPillsBar, isDarkMode && { backgroundColor: '#0B192C' }]}>
           <TouchableOpacity
             style={styles.todayActionPill}
@@ -835,30 +835,39 @@ Tracked on When is my train App`;
           </TouchableOpacity>
 
           <TouchableOpacity
+            style={[styles.outlinedActionPill, activeTab === 'journey' && { backgroundColor: '#FFFFFF' }]}
+            onPress={() => setActiveTab('journey')}
+            activeOpacity={0.75}
+          >
+            <MaterialCommunityIcons name="timeline-text" size={13} color={activeTab === 'journey' ? Colors.primary : '#FFFFFF'} style={{ marginRight: 3 }} />
+            <Text style={[styles.outlinedActionPillText, activeTab === 'journey' && { color: Colors.primary, fontWeight: '800' }]}>Track</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.outlinedActionPill, activeTab === 'coach_position' && { backgroundColor: '#FFFFFF' }]}
+            onPress={() => setActiveTab(activeTab === 'coach_position' ? 'journey' : 'coach_position')}
+            activeOpacity={0.75}
+          >
+            <MaterialCommunityIcons name="train" size={13} color={activeTab === 'coach_position' ? Colors.primary : '#FFFFFF'} style={{ marginRight: 3 }} />
+            <Text style={[styles.outlinedActionPillText, activeTab === 'coach_position' && { color: Colors.primary, fontWeight: '800' }]}>Coach</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.outlinedActionPill, activeTab === 'live_map' && { backgroundColor: '#FFFFFF' }]}
+            onPress={() => setActiveTab(activeTab === 'live_map' ? 'journey' : 'live_map')}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="map-outline" size={13} color={activeTab === 'live_map' ? Colors.primary : '#FFFFFF'} style={{ marginRight: 3 }} />
+            <Text style={[styles.outlinedActionPillText, activeTab === 'live_map' && { color: Colors.primary, fontWeight: '800' }]}>Map</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
             style={[styles.outlinedActionPill, isAlarmActive && { backgroundColor: '#16A34A', borderColor: '#16A34A' }]}
             onPress={() => setShowAlarmModal(true)}
             activeOpacity={0.75}
           >
-            <Ionicons name={isAlarmActive ? 'alarm' : 'alarm-outline'} size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
+            <Ionicons name={isAlarmActive ? 'alarm' : 'alarm-outline'} size={13} color="#FFFFFF" style={{ marginRight: 3 }} />
             <Text style={styles.outlinedActionPillText}>{isAlarmActive ? 'Alarm ON' : 'Alarm'}</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.outlinedActionPill}
-            onPress={() => setActiveTab('coach_position')}
-            activeOpacity={0.75}
-          >
-            <MaterialCommunityIcons name="train" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
-            <Text style={styles.outlinedActionPillText}>Coach</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.outlinedActionPill}
-            onPress={() => setActiveTab('live_map')}
-            activeOpacity={0.75}
-          >
-            <Ionicons name="map-outline" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
-            <Text style={styles.outlinedActionPillText}>Map</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -866,257 +875,90 @@ Tracked on When is my train App`;
             onPress={toggleSaveTrain}
             activeOpacity={0.75}
           >
-            <Ionicons name={isSavedTrain ? 'bookmark' : 'bookmark-outline'} size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
+            <Ionicons name={isSavedTrain ? 'bookmark' : 'bookmark-outline'} size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
             <Text style={styles.outlinedActionPillText}>{isSavedTrain ? 'Saved' : 'Save'}</Text>
           </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.outlinedActionPill}
-            onPress={handleShare}
-            activeOpacity={0.75}
-          >
-            <Ionicons name="share-social-outline" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
-            <Text style={styles.outlinedActionPillText}>Share</Text>
-          </TouchableOpacity>
         </View>
-      </View>
-
-      {/* ================= 3. SQUEEZED ROUTE & TRACKING COMPACT STRIP (High Density, Saves 80px) ================= */}
-      <View style={[styles.squeezedRouteCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        {/* Top: Compact Route Track Row */}
-        <View style={styles.squeezedRouteRow}>
-          <View style={styles.squeezedStationCol}>
-            <Text style={[styles.squeezedCodeBig, { color: colors.textPrimary }]}>{routeOriginCode}</Text>
-            <Text style={[styles.squeezedTimeSub, { color: colors.textSecondary }]}>{routeOriginDepTime}</Text>
-          </View>
-
-          <View style={styles.squeezedCenterTrackCol}>
-            <View style={styles.squeezedDurationPill}>
-              <Text style={styles.squeezedDurationText}>
-                {routeDuration} • {routeCommercialHalts > 0 ? `${routeCommercialHalts} stops` : 'Non-stop'}
-              </Text>
-            </View>
-            <View style={styles.squeezedTrackLineRow}>
-              <View style={styles.squeezedDotBlue} />
-              <View style={styles.squeezedTrackLine} />
-              <Ionicons name="arrow-forward" size={11} color={Colors.primary} />
-            </View>
-          </View>
-
-          <TouchableOpacity
-            style={[styles.squeezedStationCol, { alignItems: 'flex-end' }]}
-            onPress={() => setShowDestModal(true)}
-            activeOpacity={0.7}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Text style={[styles.squeezedCodeBig, { color: colors.textPrimary }]}>{routeDestCode}</Text>
-              <Ionicons name="chevron-down" size={13} color={Colors.primary} style={{ marginLeft: 2 }} />
-            </View>
-            <Text style={[styles.squeezedTimeSub, { color: colors.textSecondary }]}>{routeDestArrTime}</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Micro-row: Integrated Squeezed Tracking Engine & Offline Tag */}
-        <View style={[styles.squeezedTrackingMicroRow, { borderTopColor: isDarkMode ? '#1E293B' : '#F1F5F9' }]}>
-          <View style={styles.squeezedTrackingLeft}>
-            <Text style={[styles.squeezedTrackingLabel, { color: colors.textSecondary }]}>Via:</Text>
-            <TouchableOpacity
-              style={[styles.squeezedSourcePill, trackingSource === 'cell' && styles.squeezedSourcePillActive]}
-              onPress={() => setTrackingSource('cell')}
-              activeOpacity={0.8}
-            >
-              <MaterialCommunityIcons
-                name="transmission-tower"
-                size={11}
-                color={trackingSource === 'cell' ? '#FFFFFF' : Colors.primary}
-                style={{ marginRight: 3 }}
-              />
-              <Text style={[styles.squeezedSourcePillText, trackingSource === 'cell' && styles.squeezedSourcePillTextActive]}>
-                Cell tower
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.squeezedSourcePill, trackingSource === 'gps' && styles.squeezedSourcePillActive]}
-              onPress={() => setTrackingSource('gps')}
-              activeOpacity={0.8}
-            >
-              <MaterialCommunityIcons
-                name="crosshairs-gps"
-                size={11}
-                color={trackingSource === 'gps' ? '#FFFFFF' : Colors.primary}
-                style={{ marginRight: 3 }}
-              />
-              <Text style={[styles.squeezedSourcePillText, trackingSource === 'gps' && styles.squeezedSourcePillTextActive]}>
-                GPS
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={[styles.squeezedOfflineTag, { backgroundColor: isDarkMode ? '#064E3B' : '#DCFCE7' }]}>
-            <View style={styles.squeezedGreenDot} />
-            <Text style={[styles.squeezedOfflineText, { color: isDarkMode ? '#34D399' : '#15803D' }]}>
-              Works without internet
-            </Text>
-          </View>
-        </View>
-      </View>
-
-      {/* ================= 4. 4 SUB-TABS NAVIGATION BAR ================= */}
-      <View style={[styles.subTabsBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        {[
-          { key: 'journey', label: 'Journey' },
-          { key: 'live_map', label: 'Live Map' },
-          { key: 'coach_position', label: 'Coach Position' },
-          { key: 'info', label: 'Info' },
-        ].map((tab) => {
-          const isActive = activeTab === tab.key;
-          return (
-            <TouchableOpacity
-              key={tab.key}
-              style={styles.subTabItem}
-              onPress={() => setActiveTab(tab.key as any)}
-              activeOpacity={0.75}
-            >
-              <Text style={[styles.subTabText, isActive && styles.subTabTextActive]}>
-                {tab.label}
-              </Text>
-              {isActive && <View style={styles.subTabActiveLine} />}
-            </TouchableOpacity>
-          );
-        })}
       </View>
 
       {/* ================= TAB 1: JOURNEY (TIMELINE VIEW) ================= */}
       {activeTab === 'journey' && (
         <View style={{ flex: 1, backgroundColor: colors.background }}>
-          {/* Status Banner (Exact from Screenshot 2) */}
-          <View style={[styles.screenshot2StatusBanner, isDarkMode && { backgroundColor: '#1E293B', borderBottomColor: '#334155' }]}>
-            <View style={styles.screenshot2StatusLeft}>
-              <Text style={[styles.screenshot2StatusTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-                {liveData.currentStationName ? `Arrived ${liveData.currentStationName}` : 'Arrived Faridabad'}
-              </Text>
-              <Text style={[styles.screenshot2StatusSub, { color: colors.textSecondary }]} numberOfLines={1}>
-                {liveData.currentPlatform || 'Platform 3'} • Scheduled: {liveData.stationDetails[liveData.activeStopIndex]?.scheduledArr || '06:38 PM'}
-              </Text>
+          {/* Squeezed Master Status Strip (High Density, Saves ~180px for Timeline) */}
+          <View style={[styles.compactMasterStrip, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+            {/* Top row: Status, Platform, Speed & Delay Badge */}
+            <View style={styles.compactStatusRow}>
+              <View style={styles.compactStatusLeft}>
+                <View style={[styles.compactPulseDot, { backgroundColor: liveData.isDelayed ? '#EF4444' : '#10B981' }]} />
+                <Text style={[styles.compactStatusStation, { color: colors.textPrimary }]} numberOfLines={1}>
+                  {liveData.currentStationName ? `Arrived ${liveData.currentStationName}` : 'En Route'}
+                </Text>
+                <Text style={[styles.compactPlatformText, { color: colors.textSecondary }]}>
+                  • {liveData.currentPlatform || 'PF 1'}
+                </Text>
+                {liveData.currentSpeed > 0 && (
+                  <Text style={[styles.compactSpeedText, { color: isDarkMode ? '#34D399' : '#16A34A' }]}>
+                    • {liveData.currentSpeed} km/h
+                  </Text>
+                )}
+              </View>
+
+              <View style={[styles.compactDelayBadge, { backgroundColor: liveData.isDelayed ? '#FEE2E2' : '#DCFCE7' }]}>
+                <Text style={[styles.compactDelayBadgeText, { color: liveData.isDelayed ? '#DC2626' : '#15803D' }]}>
+                  {liveData.isDelayed ? `+${liveData.delayMinutes}m Late` : 'On Time'}
+                </Text>
+              </View>
             </View>
-            <View style={styles.screenshot2StatusRight}>
-              <Text style={[styles.screenshot2DelayNumber, { color: liveData.isDelayed ? '#DC2626' : '#16A34A' }]}>
-                {liveData.isDelayed ? `+${liveData.delayMinutes || 52}m` : 'On Time'}
-              </Text>
-              <Text style={[styles.screenshot2DelaySub, { color: liveData.isDelayed ? '#DC2626' : '#16A34A' }]}>
-                {liveData.isDelayed ? 'Late' : 'Right Time'}
-              </Text>
+
+            {/* Bottom micro-row: Route endpoints & fast Sync */}
+            <View style={styles.compactRouteSubRow}>
+              <TouchableOpacity
+                style={styles.compactRouteLeft}
+                onPress={() => setShowDestModal(true)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.compactRouteText, { color: colors.textPrimary }]} numberOfLines={1}>
+                  <Text style={{ fontWeight: '800' }}>{routeOriginCode}</Text> {routeOriginDepTime} ➔ <Text style={{ fontWeight: '800' }}>{routeDestCode}</Text> {routeDestArrTime} ({routeDuration} • {routeCommercialHalts} stops)
+                </Text>
+              </TouchableOpacity>
+
+              <View style={styles.compactSyncGroup}>
+                <TouchableOpacity
+                  style={styles.compactSourceToggle}
+                  onPress={() => setTrackingSource(trackingSource === 'gps' ? 'cell' : 'gps')}
+                  activeOpacity={0.7}
+                >
+                  <MaterialCommunityIcons
+                    name={trackingSource === 'gps' ? 'crosshairs-gps' : 'transmission-tower'}
+                    size={11}
+                    color={Colors.primary}
+                    style={{ marginRight: 2 }}
+                  />
+                  <Text style={[styles.compactSourceText, { color: Colors.primary }]}>
+                    {trackingSource === 'gps' ? 'GPS' : 'Cell'}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.compactSyncBtn}
+                  onPress={() => fetchLiveTracking(true)}
+                  activeOpacity={0.7}
+                  disabled={isLoadingApi}
+                >
+                  <Animated.View style={{ transform: [{ rotate: spin }] }}>
+                    <Ionicons name="sync" size={11} color="#15803D" />
+                  </Animated.View>
+                  <Text style={styles.compactSyncText}>Sync</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
 
-          {/* Solid Black Column Header Bar (Exact from Screenshot 2) */}
+          {/* Solid Black Column Header Bar (Arrival | Date | Departure) */}
           <View style={styles.screenshot2BlackHeaderBar}>
             <Text style={styles.screenshot2HeaderColText}>Arrival</Text>
             <Text style={styles.screenshot2HeaderDayText}>{formattedDayText}</Text>
             <Text style={styles.screenshot2HeaderColText}>Departure</Text>
-          </View>
-
-          {/* ================= REAL-TIME GPS / TELEMETRY & SPEEDOMETER DECK (find.mytrain.where signature feature) ================= */}
-          <View style={[styles.telemetryDeckContainer, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            {/* Top Micro-Bar: RailRadar GPS Real-time + Sync Button */}
-            <View style={[styles.telemetryStatusSubBar, { backgroundColor: isDarkMode ? '#064E3B' : '#F0FDF4', borderBottomColor: isDarkMode ? '#065F46' : '#DCFCE7' }]}>
-              <View style={styles.telemetryLiveIndicatorRow}>
-                <View style={styles.telemetryBlinkingDot} />
-                <Text style={[styles.telemetryLiveStatusText, { color: isDarkMode ? '#34D399' : '#15803D' }]}>
-                  {trackingSource === 'gps' ? 'RailRadar GPS Real-time' : 'Cell Tower Triangulation'} • Updated {lastUpdatedSec}s ago
-                </Text>
-              </View>
-
-              <TouchableOpacity
-                style={styles.telemetrySyncButton}
-                onPress={() => fetchLiveTracking(true)}
-                activeOpacity={0.7}
-                disabled={isLoadingApi}
-              >
-                <Animated.View style={{ transform: [{ rotate: spin }] }}>
-                  <Ionicons name="sync" size={13} color={isDarkMode ? '#34D399' : '#15803D'} />
-                </Animated.View>
-                <Text style={[styles.telemetrySyncText, { color: isDarkMode ? '#34D399' : '#15803D' }]}>Sync</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Collapsible Speedometer Stats Row */}
-            {isTelemetryDeckExpanded && (
-              <>
-                <View style={styles.speedometerMetricsRow}>
-                  {/* Metric 1: Speed */}
-                  <View style={[styles.speedometerMetricBox, { borderRightColor: colors.border }]}>
-                    <View style={[styles.speedometerIconCircle, { backgroundColor: isDarkMode ? '#064E3B' : '#DCFCE7' }]}>
-                      <MaterialCommunityIcons name="speedometer" size={18} color={isDarkMode ? '#34D399' : '#16A34A'} />
-                    </View>
-                    <View style={styles.speedometerTextCol}>
-                      <Text style={[styles.speedometerLabelText, { color: colors.textSecondary }]}>Speed</Text>
-                      <Text style={[styles.speedometerValueText, { color: isDarkMode ? '#34D399' : '#16A34A' }]}>
-                        {liveData.currentSpeed || (activeTrain.number === '22436' ? 92 : 88)} km/h
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Metric 2: Distance Left */}
-                  <View style={[styles.speedometerMetricBox, { borderRightColor: colors.border }]}>
-                    <View style={[styles.speedometerIconCircle, { backgroundColor: isDarkMode ? '#1E3A5F' : '#E0F2FE' }]}>
-                      <Ionicons name="location" size={16} color="#0284C7" />
-                    </View>
-                    <View style={styles.speedometerTextCol}>
-                      <Text style={[styles.speedometerLabelText, { color: colors.textSecondary }]}>Distance Left</Text>
-                      <Text style={[styles.speedometerValueText, { color: colors.textPrimary }]}>
-                        {liveData.distanceRemainingKm ?? 635} km
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Metric 3: Expected Arrival */}
-                  <View style={styles.speedometerMetricBox}>
-                    <View style={[styles.speedometerIconCircle, { backgroundColor: isDarkMode ? '#312E81' : '#EEF2FF' }]}>
-                      <Ionicons name="alarm" size={16} color="#4F46E5" />
-                    </View>
-                    <View style={styles.speedometerTextCol}>
-                      <Text style={[styles.speedometerLabelText, { color: colors.textSecondary }]}>Exp. Arrival</Text>
-                      <Text style={[styles.speedometerValueText, { color: colors.textPrimary }]}>
-                        {liveData.expectedArrivalAtDestination || routeDestArrTime || '07:00 AM'}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-
-                {/* Telemetry Location & Next Stop Strip */}
-                <View style={[styles.telemetryLocationStrip, { backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC', borderTopColor: colors.border }]}>
-                  <View style={styles.telemetryLocationRow}>
-                    <Text style={styles.telemetryLocationEmoji}>📍</Text>
-                    <Text style={[styles.telemetryLocationLabel, { color: colors.textSecondary }]}>Current:</Text>
-                    <Text style={[styles.telemetryLocationValue, { color: colors.textPrimary }]} numberOfLines={1}>
-                      {liveData.currentStationName} ({liveData.currentPlatform || 'PF 4'})
-                    </Text>
-                  </View>
-                  <View style={styles.telemetryLocationRow}>
-                    <Text style={styles.telemetryLocationEmoji}>➡️</Text>
-                    <Text style={[styles.telemetryLocationLabel, { color: colors.textSecondary }]}>Next Stop:</Text>
-                    <Text style={[styles.telemetryLocationValue, { color: colors.textPrimary }]} numberOfLines={1}>
-                      {liveData.nextStationName}
-                    </Text>
-                  </View>
-                </View>
-              </>
-            )}
-
-            {/* Mini Toggle Handle to Collapse/Expand */}
-            <TouchableOpacity
-              style={styles.telemetryCollapseHandle}
-              onPress={() => setIsTelemetryDeckExpanded(!isTelemetryDeckExpanded)}
-              activeOpacity={0.7}
-            >
-              <Ionicons
-                name={isTelemetryDeckExpanded ? 'chevron-up' : 'chevron-down'}
-                size={14}
-                color={colors.textSecondary}
-              />
-            </TouchableOpacity>
           </View>
 
           <ScrollView
@@ -1361,103 +1203,7 @@ Tracked on When is my train App`;
                 );
               })}
 
-              {/* ================= 5. DESTINATION TERMINUS & STATION AMENITIES (Fills bottom void) ================= */}
-              <View style={[styles.terminalSummaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                {/* Header */}
-                <View style={styles.terminalHeaderRow}>
-                  <View style={styles.terminalFlagCircle}>
-                    <MaterialCommunityIcons name="flag-checkered" size={17} color="#FFFFFF" />
-                  </View>
-                  <View style={{ flex: 1, marginLeft: 10 }}>
-                    <Text style={[styles.terminalStationTitle, { color: colors.textPrimary }]}>
-                      Terminating at {routeDestStation.name || 'Agra Cantt'} ({routeDestCode})
-                    </Text>
-                    <Text style={[styles.terminalRunSub, { color: colors.textSecondary }]}>
-                      Total Run: {liveData.totalDistanceKm || 195} km • {routeDuration} • {routeCommercialHalts} Halts
-                    </Text>
-                  </View>
-                  <View style={[styles.terminalPlatformBadge, { backgroundColor: isDarkMode ? '#1E3A5F' : '#E0F2FE' }]}>
-                    <Text style={[styles.terminalPlatformText, { color: Colors.primary }]}>PF {routeDestStation.platform ? routeDestStation.platform.replace(/[^0-9]/g, '') || '2' : '2'}</Text>
-                  </View>
-                </View>
 
-                {/* Key Station Amenities Grid */}
-                <View style={[styles.terminalDivider, { backgroundColor: colors.border }]} />
-                <View style={styles.terminalAmenitiesHeader}>
-                  <Ionicons name="business-outline" size={13} color={Colors.primary} style={{ marginRight: 5 }} />
-                  <Text style={[styles.terminalSectionTitle, { color: colors.textSecondary }]}>
-                    STATION AMENITIES & PASSENGER FACILITIES
-                  </Text>
-                </View>
-
-                <View style={styles.terminalAmenitiesGrid}>
-                  <View style={[styles.amenityCard, { backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC', borderColor: colors.border }]}>
-                    <MaterialCommunityIcons name="bag-checked" size={15} color="#0284C7" />
-                    <View style={{ marginLeft: 7, flex: 1 }}>
-                      <Text style={[styles.amenityTitle, { color: colors.textPrimary }]}>Cloak Room</Text>
-                      <Text style={[styles.amenityDesc, { color: colors.textSecondary }]}>Platform 1 • 24 Hrs</Text>
-                    </View>
-                  </View>
-
-                  <View style={[styles.amenityCard, { backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC', borderColor: colors.border }]}>
-                    <MaterialCommunityIcons name="taxi" size={15} color="#16A34A" />
-                    <View style={{ marginLeft: 7, flex: 1 }}>
-                      <Text style={[styles.amenityTitle, { color: colors.textPrimary }]}>Prepaid Cab & Auto</Text>
-                      <Text style={[styles.amenityDesc, { color: colors.textSecondary }]}>Exit Gate 1 & 2</Text>
-                    </View>
-                  </View>
-
-                  <View style={[styles.amenityCard, { backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC', borderColor: colors.border }]}>
-                    <MaterialCommunityIcons name="bed" size={15} color="#8B5CF6" />
-                    <View style={{ marginLeft: 7, flex: 1 }}>
-                      <Text style={[styles.amenityTitle, { color: colors.textPrimary }]}>IRCTC Retiring Room</Text>
-                      <Text style={[styles.amenityDesc, { color: colors.textSecondary }]}>1st Floor • PF 1</Text>
-                    </View>
-                  </View>
-
-                  <View style={[styles.amenityCard, { backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC', borderColor: colors.border }]}>
-                    <MaterialCommunityIcons name="food" size={15} color="#EA580C" />
-                    <View style={{ marginLeft: 7, flex: 1 }}>
-                      <Text style={[styles.amenityTitle, { color: colors.textPrimary }]}>Food Plaza</Text>
-                      <Text style={[styles.amenityDesc, { color: colors.textSecondary }]}>Comesum & Jan Aahar</Text>
-                    </View>
-                  </View>
-
-                  <View style={[styles.amenityCard, { backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC', borderColor: colors.border }]}>
-                    <MaterialCommunityIcons name="wheelchair-accessibility" size={15} color="#0284C7" />
-                    <View style={{ marginLeft: 7, flex: 1 }}>
-                      <Text style={[styles.amenityTitle, { color: colors.textPrimary }]}>Lifts & Escalators</Text>
-                      <Text style={[styles.amenityDesc, { color: colors.textSecondary }]}>All Platforms</Text>
-                    </View>
-                  </View>
-
-                  <View style={[styles.amenityCard, { backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC', borderColor: colors.border }]}>
-                    <MaterialCommunityIcons name="shield-check" size={15} color="#DC2626" />
-                    <View style={{ marginLeft: 7, flex: 1 }}>
-                      <Text style={[styles.amenityTitle, { color: colors.textPrimary }]}>RPF Post (139)</Text>
-                      <Text style={[styles.amenityDesc, { color: colors.textSecondary }]}>Platform 1</Text>
-                    </View>
-                  </View>
-                </View>
-
-                {/* Train Technical Specs Strip */}
-                <View style={[styles.terminalSpecsStrip, { backgroundColor: isDarkMode ? '#0F172A' : '#F0F9FF', borderColor: isDarkMode ? '#1E293B' : '#BAE6FD' }]}>
-                  <View style={styles.terminalSpecCol}>
-                    <Text style={styles.terminalSpecLabel}>Rake Type</Text>
-                    <Text style={[styles.terminalSpecVal, { color: colors.textPrimary }]}>LHB Superfast</Text>
-                  </View>
-                  <View style={styles.terminalSpecDivider} />
-                  <View style={styles.terminalSpecCol}>
-                    <Text style={styles.terminalSpecLabel}>Locomotive</Text>
-                    <Text style={[styles.terminalSpecVal, { color: colors.textPrimary }]}>WAP-7 (Electric)</Text>
-                  </View>
-                  <View style={styles.terminalSpecDivider} />
-                  <View style={styles.terminalSpecCol}>
-                    <Text style={styles.terminalSpecLabel}>Punctuality</Text>
-                    <Text style={[styles.terminalSpecVal, { color: '#16A34A' }]}>94% On Time</Text>
-                  </View>
-                </View>
-              </View>
             </View>
           </ScrollView>
 
@@ -4577,6 +4323,97 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
+  },
+  compactMasterStrip: {
+    paddingHorizontal: 12,
+    paddingTop: 7,
+    paddingBottom: 7,
+    borderBottomWidth: 1,
+  },
+  compactStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  compactStatusLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 8,
+  },
+  compactPulseDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 6,
+  },
+  compactStatusStation: {
+    fontSize: 13,
+    fontWeight: '800',
+    maxWidth: '55%',
+  },
+  compactPlatformText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    marginLeft: 3,
+  },
+  compactSpeedText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    marginLeft: 3,
+  },
+  compactDelayBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  compactDelayBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  compactRouteSubRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  compactRouteLeft: {
+    flex: 1,
+    marginRight: 8,
+  },
+  compactRouteText: {
+    fontSize: 11,
+  },
+  compactSyncGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  compactSourceToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginRight: 6,
+  },
+  compactSourceText: {
+    fontSize: 9.5,
+    fontWeight: '700',
+  },
+  compactSyncBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  compactSyncText: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: '#15803D',
+    marginLeft: 3,
   },
 });
 
