@@ -348,43 +348,8 @@ class LiveTrainApiService {
       } catch {}
     }
 
-    // 2. Direct Mobile RailRadar Client Scraper (Real Live GPS & Station Stops Over Phone Internet)
-    if (cleanTrainNo.length >= 4) {
-      try {
-        const liveData = await this.fetchDirectRailRadarLive(cleanTrainNo);
-        if (liveData && liveData.stations && liveData.stations.length > 0) {
-          TrainCache.set(cacheKey, liveData, 60 * 1000, 'api');
-          SafeStorage.setItem(`@cache_status_${cleanTrainNo}`, JSON.stringify({ data: liveData, savedAt: Date.now() })).catch(() => {});
-          this.lastKnownLiveStatus.set(cleanTrainNo, liveData);
-          return liveData;
-        }
-      } catch (directErr) {
-        // Direct RailRadar fetch failed (e.g. offline), fall back to proxy or simulated engine
-      }
-    }
-
-    // 2.1 RailRadar Local Proxy Bridge (Tareeqa 2 - For Local Dev Environment)
-    try {
-      const localProxyUrl = `${getLocalProxyBaseUrl()}/api/live-train/${cleanTrainNo}`;
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000);
-      const proxyRes = await fetch(localProxyUrl, { method: 'GET', signal: controller.signal });
-      clearTimeout(timeoutId);
-      if (proxyRes.ok) {
-        const proxyJson = await proxyRes.json();
-        if (proxyJson && proxyJson.success && Array.isArray(proxyJson.stations) && proxyJson.stations.length > 0) {
-          this.registerTrainFromRailRadar(cleanTrainNo, proxyJson);
-          TrainCache.set(cacheKey, proxyJson, 60 * 1000, 'api');
-          SafeStorage.setItem(`@cache_status_${cleanTrainNo}`, JSON.stringify({ data: proxyJson, savedAt: Date.now() })).catch(() => {});
-          this.lastKnownLiveStatus.set(cleanTrainNo, proxyJson);
-          return proxyJson;
-        }
-      }
-    } catch {
-      // Local proxy not active, fall through to direct API or simulated engine
-    }
-
-    // 2.1 RailRadar.in Real-Time Live Status (Direct Provider if Key Present)
+    // 2. PRIORITY 1: OFFICIAL PAID API (RailRadar / RapidAPI)
+    // Activated automatically when you purchase an API key and enter it in Settings or .env!
     if (this.railRadarApiKey && cleanTrainNo.length >= 4) {
       try {
         const url = `https://api.railradar.in/v1/trains/${cleanTrainNo}/live`;
@@ -407,8 +372,45 @@ class LiveTrainApiService {
           }
         }
       } catch (err) {
-        console.warn('RailRadar API live query error:', err);
+        console.warn('Paid RailRadar API error, falling back to Internet Scraper:', err);
       }
+    }
+
+    // 3. PRIORITY 2: DIRECT INTERNET SCRAPER (Direct Mobile RailRadar / RailYatri over Phone Network)
+    // Works right now without buying any API, and acts as an automatic backup if your paid quota ends!
+    if (cleanTrainNo.length >= 4) {
+      try {
+        const liveData = await this.fetchDirectRailRadarLive(cleanTrainNo);
+        if (liveData && liveData.stations && liveData.stations.length > 0) {
+          TrainCache.set(cacheKey, liveData, 60 * 1000, 'api');
+          SafeStorage.setItem(`@cache_status_${cleanTrainNo}`, JSON.stringify({ data: liveData, savedAt: Date.now() })).catch(() => {});
+          this.lastKnownLiveStatus.set(cleanTrainNo, liveData);
+          return liveData;
+        }
+      } catch (directErr) {
+        // Direct fetch failed (e.g. browser CORS), fall back to proxy or simulated engine
+      }
+    }
+
+    // 3.1 RailRadar Local Proxy Bridge (For Local PC Chrome Environment)
+    try {
+      const localProxyUrl = `${getLocalProxyBaseUrl()}/api/live-train/${cleanTrainNo}`;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2000);
+      const proxyRes = await fetch(localProxyUrl, { method: 'GET', signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (proxyRes.ok) {
+        const proxyJson = await proxyRes.json();
+        if (proxyJson && proxyJson.success && Array.isArray(proxyJson.stations) && proxyJson.stations.length > 0) {
+          this.registerTrainFromRailRadar(cleanTrainNo, proxyJson);
+          TrainCache.set(cacheKey, proxyJson, 60 * 1000, 'api');
+          SafeStorage.setItem(`@cache_status_${cleanTrainNo}`, JSON.stringify({ data: proxyJson, savedAt: Date.now() })).catch(() => {});
+          this.lastKnownLiveStatus.set(cleanTrainNo, proxyJson);
+          return proxyJson;
+        }
+      }
+    } catch {
+      // Local proxy not active, fall through
     }
 
     // 2.1 Return last known verified live GPS state if available before falling back to clock simulation
