@@ -709,11 +709,6 @@ export const LiveTrainTrackerScreen: React.FC<LiveTrainTrackerScreenProps> = ({
     return calculateDurationText(routeOriginDepTime, routeDestArrTime);
   }, [activeTrain.number, activeTrain.duration, customDestCode, routeOriginDepTime, routeDestArrTime]);
 
-  // Keep active station state synced
-  useEffect(() => {
-    // Current train stop index is tracked via liveData.activeStopIndex
-  }, [liveData.activeStopIndex]);
-
   const handleScrollToCurrent = useCallback(() => {
     if (scrollRef.current && liveData.activeStopIndex >= 0) {
       if (liveData.activeStopIndex > 2) {
@@ -726,6 +721,16 @@ export const LiveTrainTrackerScreen: React.FC<LiveTrainTrackerScreenProps> = ({
       }
     }
   }, [liveData.activeStopIndex]);
+
+  // Auto-scroll to current train position when data loads or updates
+  useEffect(() => {
+    if (liveData.activeStopIndex > 0) {
+      const timer = setTimeout(() => {
+        handleScrollToCurrent();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [liveData.activeStopIndex, handleScrollToCurrent]);
 
   const handleManualRefresh = useCallback(async () => {
     setIsRefreshing(true);
@@ -970,7 +975,10 @@ Tracked on When is my train App`;
             <View style={styles.timelineContentWrapper}>
               {timelineItems.map((item, tIdx) => {
                 if (item.type === 'passingGroup') {
-                  const isExpanded = !!expandedPassingGroups[item.key];
+                  const hasCurrentInGroup = item.stations.some((s) => s.originalIndex === liveData.activeStopIndex);
+                  const isExpanded = expandedPassingGroups[item.key] !== undefined
+                    ? !!expandedPassingGroups[item.key]
+                    : hasCurrentInGroup;
                   return (
                     <View key={item.key} style={styles.passingGroupContainer}>
                       <TouchableOpacity
@@ -982,15 +990,31 @@ Tracked on When is my train App`;
                           <View style={[styles.trackLinePassing, { backgroundColor: isDarkMode ? '#475569' : '#CBD5E1' }]} />
                         </View>
                         <View style={styles.intermediateContentCol}>
-                          <View style={[styles.intermediateBadge, { backgroundColor: isDarkMode ? '#334155' : '#E0F2FE' }]}>
-                            <Ionicons
-                              name={isExpanded ? 'chevron-up' : 'chevron-down'}
-                              size={12}
-                              color={Colors.primary}
-                              style={{ marginRight: 4 }}
-                            />
+                          <View style={[
+                            styles.intermediateBadge,
+                            hasCurrentInGroup && !isExpanded
+                              ? { backgroundColor: isDarkMode ? '#1E3A5F' : '#E0F2FE', borderColor: Colors.primary, borderWidth: 1 }
+                              : { backgroundColor: isDarkMode ? '#334155' : '#E0F2FE' }
+                          ]}>
+                            {hasCurrentInGroup && !isExpanded ? (
+                              <MaterialCommunityIcons
+                                name="train"
+                                size={13}
+                                color={Colors.primary}
+                                style={{ marginRight: 4 }}
+                              />
+                            ) : (
+                              <Ionicons
+                                name={isExpanded ? 'chevron-up' : 'chevron-down'}
+                                size={12}
+                                color={Colors.primary}
+                                style={{ marginRight: 4 }}
+                              />
+                            )}
                             <Text style={styles.intermediateText}>
-                              {isExpanded
+                              {hasCurrentInGroup && !isExpanded
+                                ? `Train at ${liveData.currentStationName || 'Passing Station'} (+${item.stations.length} stops)`
+                                : isExpanded
                                 ? `Hide ${item.stations.length} intermediate stations`
                                 : `+ ${item.stations.length} intermediate stations`}
                             </Text>
@@ -1018,14 +1042,27 @@ Tracked on When is my train App`;
                                 </Text>
                               </View>
                               <View style={styles.passingTrackCol}>
-                                <View style={[styles.passingTrackLineTop, pPassed ? styles.lineGreen : styles.lineGrey]} />
-                                <View
-                                  style={[
-                                    styles.passingTrackDot,
-                                    pPassed && styles.passingTrackDotGreen,
-                                    pCurrent && styles.passingTrackDotCurrent,
-                                  ]}
-                                />
+                                <View style={[styles.passingTrackLineTop, (pPassed || pCurrent) ? styles.lineGreen : styles.lineGrey]} />
+                                {pCurrent ? (
+                                  <View style={styles.currentStationBadgeWrapper}>
+                                    <Animated.View
+                                      style={[
+                                        styles.currentPulseRing,
+                                        { transform: [{ scale: pulseAnim }] },
+                                      ]}
+                                    />
+                                    <View style={[styles.currentTrainBadge, { width: 20, height: 20, borderRadius: 10 }]}>
+                                      <MaterialCommunityIcons name="train" size={12} color="#FFFFFF" />
+                                    </View>
+                                  </View>
+                                ) : (
+                                  <View
+                                    style={[
+                                      styles.passingTrackDot,
+                                      pPassed && styles.passingTrackDotGreen,
+                                    ]}
+                                  />
+                                )}
                                 <View style={[styles.passingTrackLineBottom, pPassed ? styles.lineGreen : styles.lineGrey]} />
                               </View>
                               <View style={styles.passingInfoCol}>
@@ -1124,14 +1161,12 @@ Tracked on When is my train App`;
                             <MaterialCommunityIcons name="train" size={14} color="#FFFFFF" />
                           </View>
                         </View>
-                      ) : isFirst ? (
-                        <View style={styles.originTrainBadge}>
-                          <MaterialCommunityIcons name="train" size={13} color="#FFFFFF" />
-                        </View>
                       ) : isPassed ? (
                         <View style={styles.passedCheckCircle}>
                           <Ionicons name="checkmark" size={12} color="#FFFFFF" />
                         </View>
+                      ) : isFirst ? (
+                        <View style={styles.originStartDot} />
                       ) : isLast ? (
                         <View style={styles.destRedDot} />
                       ) : (
@@ -2702,6 +2737,15 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 4,
+  },
+  originStartDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#16A34A',
+    borderWidth: 2.5,
+    borderColor: '#FFFFFF',
     zIndex: 4,
   },
   passedCheckCircle: {
