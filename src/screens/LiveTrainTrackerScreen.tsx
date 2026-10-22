@@ -337,7 +337,9 @@ export const LiveTrainTrackerScreen: React.FC<LiveTrainTrackerScreenProps> = ({
   onBack,
 }) => {
   const { isDarkMode, colors, t } = usePreferences();
-  const [selectedDateMode, setSelectedDateMode] = useState<'today' | 'yesterday' | 'tomorrow'>('today');
+  const [selectedDateMode, setSelectedDateMode] = useState<'today' | 'yesterday' | 'tomorrow' | 'custom'>('today');
+  const [customPickedDate, setCustomPickedDate] = useState<{ dayLabel: string; dateStr: string; fullDate: Date; key?: string } | null>(null);
+  const [showCalendarView, setShowCalendarView] = useState(false);
   const [showDateModal, setShowDateModal] = useState(false);
   const [showDestModal, setShowDestModal] = useState(false);
   const [showAlarmModal, setShowAlarmModal] = useState(false);
@@ -778,22 +780,50 @@ Tracked on When is my train App`;
     } catch {}
   }, [activeTrain, liveData]);
 
-  // Formatted date string matching screenshot: Day 1 - Oct 17, Sat
+  // 35-day calendar date list for "Pick Any Date" selector
+  const availableCalendarDays = useMemo(() => {
+    const list: { dayLabel: string; dateNum: number; monthName: string; fullDate: Date; key: string }[] = [];
+    const base = new Date();
+    const daysShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    for (let offset = -2; offset < 35; offset++) {
+      const d = new Date(base);
+      d.setDate(base.getDate() + offset);
+      list.push({
+        dayLabel: daysShort[d.getDay()],
+        dateNum: d.getDate(),
+        monthName: months[d.getMonth()],
+        fullDate: d,
+        key: `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`,
+      });
+    }
+    return list;
+  }, []);
+
+  // Formatted date string matching screenshot: Day 1 - Oct 22, Thu
   const formattedDayText = useMemo(() => {
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    if (selectedDateMode === 'custom' && customPickedDate) {
+      const d = customPickedDate.fullDate;
+      return `Day 1 - ${months[d.getMonth()]} ${d.getDate()}, ${days[d.getDay()]}`;
+    }
+
     const now = new Date();
     if (selectedDateMode === 'yesterday') now.setDate(now.getDate() - 1);
     if (selectedDateMode === 'tomorrow') now.setDate(now.getDate() + 1);
 
-    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return `Day 1 - ${months[now.getMonth()]} ${now.getDate()}, ${days[now.getDay()]}`;
-  }, [selectedDateMode]);
+  }, [selectedDateMode, customPickedDate]);
 
   const datePillLabel = useMemo(() => {
     if (selectedDateMode === 'yesterday') return 'Yesterday';
     if (selectedDateMode === 'tomorrow') return 'Tomorrow';
+    if (selectedDateMode === 'custom' && customPickedDate) return customPickedDate.dateStr;
     return 'Today';
-  }, [selectedDateMode]);
+  }, [selectedDateMode, customPickedDate]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -828,8 +858,9 @@ Tracked on When is my train App`;
           </View>
         </View>
 
-        {/* ================= 2. ACTION CHIPS BAR (Today ▾, Alarm, Save, Source) ================= */}
+        {/* ================= 2. ACTION CHIPS BAR (Today ▾, Alarm, Coach, Share) ================= */}
         <View style={[styles.actionPillsBar, isDarkMode && { backgroundColor: '#0B192C' }]}>
+          {/* 1. Date Selector Pill */}
           <TouchableOpacity
             style={styles.todayActionPill}
             activeOpacity={0.85}
@@ -839,38 +870,34 @@ Tracked on When is my train App`;
             <Ionicons name="caret-down" size={13} color={Colors.primary} style={{ marginLeft: 4 }} />
           </TouchableOpacity>
 
+          {/* 2. Alarm Pill */}
           <TouchableOpacity
             style={[styles.outlinedActionPill, isAlarmActive && { backgroundColor: '#16A34A', borderColor: '#16A34A' }]}
             onPress={() => setShowAlarmModal(true)}
             activeOpacity={0.75}
           >
-            <Ionicons name={isAlarmActive ? 'alarm' : 'alarm-outline'} size={14} color="#FFFFFF" style={{ marginRight: 3 }} />
+            <Ionicons name={isAlarmActive ? 'alarm' : 'alarm-outline'} size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
             <Text style={styles.outlinedActionPillText}>{isAlarmActive ? 'Alarm ON' : 'Alarm'}</Text>
           </TouchableOpacity>
 
+          {/* 3. Coach Pill */}
           <TouchableOpacity
-            style={[styles.outlinedActionPill, isSavedTrain && { backgroundColor: '#D97706', borderColor: '#D97706' }]}
-            onPress={toggleSaveTrain}
+            style={[styles.outlinedActionPill, activeTab === 'coach_position' && { backgroundColor: 'rgba(255, 255, 255, 0.35)', borderColor: '#FFFFFF' }]}
+            onPress={() => setActiveTab(activeTab === 'coach_position' ? 'journey' : 'coach_position')}
             activeOpacity={0.75}
           >
-            <Ionicons name={isSavedTrain ? 'bookmark' : 'bookmark-outline'} size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
-            <Text style={styles.outlinedActionPillText}>{isSavedTrain ? 'Saved' : 'Save'}</Text>
+            <MaterialCommunityIcons name="train-car" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+            <Text style={styles.outlinedActionPillText}>Coach</Text>
           </TouchableOpacity>
 
+          {/* 4. Share Pill */}
           <TouchableOpacity
-            style={styles.compactSourceToggle}
-            onPress={() => setTrackingSource(trackingSource === 'gps' ? 'cell' : 'gps')}
+            style={styles.outlinedActionPill}
+            onPress={handleShare}
             activeOpacity={0.75}
           >
-            <MaterialCommunityIcons
-              name={trackingSource === 'gps' ? 'crosshairs-gps' : 'transmission-tower'}
-              size={12}
-              color={Colors.primary}
-              style={{ marginRight: 3 }}
-            />
-            <Text style={[styles.compactSourceText, { color: Colors.primary }]}>
-              {trackingSource === 'gps' ? 'GPS' : 'Cell'}
-            </Text>
+            <Ionicons name="share-social-outline" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+            <Text style={styles.outlinedActionPillText}>Share</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -1765,50 +1792,150 @@ Tracked on When is my train App`;
         <TouchableOpacity
           style={styles.modalOverlay}
           activeOpacity={1}
-          onPress={() => setShowDateModal(false)}
+          onPress={() => {
+            setShowDateModal(false);
+            setShowCalendarView(false);
+          }}
         >
-          <View style={[styles.modalCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={[styles.modalCard, { backgroundColor: colors.surface, borderColor: colors.border, maxHeight: 520 }]}>
             <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
               <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Select Journey Date</Text>
-              <TouchableOpacity onPress={() => setShowDateModal(false)}>
+              <TouchableOpacity onPress={() => { setShowDateModal(false); setShowCalendarView(false); }}>
                 <Ionicons name="close" size={20} color={colors.textPrimary} />
               </TouchableOpacity>
             </View>
 
-            {[
-              { id: 'yesterday', label: 'Yesterday' },
-              { id: 'today', label: 'Today (20 Sep)' },
-              { id: 'tomorrow', label: 'Tomorrow' },
-            ].map((d) => (
-              <TouchableOpacity
-                key={d.id}
-                style={[
-                  styles.menuOptionRow,
-                  { borderBottomColor: colors.border },
-                  selectedDateMode === d.id && { backgroundColor: isDarkMode ? '#1E3A5F' : '#F0F9FF' },
-                ]}
-                onPress={() => {
-                  setSelectedDateMode(d.id as any);
-                  setShowDateModal(false);
-                }}
-              >
-                <Ionicons
-                  name={selectedDateMode === d.id ? 'radio-button-on' : 'radio-button-off'}
-                  size={18}
-                  color="#007AFF"
-                  style={{ marginRight: 10 }}
-                />
-                <Text
+            {/* Standard Quick Options: Yesterday, Today, Tomorrow */}
+            {(() => {
+              const now = new Date();
+              const daysShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+              const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+              const yest = new Date(now);
+              yest.setDate(now.getDate() - 1);
+              const tomo = new Date(now);
+              tomo.setDate(now.getDate() + 1);
+
+              const options = [
+                { id: 'yesterday', label: `Yesterday (${yest.getDate()} ${months[yest.getMonth()]}, ${daysShort[yest.getDay()]})` },
+                { id: 'today', label: `Today (${now.getDate()} ${months[now.getMonth()]}, ${daysShort[now.getDay()]})` },
+                { id: 'tomorrow', label: `Tomorrow (${tomo.getDate()} ${months[tomo.getMonth()]}, ${daysShort[tomo.getDay()]})` },
+              ];
+
+              return options.map((d) => (
+                <TouchableOpacity
+                  key={d.id}
                   style={[
-                    styles.menuOptionText,
-                    { color: colors.textPrimary },
-                    selectedDateMode === d.id && { fontWeight: '800', color: '#007AFF' },
+                    styles.menuOptionRow,
+                    { borderBottomColor: colors.border },
+                    selectedDateMode === d.id && { backgroundColor: isDarkMode ? '#1E3A5F' : '#F0F9FF' },
                   ]}
+                  onPress={() => {
+                    setSelectedDateMode(d.id as any);
+                    setCustomPickedDate(null);
+                    setShowDateModal(false);
+                    setShowCalendarView(false);
+                  }}
                 >
-                  {d.label}
+                  <Ionicons
+                    name={selectedDateMode === d.id ? 'radio-button-on' : 'radio-button-off'}
+                    size={18}
+                    color="#007AFF"
+                    style={{ marginRight: 10 }}
+                  />
+                  <Text
+                    style={[
+                      styles.menuOptionText,
+                      { color: colors.textPrimary },
+                      selectedDateMode === d.id && { fontWeight: '800', color: '#007AFF' },
+                    ]}
+                  >
+                    {d.label}
+                  </Text>
+                </TouchableOpacity>
+              ));
+            })()}
+
+            {/* Pick Any Date / Calendar Toggle */}
+            <TouchableOpacity
+              style={[
+                styles.menuOptionRow,
+                { borderBottomColor: colors.border },
+                (selectedDateMode === 'custom' || showCalendarView) && { backgroundColor: isDarkMode ? '#1E3A5F' : '#F0F9FF' },
+              ]}
+              onPress={() => setShowCalendarView(!showCalendarView)}
+            >
+              <Ionicons
+                name="calendar-outline"
+                size={18}
+                color="#007AFF"
+                style={{ marginRight: 10 }}
+              />
+              <Text
+                style={[
+                  styles.menuOptionText,
+                  { color: colors.textPrimary, flex: 1 },
+                  selectedDateMode === 'custom' && { fontWeight: '800', color: '#007AFF' },
+                ]}
+              >
+                {selectedDateMode === 'custom' && customPickedDate
+                  ? `Selected: ${customPickedDate.dateStr} (${customPickedDate.dayLabel})`
+                  : 'Pick Any Date (Calendar)'}
+              </Text>
+              <Ionicons
+                name={showCalendarView ? 'chevron-up' : 'chevron-down'}
+                size={16}
+                color={colors.textSecondary}
+              />
+            </TouchableOpacity>
+
+            {/* Inline Calendar Day Picker */}
+            {showCalendarView && (
+              <View style={{ paddingTop: 8, paddingBottom: 12 }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textSecondary, marginBottom: 8, marginHorizontal: 14 }}>
+                  SELECT ANY DATE FROM CALENDAR:
                 </Text>
-              </TouchableOpacity>
-            ))}
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ paddingHorizontal: 12, gap: 6 }}
+                >
+                  {availableCalendarDays.map((item) => {
+                    const isSelected = selectedDateMode === 'custom' && customPickedDate?.key === item.key;
+                    return (
+                      <TouchableOpacity
+                        key={item.key}
+                        style={[
+                          styles.calendarDateBox,
+                          { backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC', borderColor: colors.border },
+                          isSelected && { backgroundColor: Colors.primary, borderColor: Colors.primary },
+                        ]}
+                        onPress={() => {
+                          setSelectedDateMode('custom');
+                          setCustomPickedDate({
+                            dayLabel: item.dayLabel,
+                            dateStr: `${item.dateNum} ${item.monthName}`,
+                            fullDate: item.fullDate,
+                            key: item.key,
+                          } as any);
+                          setShowDateModal(false);
+                          setShowCalendarView(false);
+                        }}
+                      >
+                        <Text style={[styles.calendarDayText, { color: colors.textSecondary }, isSelected && { color: '#FFFFFF', fontWeight: '800' }]}>
+                          {item.dayLabel}
+                        </Text>
+                        <Text style={[styles.calendarNumText, { color: colors.textPrimary }, isSelected && { color: '#FFFFFF', fontWeight: '900' }]}>
+                          {item.dateNum}
+                        </Text>
+                        <Text style={[styles.calendarMonthText, { color: colors.textSecondary }, isSelected && { color: '#FFFFFF' }]}>
+                          {item.monthName}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            )}
           </View>
         </TouchableOpacity>
       </Modal>
@@ -2249,6 +2376,29 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  calendarDateBox: {
+    width: 54,
+    height: 66,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 4,
+  },
+  calendarDayText: {
+    fontSize: 10,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  calendarNumText: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  calendarMonthText: {
+    fontSize: 10,
+    fontWeight: '600',
+    marginTop: 2,
   },
   dynamicStationThumbBadge: {
     width: 60,

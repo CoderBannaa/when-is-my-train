@@ -14,6 +14,19 @@ function formatMinutesTo12h(mins) {
   return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')} ${mer}`;
 }
 
+function parseTimeToMinutes(timeStr) {
+  if (!timeStr || !timeStr.includes(':')) return 0;
+  const clean = timeStr.trim();
+  const parts = clean.split(' ');
+  const [hStr, mStr] = parts[0].split(':');
+  let h = parseInt(hStr, 10) || 0;
+  const m = parseInt(mStr, 10) || 0;
+  const mer = parts[1]?.toUpperCase();
+  if (mer === 'PM' && h !== 12) h += 12;
+  if (mer === 'AM' && h === 12) h = 0;
+  return h * 60 + m;
+}
+
 /**
  * Fetch live train data from RailYatri / RailRadar public SSR page
  */
@@ -208,6 +221,45 @@ async function fetchLiveTrainData(trainNo) {
     }
   }
 
+  // Automatic Completion Detection: Detect if train run has completed / arrived at destination
+  if (stationDetails.length > 0) {
+    const destStation = stationDetails[stationDetails.length - 1];
+    const destArrStr = destStation.actualArr !== '--' ? destStation.actualArr : destStation.scheduledArr;
+    const destMins = parseTimeToMinutes(destArrStr);
+
+    const now = new Date();
+    const istOffsetMs = 5.5 * 60 * 60 * 1000;
+    const istDate = new Date(now.getTime() + (now.getTimezoneOffset() * 60 * 1000) + istOffsetMs);
+    const currentIstMinutes = istDate.getHours() * 60 + istDate.getMinutes();
+
+    let minsPastDest = currentIstMinutes - destMins;
+    if (minsPastDest < -720) minsPastDest += 1440;
+
+    const statusAsOf = String(lts.status_as_of || '');
+    const isStaleByHours = statusAsOf.includes('hr') || statusAsOf.includes('hour');
+    const routeProgress = activeStopIdx >= 0 ? activeStopIdx / stationDetails.length : 0;
+
+    const isRunComplete = lts.terminated || lts.at_dstn || lts.title === 'Train Run Complete' ||
+      (minsPastDest > 20 && (isStaleByHours || routeProgress >= 0.70)) || minsPastDest > 90;
+
+    if (isRunComplete) {
+      activeStopIdx = stationDetails.length - 1;
+      for (let i = 0; i < stationDetails.length - 1; i++) {
+        stationDetails[i].status = 'PASSED';
+      }
+      destStation.status = 'CURRENT';
+      curCode = destStation.code;
+      curName = destStation.name;
+      curPlatform = destStation.platform || curPlatform;
+      curSpeed = 0;
+      nextName = 'Terminated';
+      nextCode = destStation.code;
+      const finalDelay = destStation.delayMinutes || curDelay || 0;
+      bannerTitle = `Arrived ${curName}` + (finalDelay > 0 ? ` (+${finalDelay}m Late)` : ' (Right Time)');
+      bannerSub = `${curPlatform} • Train reached destination (Completed Run)`;
+    }
+  }
+
   // Create standardized stations array for LiveTrainTrackingData
   const stations = stationDetails.map((st) => ({
     stationCode: st.code,
@@ -225,9 +277,9 @@ async function fetchLiveTrainData(trainNo) {
   }));
 
   const totalDistanceKm = stationDetails[stationDetails.length - 1]?.distanceKm || parseInt(lts.total_distance, 10) || 545;
-  const coveredDist = stationDetails[activeStopIdx]?.distanceKm || 0;
-  const remainingDist = Math.max(0, totalDistanceKm - coveredDist);
-  const distNext = parseInt(lts.ahead_distance, 10) || (activeStopIdx + 1 < stationDetails.length ? Math.max(1, stationDetails[activeStopIdx + 1].distanceKm - coveredDist) : 15);
+  const coveredDist = activeStopIdx === stationDetails.length - 1 ? totalDistanceKm : (stationDetails[activeStopIdx]?.distanceKm || 0);
+  const remainingDist = activeStopIdx === stationDetails.length - 1 ? 0 : Math.max(0, totalDistanceKm - coveredDist);
+  const distNext = activeStopIdx === stationDetails.length - 1 ? 0 : (parseInt(lts.ahead_distance, 10) || (activeStopIdx + 1 < stationDetails.length ? Math.max(1, stationDetails[activeStopIdx + 1].distanceKm - coveredDist) : 15));
   if (stationDetails.length === 0) {
     throw new Error(`No live station details available on RailRadar for train ${cleanTrainNo}`);
   }
