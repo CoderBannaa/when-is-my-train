@@ -388,15 +388,8 @@ export const LiveTrainTrackerScreen: React.FC<LiveTrainTrackerScreenProps> = ({
   // Dynamic train lookup from catalog - default to 22436 Vande Bharat Express if no train is selected
   const activeTrain: CorridorTrain = useMemo(() => {
     const targetNumber = (trainNumber && trainNumber.trim().length > 0) ? trainNumber.trim() : '22436';
-    let train = findOrGenerateTrain(targetNumber);
-    if (fromStationCode && toStationCode && (train.originCode !== fromStationCode || train.destCode !== toStationCode)) {
-      const routeSpecific = findOrGenerateTrain(`dyn-${targetNumber}-${fromStationCode}-${toStationCode}`);
-      if (routeSpecific && routeSpecific.originCode === fromStationCode) {
-        train = routeSpecific;
-      }
-    }
-    return train;
-  }, [trainNumber, fromStationCode, toStationCode]);
+    return findOrGenerateTrain(targetNumber);
+  }, [trainNumber]);
 
   // Load saved train status
   useEffect(() => {

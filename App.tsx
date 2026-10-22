@@ -119,11 +119,11 @@ function MainApp() {
     setTrackingTrainMeta({
       number: trainNumber,
       name: trainName,
-      fromStation: fromStation || searchParams?.from || selectedFromStation || undefined,
-      toStation: toStation || searchParams?.to || selectedToStation || undefined,
+      fromStation: fromStation || undefined,
+      toStation: toStation || undefined,
     });
     navigateTo('home', false, trainNumber);
-  }, [navigateTo, searchParams, selectedFromStation, selectedToStation]);
+  }, [navigateTo]);
 
   const handleSelectTab = useCallback((tab: TabKey) => {
     if (tab === 'track' || tab === 'home' || tab === 'live') {

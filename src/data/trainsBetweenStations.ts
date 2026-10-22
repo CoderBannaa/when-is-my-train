@@ -1179,6 +1179,12 @@ for (let i = 0; i < CORRIDOR_TRAINS_MASTER.length; i++) {
 const dynamicTrainCache = new Map<string, CorridorTrain>();
 const MAX_DYNAMIC_TRAIN_CACHE = 50;
 
+export function registerDynamicCorridorTrain(train: CorridorTrain): void {
+  if (!train || !train.number) return;
+  trainByNumberMap.set(train.number, train);
+  dynamicTrainCache.set(train.number, train);
+}
+
 export function findOrGenerateTrain(query: string): CorridorTrain {
   const clean = query.trim().toUpperCase();
   if (!clean) return CORRIDOR_TRAINS_MASTER[0];

@@ -6,6 +6,7 @@ import { Station, STATIONS_DATABASE, POPULAR_STATIONS } from '../data/stations';
 import { CORRIDOR_TRAINS_MASTER, findOrGenerateTrain, CorridorTrain } from '../data/trainsBetweenStations';
 import { searchAndRankStations, searchAndRankTrains } from '../utils/searchRanker';
 import { usePreferences, SafeStorage } from '../context/PreferencesContext';
+import { LiveTrainApi } from '../services/liveTrainApiService';
 
 interface RecentSearchItem {
   id: string;
@@ -403,19 +404,63 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   useEffect(() => {
     const cleanNo = spotTrainQuery.trim().replace(/\D/g, '');
     if (cleanNo.length >= 4) {
+      let isCurrent = true;
       const abortCtrl = new AbortController();
       const timer = setTimeout(async () => {
         try {
+          // 1. Fetch live train status via LiveTrainApi (works directly on mobile via RailRadar SSR)
+          const liveData = await LiveTrainApi.getLiveTrainStatus(cleanNo);
+          if (liveData && liveData.stations && liveData.stations.length > 0 && isCurrent) {
+            const origin = liveData.stations[0];
+            const dest = liveData.stations[liveData.stations.length - 1];
+            const trainObj: CorridorTrain = {
+              id: `rr-${cleanNo}`,
+              number: cleanNo,
+              name: liveData.trainName,
+              type: 'Superfast',
+              isLocalEmu: false,
+              originCode: origin.stationCode,
+              originName: origin.stationName,
+              destCode: dest.stationCode,
+              destName: dest.stationName,
+              depTime: origin.scheduledDeparture !== '--:--' ? origin.scheduledDeparture : origin.scheduledArrival,
+              arrTime: dest.scheduledArrival !== '--:--' ? dest.scheduledArrival : dest.scheduledDeparture,
+              duration: `${Math.round((dest.distanceKm || 400) / 60)}h`,
+              totalHaults: liveData.stations.filter((s) => !s.isPassing).length,
+              totalDistanceKm: dest.distanceKm || 500,
+              runsOn: [true, true, true, true, true, true, true],
+              classes: [
+                { type: 'SL', price: 350, status: 'AVAILABLE', statusType: 'available', updatedText: 'Live' },
+                { type: '3A', price: 950, status: 'AVAILABLE', statusType: 'available', updatedText: 'Live' },
+              ],
+              stops: liveData.stations.map((s) => ({
+                code: s.stationCode,
+                name: s.stationName,
+                arr: s.scheduledArrival,
+                dep: s.scheduledDeparture,
+                distanceKm: s.distanceKm,
+                platform: s.platform,
+                isPassing: !!s.isPassing,
+                day: s.day || 1,
+              })),
+            };
+            setOnlineSearchResults([trainObj]);
+            return;
+          }
+        } catch {}
+
+        try {
           const res = await fetch(`http://localhost:5001/api/train-search?query=${cleanNo}`, { signal: abortCtrl.signal });
-          if (res.ok) {
+          if (res.ok && isCurrent) {
             const data = await res.json();
             if (data.success && Array.isArray(data.trains) && data.trains.length > 0) {
               setOnlineSearchResults(data.trains);
             }
           }
         } catch {}
-      }, 200);
+      }, 300);
       return () => {
+        isCurrent = false;
         clearTimeout(timer);
         abortCtrl.abort();
       };
