@@ -15,7 +15,7 @@ import {
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '../theme/colors';
 import { CorridorTrain, findOrGenerateTrain } from '../data/trainsBetweenStations';
-import { calculateLiveStatus, parseTimeToMinutes, StationLiveDetail } from '../utils/liveStatusEngine';
+import { calculateLiveStatus, parseTimeToMinutes, StationLiveDetail, TrainOperationalState } from '../utils/liveStatusEngine';
 import { LiveTrainApi, TrainCache, LiveTrainTrackingData } from '../services/liveTrainApiService';
 import { usePreferences, SafeStorage } from '../context/PreferencesContext';
 import { STORAGE_KEYS } from '../config/env';
@@ -367,6 +367,8 @@ export const LiveTrainTrackerScreen: React.FC<LiveTrainTrackerScreenProps> = ({
   const scrollRef = useRef<ScrollView>(null);
   const spinAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const redBlinkAnim = useRef(new Animated.Value(1)).current;
+  const redPulseRing = useRef(new Animated.Value(1)).current;
   const whistleBounce = useRef(new Animated.Value(1)).current;
   const [showHornBanner, setShowHornBanner] = useState(false);
 
@@ -526,6 +528,46 @@ export const LiveTrainTrackerScreen: React.FC<LiveTrainTrackerScreenProps> = ({
     return () => loop.stop();
   }, [pulseAnim]);
 
+  // Animated red blink & pulse for upcoming/reaching station
+  useEffect(() => {
+    const blinkLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(redBlinkAnim, {
+          toValue: 0.2,
+          duration: 450,
+          useNativeDriver: true,
+        }),
+        Animated.timing(redBlinkAnim, {
+          toValue: 1,
+          duration: 450,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    const pulseLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(redPulseRing, {
+          toValue: 1.6,
+          duration: 800,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(redPulseRing, {
+          toValue: 1,
+          duration: 800,
+          easing: Easing.in(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    blinkLoop.start();
+    pulseLoop.start();
+    return () => {
+      blinkLoop.stop();
+      pulseLoop.stop();
+    };
+  }, [redBlinkAnim, redPulseRing]);
+
   // Seconds counter
   useEffect(() => {
     const timer = setInterval(() => {
@@ -611,12 +653,22 @@ export const LiveTrainTrackerScreen: React.FC<LiveTrainTrackerScreenProps> = ({
         }
       }
 
+      const bannerLow = (liveApiResponse.statusBanner || '').toLowerCase();
+      let determinedState: TrainOperationalState = 'RUNNING_BETWEEN_STATIONS';
+      if (activeIdx === 0 && (bannerLow.includes('scheduled') || bannerLow.includes('yet to') || apiStations[0]?.status !== 'departed')) {
+        determinedState = 'NOT_STARTED';
+      } else if (activeIdx === apiStations.length - 1 && (bannerLow.includes('complete') || bannerLow.includes('arrived') || bannerLow.includes('reached') || bannerLow.includes('terminated'))) {
+        determinedState = 'COMPLETED';
+      } else if (bannerLow.includes('platform') || (liveApiResponse.currentSpeedKmH ?? 0) === 0) {
+        determinedState = 'HALTED_AT_STATION';
+      }
+
       return {
         trainNumber: liveApiResponse.trainNumber || activeTrain.number,
         trainName: liveApiResponse.trainName || trainName || activeTrain.name,
         type: activeTrain.type,
         isLocalEmu: activeTrain.isLocalEmu,
-        state: 'RUNNING_BETWEEN_STATIONS' as any,
+        state: determinedState,
         currentPlatform: (liveApiResponse as any).currentPlatform || stationDetails[activeIdx]?.platform || 'Platform 1',
         currentStationName: liveApiResponse.currentStationName,
         currentStationCode: liveApiResponse.currentStationCode,
@@ -946,112 +998,150 @@ Tracked on When is my train App`;
             <View style={styles.timelineContentWrapper}>
               {timelineItems.map((item, tIdx) => {
                 if (item.type === 'passingGroup') {
-                  const hasCurrentInGroup = item.stations.some((s) => s.originalIndex === liveData.activeStopIndex);
-                  const isExpanded = expandedPassingGroups[item.key] !== undefined
-                    ? !!expandedPassingGroups[item.key]
-                    : hasCurrentInGroup;
-                  return (
-                    <View key={item.key} style={styles.passingGroupContainer}>
+                  const count = item.stations.length;
+                  const isExpanded = !!expandedPassingGroups[item.key];
+
+                  if (!isExpanded) {
+                    return (
                       <TouchableOpacity
-                        style={[styles.intermediateStationsBar, { backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC' }]}
+                        key={item.key}
+                        activeOpacity={0.8}
                         onPress={() => togglePassingGroup(item.key)}
-                        activeOpacity={0.7}
+                        style={[styles.passingCollapsedRow, { backgroundColor: colors.surface }]}
                       >
-                        <View style={styles.intermediateTrackLineCol}>
-                          <View style={[styles.trackLinePassing, { backgroundColor: isDarkMode ? '#475569' : '#CBD5E1' }]} />
-                        </View>
-                        <View style={styles.intermediateContentCol}>
-                          <View style={[
-                            styles.intermediateBadge,
-                            hasCurrentInGroup && !isExpanded
-                              ? { backgroundColor: isDarkMode ? '#1E3A5F' : '#E0F2FE', borderColor: Colors.primary, borderWidth: 1 }
-                              : { backgroundColor: isDarkMode ? '#334155' : '#E0F2FE' }
-                          ]}>
-                            {hasCurrentInGroup && !isExpanded ? (
-                              <MaterialCommunityIcons
-                                name="train"
-                                size={13}
-                                color={Colors.primary}
-                                style={{ marginRight: 4 }}
-                              />
-                            ) : (
-                              <Ionicons
-                                name={isExpanded ? 'chevron-up' : 'chevron-down'}
-                                size={12}
-                                color={Colors.primary}
-                                style={{ marginRight: 4 }}
-                              />
-                            )}
-                            <Text style={styles.intermediateText}>
-                              {hasCurrentInGroup && !isExpanded
-                                ? `Train at ${liveData.currentStationName || 'Passing Station'} (+${item.stations.length} stops)`
-                                : isExpanded
-                                ? `Hide ${item.stations.length} intermediate stations`
-                                : `+ ${item.stations.length} intermediate stations`}
-                            </Text>
+                        {/* 1. Left Arrival Column - empty/seamless */}
+                        <View style={styles.timeColLeft} />
+
+                        {/* 2. Center Track Column: 100% straight continuous blue railway line */}
+                        <View style={styles.passingTrackColInteractive}>
+                          {/* Continuous straight blue railway line */}
+                          <View style={styles.trackLineContinuousBlue} />
+
+                          {/* Visible + count badge centered on the straight blue line */}
+                          <View style={styles.trackCountBadge}>
+                            <Text style={styles.trackCountBadgeText}>{`+${count}`}</Text>
                           </View>
+                        </View>
+
+                        {/* 3. Station Info Column */}
+                        <View style={styles.stationInfoCol} />
+
+                        {/* 4. Right Departure Column */}
+                        <View style={styles.timeColRight} />
+                      </TouchableOpacity>
+                    );
+                  }
+
+                  // EXPANDED STATE (Fade Blue)
+                  return (
+                    <View
+                      key={item.key}
+                      style={[
+                        styles.passingExpandedFadeBlueContainer,
+                        {
+                          backgroundColor: isDarkMode ? 'rgba(14, 58, 108, 0.3)' : '#F0F7FF',
+                          borderColor: isDarkMode ? '#1E3A5F' : '#BAE6FD',
+                        },
+                      ]}
+                    >
+                      {/* Collapse Header Bar */}
+                      <TouchableOpacity
+                        activeOpacity={0.7}
+                        onPress={() => togglePassingGroup(item.key)}
+                        style={[
+                          styles.fadeBlueHeaderBar,
+                          { backgroundColor: isDarkMode ? 'rgba(30, 58, 95, 0.45)' : 'rgba(186, 230, 253, 0.4)' },
+                        ]}
+                      >
+                        <View style={styles.timeColLeft} />
+                        <View style={styles.trackTrackWrapper}>
+                          <View style={styles.trackLineContinuousBlue} />
+                          <View style={styles.trackCountBadgeExpanded}>
+                            <Ionicons name="chevron-up" size={11} color="#0284C7" />
+                            <Text style={styles.trackCountBadgeTextExpanded}>{`−${count}`}</Text>
+                          </View>
+                        </View>
+                        <View style={styles.stationInfoCol}>
+                          <Text style={[styles.fadeBlueHeaderText, { color: isDarkMode ? '#93C5FD' : '#0369A1' }]}>
+                            {`${count} Intermediate Stations • Tap line to close`}
+                          </Text>
+                        </View>
+                        <View style={styles.timeColRight}>
+                          <Ionicons name="close-circle-outline" size={16} color={isDarkMode ? '#93C5FD' : '#0284C7'} />
                         </View>
                       </TouchableOpacity>
 
-                      {isExpanded &&
-                        item.stations.map((pSub) => {
-                          const pSt = pSub.station;
-                          const pPassed = pSub.originalIndex < liveData.activeStopIndex;
-                          const pCurrent = pSub.originalIndex === liveData.activeStopIndex;
-                          return (
-                            <View
-                              key={`passing-${pSt.code}-${pSub.originalIndex}`}
-                              style={[
-                                styles.passingStationRow,
-                                { backgroundColor: colors.surface, borderBottomColor: colors.border },
-                                pCurrent && { backgroundColor: isDarkMode ? '#1E3A5F' : '#EDF6FF' },
-                              ]}
+                      {/* Intermediate Stations List */}
+                      {item.stations.map((pSub) => {
+                        const pSt = pSub.station;
+                        const pPassed = liveData.state === 'NOT_STARTED'
+                          ? false
+                          : (liveData.state === 'RUNNING_BETWEEN_STATIONS'
+                              ? pSub.originalIndex <= liveData.activeStopIndex
+                              : pSub.originalIndex < liveData.activeStopIndex);
+                        const pReaching = liveData.state === 'NOT_STARTED'
+                          ? false
+                          : (liveData.state === 'RUNNING_BETWEEN_STATIONS'
+                              ? pSub.originalIndex === liveData.activeStopIndex + 1
+                              : pSub.originalIndex === liveData.activeStopIndex);
+
+                        return (
+                          <View
+                            key={`passing-${pSt.code}-${pSub.originalIndex}`}
+                            style={[
+                              styles.passingStationRowFadeBlue,
+                              pReaching && { backgroundColor: isDarkMode ? 'rgba(2, 132, 199, 0.25)' : 'rgba(2, 132, 199, 0.12)' },
+                            ]}
+                          >
+                            <View style={styles.timeColLeft}>
+                              <Text style={[styles.passingTimeText, { color: colors.textSecondary }]}>
+                                {pSt.actualArr || pSt.scheduledArr || '--'}
+                              </Text>
+                            </View>
+                            <TouchableOpacity
+                              activeOpacity={0.8}
+                              onPress={() => togglePassingGroup(item.key)}
+                              style={styles.trackTrackWrapper}
                             >
-                              <View style={styles.timeColLeft}>
-                                <Text style={[styles.passingTimeText, { color: colors.textSecondary }]}>
-                                  {pSt.actualArr || pSt.scheduledArr || '--'}
-                                </Text>
-                              </View>
-                              <View style={styles.passingTrackCol}>
-                                <View style={[styles.passingTrackLineTop, (pPassed || pCurrent) ? styles.lineGreen : styles.lineGrey]} />
-                                {pCurrent ? (
-                                  <View style={styles.currentStationBadgeWrapper}>
-                                    <Animated.View
-                                      style={[
-                                        styles.currentPulseRing,
-                                        { transform: [{ scale: pulseAnim }] },
-                                      ]}
-                                    />
-                                    <View style={[styles.currentTrainBadge, { width: 20, height: 20, borderRadius: 10 }]}>
-                                      <MaterialCommunityIcons name="train" size={12} color="#FFFFFF" />
-                                    </View>
-                                  </View>
-                                ) : (
-                                  <View
+                              <View style={styles.trackLineContinuousBlue} />
+                              {pReaching ? (
+                                <View style={styles.passingReachingDotWrapper}>
+                                  <Animated.View
                                     style={[
-                                      styles.passingTrackDot,
-                                      pPassed && styles.passingTrackDotGreen,
+                                      styles.passingLightRedPulseRing,
+                                      {
+                                        transform: [{ scale: redPulseRing }],
+                                        opacity: redBlinkAnim.interpolate({
+                                          inputRange: [0.2, 1],
+                                          outputRange: [0.2, 0.7],
+                                        }),
+                                      },
                                     ]}
                                   />
-                                )}
-                                <View style={[styles.passingTrackLineBottom, pPassed ? styles.lineGreen : styles.lineGrey]} />
-                              </View>
-                              <View style={styles.passingInfoCol}>
-                                <Text style={[styles.passingStationName, { color: colors.textPrimary }]} numberOfLines={1}>
-                                  {pSt.name}
-                                </Text>
-                                <Text style={[styles.passingSpeedText, { color: colors.textSecondary }]}>
-                                  Pass • {pSt.distanceKm} km
-                                </Text>
-                              </View>
-                              <View style={styles.timeColRight}>
-                                <Text style={[styles.passingTimeText, { color: colors.textSecondary }]}>
-                                  {pSt.actualDep || pSt.scheduledDep || '--'}
-                                </Text>
-                              </View>
+                                  <View style={styles.passingLightRedDot} />
+                                </View>
+                              ) : pPassed ? (
+                                <View style={styles.passingGreenDot} />
+                              ) : (
+                                <View style={styles.passingLightYellowDot} />
+                              )}
+                            </TouchableOpacity>
+                            <View style={styles.stationInfoCol}>
+                              <Text style={[styles.passingStationName, { color: colors.textPrimary }]} numberOfLines={1}>
+                                {pSt.name}
+                              </Text>
+                              <Text style={[styles.passingSpeedText, { color: colors.textSecondary }]}>
+                                Pass • {pSt.distanceKm} km
+                              </Text>
                             </View>
-                          );
-                        })}
+                            <View style={styles.timeColRight}>
+                              <Text style={[styles.passingTimeText, { color: colors.textSecondary }]}>
+                                {pSt.actualDep || pSt.scheduledDep || '--'}
+                              </Text>
+                            </View>
+                          </View>
+                        );
+                      })}
                     </View>
                   );
                 }
@@ -1060,9 +1150,18 @@ Tracked on When is my train App`;
                 const index = item.originalIndex;
                 const isFirst = index === 0;
                 const isLast = index === liveData.stationDetails.length - 1;
-                const isPassed = index < liveData.activeStopIndex;
-                const isCurrent = index === liveData.activeStopIndex;
-                const isUpcoming = index > liveData.activeStopIndex;
+                const isPassed = liveData.state === 'NOT_STARTED'
+                  ? false
+                  : (liveData.state === 'RUNNING_BETWEEN_STATIONS'
+                      ? index <= liveData.activeStopIndex
+                      : index < liveData.activeStopIndex);
+                const isReaching = liveData.state === 'NOT_STARTED'
+                  ? index === 0
+                  : (liveData.state === 'RUNNING_BETWEEN_STATIONS'
+                      ? index === liveData.activeStopIndex + 1
+                      : index === liveData.activeStopIndex);
+                const isUpcoming = !isPassed && !isReaching;
+                const isCurrent = liveData.state === 'NOT_STARTED' ? index === 0 : index === liveData.activeStopIndex;
 
                 const schedArrText = st.scheduledArr !== '--' ? st.scheduledArr : st.scheduledDep;
                 const schedDepText = st.scheduledDep !== '--' ? st.scheduledDep : st.scheduledArr;
@@ -1100,48 +1199,56 @@ Tracked on When is my train App`;
                       )}
                     </View>
 
-                    {/* 2. Track & Node Column */}
+                    {/* 2. Track & Node Column: 100% straight continuous blue railway line with colored dots */}
                     <View style={styles.trackTrackWrapper}>
-                      {!isFirst && (
-                        <View
-                          style={[
-                            styles.trackLineHalfTop,
-                            isPassed || isCurrent ? styles.lineGreen : styles.lineGrey,
-                          ]}
-                        />
-                      )}
-                      {!isLast && (
-                        <View
-                          style={[
-                            styles.trackLineHalfBottom,
-                            isPassed ? styles.lineGreen : styles.lineGrey,
-                          ]}
-                        />
-                      )}
+                      {/* Straight Blue Railway Track Line */}
+                      <View
+                        style={[
+                          styles.trackLineContinuousBlue,
+                          isFirst && styles.trackLineFromMiddleDown,
+                          isLast && styles.trackLineFromTopToMiddle,
+                        ]}
+                      />
 
-                      {/* Station Node Badge */}
-                      {isCurrent ? (
-                        <View style={styles.currentStationBadgeWrapper}>
+                      {/* Station Node Badge:
+                          - Passed: Solid Green
+                          - Upcoming Reaching: Light Red
+                          - Future stations after upcoming: Light Yellow
+                      */}
+                      {isReaching ? (
+                        <View style={styles.reachingStationBadgeWrapper}>
                           <Animated.View
                             style={[
-                              styles.currentPulseRing,
-                              { transform: [{ scale: pulseAnim }] },
+                              styles.reachingLightRedPulseRing,
+                              {
+                                transform: [{ scale: redPulseRing }],
+                                opacity: redBlinkAnim.interpolate({
+                                  inputRange: [0.2, 1],
+                                  outputRange: [0.2, 0.65],
+                                }),
+                              },
                             ]}
                           />
-                          <View style={styles.currentTrainBadge}>
-                            <MaterialCommunityIcons name="train" size={14} color="#FFFFFF" />
-                          </View>
+                          <Animated.View
+                            style={[
+                              styles.reachingLightRedDot,
+                              {
+                                opacity: redBlinkAnim.interpolate({
+                                  inputRange: [0.2, 1],
+                                  outputRange: [0.75, 1],
+                                }),
+                              },
+                            ]}
+                          >
+                            <View style={styles.innerWhiteCoreDot} />
+                          </Animated.View>
                         </View>
                       ) : isPassed ? (
-                        <View style={styles.passedCheckCircle}>
-                          <Ionicons name="checkmark" size={12} color="#FFFFFF" />
-                        </View>
-                      ) : isFirst ? (
-                        <View style={styles.originStartDot} />
-                      ) : isLast ? (
-                        <View style={styles.destRedDot} />
+                        <View style={styles.passedGreenCircle} />
                       ) : (
-                        <View style={styles.upcomingGreyDot} />
+                        <View style={styles.futureLightYellowDot}>
+                          <View style={styles.innerYellowDot} />
+                        </View>
                       )}
                     </View>
 
@@ -1165,10 +1272,15 @@ Tracked on When is my train App`;
                       </View>
 
                       {/* Status Badges */}
-                      {isCurrent ? (
-                        <View style={styles.currentStatusBadge}>
-                          <Text style={styles.currentStatusBadgeText}>
-                            Current Station • {st.isDelayed ? `${st.delayMinutes} min late` : 'On Time'}
+                      {isReaching ? (
+                        <View style={styles.reachingRedStatusBadge}>
+                          <Animated.View style={[styles.reachingRedBlinkDot, { opacity: redBlinkAnim }]} />
+                          <Text style={styles.reachingRedStatusBadgeText}>
+                            {liveData.state === 'NOT_STARTED'
+                              ? `Scheduled • Departs ${st.scheduledDep || '08:00 PM'}`
+                              : isCurrent
+                                ? (st.isDelayed ? `Arrived • ${st.delayMinutes} min late` : 'Arrived • On Time')
+                                : (st.isDelayed ? `Reaching Next • ${st.delayMinutes} min late` : 'Reaching Next • On Time')}
                           </Text>
                         </View>
                       ) : isPassed && st.isDelayed ? (
@@ -1179,7 +1291,11 @@ Tracked on When is my train App`;
                         <View style={styles.departedBadge}>
                           <Text style={styles.departedBadgeText}>Departed</Text>
                         </View>
-                      ) : null}
+                      ) : (
+                        <View style={styles.upcomingYellowBadge}>
+                          <Text style={styles.upcomingYellowBadgeText}>Upcoming</Text>
+                        </View>
+                      )}
                     </View>
 
                     {/* 4. Right Departure Column */}
@@ -1234,7 +1350,13 @@ Tracked on When is my train App`;
               <View style={styles.screenshot2FloatingPillTextCol}>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <Text style={[styles.screenshot2FloatingPillTitle, { color: colors.textPrimary, flexShrink: 1 }]} numberOfLines={1}>
-                    {liveData.currentStationName ? `Arrived ${liveData.currentStationName}` : 'En Route'} • {liveData.currentPlatform ? liveData.currentPlatform.replace(/Platform\s*/i, 'PF ') : 'PF 1'}
+                    {liveData.state === 'NOT_STARTED'
+                      ? `Scheduled ${liveData.currentStationName || 'Origin'}`
+                      : liveData.state === 'COMPLETED'
+                        ? `Arrived ${liveData.currentStationName || 'Destination'}`
+                        : liveData.currentStationName
+                          ? `At ${liveData.currentStationName}`
+                          : 'En Route'} • {liveData.currentPlatform ? liveData.currentPlatform.replace(/Platform\s*/i, 'PF ') : 'PF 1'}
                   </Text>
                   <View style={[
                     styles.bottomPillDelayBadge,
@@ -2757,9 +2879,8 @@ const styles = StyleSheet.create({
   },
   stationTimelineRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'stretch',
     minHeight: 56,
-    paddingVertical: 4.5,
     paddingHorizontal: 4,
     backgroundColor: '#FFFFFF',
   },
@@ -2772,10 +2893,12 @@ const styles = StyleSheet.create({
   timeColLeft: {
     width: 68,
     alignItems: 'flex-start',
+    paddingVertical: 7,
   },
   timeColRight: {
     width: 68,
     alignItems: 'flex-end',
+    paddingVertical: 7,
   },
   schedTimeText: {
     fontSize: 12,
@@ -2806,39 +2929,70 @@ const styles = StyleSheet.create({
   },
 
   trackTrackWrapper: {
-    width: 32,
+    width: 36,
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'stretch',
     position: 'relative',
+    overflow: 'visible',
+  },
+  trackLineContinuousBlue: {
+    position: 'absolute',
+    top: -2,
+    bottom: -2,
+    width: 6,
+    backgroundColor: '#0284C7',
+    zIndex: 1,
+  },
+  trackLineFromMiddleDown: {
+    top: '50%',
+    borderTopLeftRadius: 3,
+    borderTopRightRadius: 3,
+  },
+  trackLineFromTopToMiddle: {
+    bottom: '50%',
+    borderBottomLeftRadius: 3,
+    borderBottomRightRadius: 3,
   },
   verticalTrackLine: {
     position: 'absolute',
     top: 0,
     bottom: 0,
-    width: 3,
+    width: 6,
     zIndex: 1,
   },
   trackLineHalfTop: {
     position: 'absolute',
     top: 0,
     bottom: '50%',
-    width: 3,
+    width: 6,
+    borderRadius: 3,
   },
   trackLineHalfBottom: {
     position: 'absolute',
     top: '50%',
     bottom: 0,
-    width: 3,
+    width: 6,
+    borderRadius: 3,
   },
   lineGreen: {
-    backgroundColor: '#16A34A',
+    backgroundColor: '#0284C7',
   },
   lineGrey: {
     backgroundColor: '#CBD5E1',
   },
+  lineGreenThick: {
+    width: 6,
+    backgroundColor: '#0284C7',
+    borderRadius: 3,
+  },
+  lineGreyThick: {
+    width: 6,
+    backgroundColor: '#CBD5E1',
+    borderRadius: 3,
+  },
   lineBluePassing: {
-    backgroundColor: '#90CAF9',
+    backgroundColor: '#0284C7',
   },
 
   originTrainBadge: {
@@ -2859,6 +3013,20 @@ const styles = StyleSheet.create({
     borderColor: '#FFFFFF',
     zIndex: 4,
   },
+  passedGreenCircle: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#16A34A',
+    borderWidth: 2.5,
+    borderColor: '#FFFFFF',
+    zIndex: 4,
+    elevation: 2,
+    shadowColor: '#16A34A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+  },
   passedCheckCircle: {
     width: 20,
     height: 20,
@@ -2867,6 +3035,106 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 4,
+  },
+  reachingStationBadgeWrapper: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 6,
+  },
+  reachingRedPulseRing: {
+    position: 'absolute',
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(239, 68, 68, 0.45)',
+  },
+  reachingLightRedPulseRing: {
+    position: 'absolute',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(248, 113, 113, 0.45)',
+  },
+  reachingLightRedDot: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#F87171',
+    borderWidth: 2.5,
+    borderColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 5,
+    elevation: 3,
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.35,
+    shadowRadius: 3,
+  },
+  innerWhiteCoreDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#FFFFFF',
+  },
+  futureLightYellowDot: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#FEF08A',
+    borderWidth: 2.5,
+    borderColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 4,
+    elevation: 2,
+    shadowColor: '#CA8A04',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+  },
+  innerYellowDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#EAB308',
+  },
+  reachingRedBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#DC2626',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 6,
+    elevation: 4,
+    shadowColor: '#DC2626',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 3,
+  },
+  reachingRedStatusBadge: {
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
+    borderRadius: 10,
+    alignSelf: 'flex-start',
+    marginTop: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  reachingRedBlinkDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#DC2626',
+    marginRight: 5,
+  },
+  reachingRedStatusBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#DC2626',
   },
   currentStationBadgeWrapper: {
     position: 'relative',
@@ -2910,6 +3178,8 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingLeft: 10,
     paddingRight: 6,
+    paddingVertical: 7,
+    justifyContent: 'center',
   },
   stationNameText: {
     fontSize: 13.5,
@@ -2962,6 +3232,21 @@ const styles = StyleSheet.create({
     fontSize: 10.5,
     fontWeight: '800',
     color: '#1D4ED8',
+  },
+  upcomingYellowBadge: {
+    backgroundColor: '#FEF9C3',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    alignSelf: 'flex-start',
+    marginTop: 4,
+    borderWidth: 0.5,
+    borderColor: '#FDE047',
+  },
+  upcomingYellowBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#A16207',
   },
 
   // ================= IN-BETWEEN PASSING STATIONS ACCORDION & SLATE GREY STYLES =================
@@ -3808,7 +4093,197 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
 
-  // Intermediate Passing Stations Group
+  // Intermediate Passing Stations Group - Proportional Collapsed & Expanded Fade-Blue
+  passingCollapsedRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    paddingHorizontal: 4,
+    height: 32,
+    width: '100%',
+    position: 'relative',
+    backgroundColor: '#FFFFFF',
+  },
+  passingTrackColInteractive: {
+    width: 36,
+    height: '100%',
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    overflow: 'visible',
+  },
+  thickTrackLineFull: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: 5,
+    borderRadius: 2.5,
+  },
+  trackCountBadge: {
+    height: 20,
+    minWidth: 28,
+    paddingHorizontal: 6,
+    borderRadius: 10,
+    backgroundColor: '#0284C7',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 5,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+  },
+  trackCountBadgePassed: {
+    backgroundColor: '#0284C7',
+  },
+  trackCountBadgeUpcoming: {
+    backgroundColor: '#64748B',
+  },
+  trackCountBadgeActive: {
+    backgroundColor: '#DC2626',
+    borderColor: '#FEE2E2',
+  },
+  trackCountBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10.5,
+    fontWeight: '800',
+  },
+  trackCountBadgeExpanded: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 20,
+    paddingHorizontal: 5,
+    borderRadius: 10,
+    backgroundColor: '#E0F2FE',
+    borderWidth: 1,
+    borderColor: '#38BDF8',
+    zIndex: 5,
+  },
+  trackCountBadgeTextExpanded: {
+    color: '#0284C7',
+    fontSize: 10,
+    fontWeight: '800',
+    marginLeft: 1,
+  },
+
+  // Expanded Fade-Blue Container
+  passingExpandedFadeBlueContainer: {
+    backgroundColor: '#F0F7FF',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    borderRadius: 12,
+    marginVertical: 4,
+    overflow: 'hidden',
+  },
+  fadeBlueHeaderBar: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    minHeight: 34,
+    paddingHorizontal: 4,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#BAE6FD',
+  },
+  fadeBlueHeaderText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  passingStationRowFadeBlue: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    minHeight: 38,
+    paddingHorizontal: 4,
+    borderBottomWidth: 0.5,
+    borderBottomColor: 'rgba(186, 230, 253, 0.4)',
+  },
+  passingThickTrackLineTop: {
+    position: 'absolute',
+    top: 0,
+    bottom: '50%',
+    width: 4,
+    borderRadius: 2,
+  },
+  passingThickTrackLineBottom: {
+    position: 'absolute',
+    top: '50%',
+    bottom: 0,
+    width: 4,
+    borderRadius: 2,
+  },
+  passingGreenDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#16A34A',
+    zIndex: 4,
+  },
+  passingGreyDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#94A3B8',
+    zIndex: 3,
+  },
+  passingReachingDotWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 5,
+    position: 'relative',
+  },
+  passingRedBlinkRing: {
+    position: 'absolute',
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: 'rgba(239, 68, 68, 0.4)',
+  },
+  passingLightRedPulseRing: {
+    position: 'absolute',
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: 'rgba(248, 113, 113, 0.4)',
+  },
+  passingRedDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#DC2626',
+    zIndex: 5,
+  },
+  passingLightRedDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#F87171',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    zIndex: 5,
+  },
+  passingLightYellowDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#FEF08A',
+    borderWidth: 1,
+    borderColor: '#EAB308',
+    zIndex: 4,
+  },
+  passingTimeText: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  passingStationName: {
+    fontSize: 11.5,
+    fontWeight: '600',
+  },
+  passingSpeedText: {
+    fontSize: 9.5,
+  },
+
+  // Legacy intermediate bar support
   intermediateStationsBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -3854,10 +4329,6 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     paddingRight: 6,
   },
-  passingTimeText: {
-    fontSize: 10,
-    fontWeight: '600',
-  },
   passingTrackCol: {
     width: 20,
     alignItems: 'center',
@@ -3893,13 +4364,6 @@ const styles = StyleSheet.create({
   passingInfoCol: {
     flex: 1,
     paddingLeft: 8,
-  },
-  passingStationName: {
-    fontSize: 11.5,
-    fontWeight: '600',
-  },
-  passingSpeedText: {
-    fontSize: 9.5,
   },
   passingTimeColRight: {
     width: 60,

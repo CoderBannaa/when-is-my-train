@@ -164,9 +164,70 @@ async function fetchLiveTrainData(trainNo) {
     bannerTitle = curDelay > 0 ? `Arrived ${curName || 'Station'} (+${curDelay}m Late)` : `Right Time at ${curName || 'Station'}`;
     bannerSub = `${curPlatform} • ${lts.status_as_of || 'Live GPS'}`;
   } else if (route.length > 0) {
-    // Scheduled or at origin station
-    const isTerminated = lts.title === 'Train Run Complete' || lts.at_dstn;
-    activeStopIdx = isTerminated ? route.length - 1 : 0;
+    const now = new Date();
+    const istOffsetMs = 5.5 * 60 * 60 * 1000;
+    const istDate = new Date(now.getTime() + (now.getTimezoneOffset() * 60 * 1000) + istOffsetMs);
+    const currentIstMinutes = istDate.getHours() * 60 + istDate.getMinutes();
+
+    let dayOffset = 0;
+    let prevCheckMin = -1;
+    const routeTimeline = route.map((st, i) => {
+      const arr = st.sta_min || 0;
+      const dep = st.std_min || 0;
+      const chk = arr > 0 ? arr : dep;
+      if (prevCheckMin !== -1 && chk > 0 && chk < (prevCheckMin % 1440)) {
+        dayOffset++;
+      }
+      prevCheckMin = dep > 0 ? dep : arr;
+      return {
+        cumArr: arr > 0 ? dayOffset * 1440 + arr : (i === 0 ? 0 : -1),
+        cumDep: dep > 0 ? dayOffset * 1440 + dep : -1,
+        day: dayOffset + 1,
+      };
+    });
+
+    const originDepCumulative = routeTimeline[0].cumDep > 0 ? routeTimeline[0].cumDep : (route[0].std_min || 0);
+    const destArrCumulative = routeTimeline[route.length - 1].cumArr > 0 
+      ? routeTimeline[route.length - 1].cumArr 
+      : (dayOffset * 1440 + (route[route.length - 1].sta_min || 0));
+
+    let normMins = currentIstMinutes;
+    if (destArrCumulative > 1440 && currentIstMinutes < (originDepCumulative % 1440)) {
+      if (1440 + currentIstMinutes <= destArrCumulative + 45) {
+        normMins = 1440 + currentIstMinutes;
+      }
+    }
+
+    const isTerminated = lts.terminated || lts.at_dstn || lts.title === 'Train Run Complete';
+    if (isTerminated) {
+      activeStopIdx = route.length - 1;
+    } else if (normMins < originDepCumulative) {
+      // 1. Train has not started yet today!
+      activeStopIdx = 0;
+    } else if (normMins >= destArrCumulative) {
+      // 2. Train has finished its scheduled journey
+      if (normMins - destArrCumulative <= 60) {
+        activeStopIdx = route.length - 1;
+      } else {
+        // Next scheduled run today/tomorrow - yet to start
+        activeStopIdx = 0;
+      }
+    } else {
+      // 3. Train is en route!
+      let foundIdx = 0;
+      for (let i = 0; i < route.length - 1; i++) {
+        const depI = routeTimeline[i].cumDep !== -1 ? routeTimeline[i].cumDep : routeTimeline[i].cumArr;
+        const arrNext = routeTimeline[i + 1].cumArr !== -1 ? routeTimeline[i + 1].cumArr : routeTimeline[i + 1].cumDep;
+        if (normMins >= depI && normMins < arrNext) {
+          foundIdx = i;
+          break;
+        } else if (normMins < depI) {
+          foundIdx = Math.max(0, i - 1);
+          break;
+        }
+      }
+      activeStopIdx = foundIdx;
+    }
 
     for (let idx = 0; idx < route.length; idx++) {
       const st = route[idx];
@@ -177,7 +238,7 @@ async function fetchLiveTrainData(trainNo) {
       const isPassing = !st.stop;
 
       let stStatus = 'UPCOMING';
-      if (isTerminated) {
+      if (activeStopIdx === route.length - 1 && isTerminated) {
         stStatus = isDest ? 'CURRENT' : 'PASSED';
       } else if (idx < activeStopIdx) {
         stStatus = 'PASSED';
@@ -202,61 +263,35 @@ async function fetchLiveTrainData(trainNo) {
         haltDuration: isPassing ? 'Pass' : (st.halt ? `${st.halt}m` : '2m'),
         status: stStatus,
         isPassing,
-        day: st.day || 1,
+        day: routeTimeline[idx].day || 1,
       });
     }
 
     curCode = stationDetails[activeStopIdx]?.code || route[0]?.station_code || 'NDLS';
     curName = stationDetails[activeStopIdx]?.name || lts.source_stn_name || 'New Delhi';
-    curPlatform = stationDetails[activeStopIdx]?.platform || (lts.platform_number ? (String(lts.platform_number).toLowerCase().includes('platform') ? String(lts.platform_number) : `Platform ${lts.platform_number}`) : 'Platform 1');
+    curPlatform = stationDetails[activeStopIdx]?.platform || 'Platform 1';
     curDelay = 0;
-    curSpeed = 0;
+    curSpeed = (activeStopIdx > 0 && activeStopIdx < route.length - 1) ? 84 : 0;
 
-    bannerTitle = lts.title || (isTerminated ? 'Train has reached destination' : `Scheduled Departure at ${stationDetails[0]?.scheduledDep || '10:10 PM'}`);
-    bannerSub = lts.new_message || (isTerminated ? 'Journey Completed' : `Departs from ${curPlatform} • Right Time`);
-
-    if (!nextName && route.length > 1) {
-      nextName = route[1].station_name;
-      nextCode = route[1].station_code;
-    }
-  }
-
-  // Automatic Completion Detection: Detect if train run has completed / arrived at destination
-  if (stationDetails.length > 0) {
-    const destStation = stationDetails[stationDetails.length - 1];
-    const destArrStr = destStation.actualArr !== '--' ? destStation.actualArr : destStation.scheduledArr;
-    const destMins = parseTimeToMinutes(destArrStr);
-
-    const now = new Date();
-    const istOffsetMs = 5.5 * 60 * 60 * 1000;
-    const istDate = new Date(now.getTime() + (now.getTimezoneOffset() * 60 * 1000) + istOffsetMs);
-    const currentIstMinutes = istDate.getHours() * 60 + istDate.getMinutes();
-
-    let minsPastDest = currentIstMinutes - destMins;
-    if (minsPastDest < -720) minsPastDest += 1440;
-
-    const statusAsOf = String(lts.status_as_of || '');
-    const isStaleByHours = statusAsOf.includes('hr') || statusAsOf.includes('hour');
-    const routeProgress = activeStopIdx >= 0 ? activeStopIdx / stationDetails.length : 0;
-
-    const isRunComplete = lts.terminated || lts.at_dstn || lts.title === 'Train Run Complete' ||
-      (minsPastDest > 20 && (isStaleByHours || routeProgress >= 0.70)) || minsPastDest > 90;
-
-    if (isRunComplete) {
-      activeStopIdx = stationDetails.length - 1;
-      for (let i = 0; i < stationDetails.length - 1; i++) {
-        stationDetails[i].status = 'PASSED';
-      }
-      destStation.status = 'CURRENT';
-      curCode = destStation.code;
-      curName = destStation.name;
-      curPlatform = destStation.platform || curPlatform;
-      curSpeed = 0;
-      nextName = 'Terminated';
-      nextCode = destStation.code;
-      const finalDelay = destStation.delayMinutes || curDelay || 0;
-      bannerTitle = `Arrived ${curName}` + (finalDelay > 0 ? ` (+${finalDelay}m Late)` : ' (Right Time)');
+    if (activeStopIdx === 0 && normMins < originDepCumulative) {
+      const minsToStart = originDepCumulative - normMins;
+      const h = Math.floor(minsToStart / 60);
+      const m = minsToStart % 60;
+      bannerTitle = `Scheduled Departure at ${stationDetails[0]?.scheduledDep}`;
+      bannerSub = `Yet to depart from ${curName} • Starts in ${h > 0 ? `${h}h ${m}m` : `${m} mins`} (${curPlatform})`;
+    } else if (activeStopIdx === route.length - 1 && isTerminated) {
+      bannerTitle = `Arrived ${curName} (Right Time)`;
       bannerSub = `${curPlatform} • Train reached destination (Completed Run)`;
+    } else {
+      nextName = route[activeStopIdx + 1]?.station_name || 'Destination';
+      nextCode = route[activeStopIdx + 1]?.station_code || '';
+      bannerTitle = `Running to ${nextName}`;
+      bannerSub = `Departed ${curName} • Right Time`;
+    }
+
+    if (!nextName && route.length > activeStopIdx + 1) {
+      nextName = route[activeStopIdx + 1].station_name;
+      nextCode = route[activeStopIdx + 1].station_code;
     }
   }
 

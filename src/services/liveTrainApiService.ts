@@ -74,6 +74,13 @@ class SixtySecondCacheEngine {
   }
 
   /**
+   * Clear all entries completely
+   */
+  public clearAll(): void {
+    this.cache.clear();
+  }
+
+  /**
    * Returns current cache statistics
    */
   public getStats(): { activeEntries: number; keys: string[] } {
@@ -196,7 +203,7 @@ function calculateDurationText(depStr?: string, arrStr?: string): string {
   }
 }
 
-function getLocalProxyBaseUrl(): string {
+export function getLocalProxyBaseUrl(): string {
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
     const host = window.location.hostname;
     if (host && host !== 'localhost' && host !== '127.0.0.1') {

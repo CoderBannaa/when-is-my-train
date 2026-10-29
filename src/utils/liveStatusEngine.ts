@@ -280,7 +280,9 @@ export function calculateLiveStatus(
   // Normalize current time into journey timeline (handles overnight journeys seamlessly)
   let normalizedCurrentMins = currentMins;
   if (destArrCumulative > 1440 && currentMins < (originDepCumulative % 1440)) {
-    normalizedCurrentMins = 1440 + currentMins;
+    if (1440 + currentMins <= destArrCumulative + delayMins + 60) {
+      normalizedCurrentMins = 1440 + currentMins;
+    }
   }
 
   // Build station details with platform and distance

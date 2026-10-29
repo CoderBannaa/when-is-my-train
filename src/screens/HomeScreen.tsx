@@ -6,7 +6,7 @@ import { Station, STATIONS_DATABASE, POPULAR_STATIONS } from '../data/stations';
 import { CORRIDOR_TRAINS_MASTER, findOrGenerateTrain, CorridorTrain } from '../data/trainsBetweenStations';
 import { searchAndRankStations, searchAndRankTrains } from '../utils/searchRanker';
 import { usePreferences, SafeStorage } from '../context/PreferencesContext';
-import { LiveTrainApi } from '../services/liveTrainApiService';
+import { LiveTrainApi, getLocalProxyBaseUrl } from '../services/liveTrainApiService';
 
 interface RecentSearchItem {
   id: string;
@@ -450,7 +450,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         } catch {}
 
         try {
-          const res = await fetch(`http://localhost:5001/api/train-search?query=${cleanNo}`, { signal: abortCtrl.signal });
+          const proxyBase = getLocalProxyBaseUrl();
+          const res = await fetch(`${proxyBase}/api/train-search?query=${cleanNo}`, { signal: abortCtrl.signal });
           if (res.ok && isCurrent) {
             const data = await res.json();
             if (data.success && Array.isArray(data.trains) && data.trains.length > 0) {
