@@ -383,8 +383,32 @@ class LiveTrainApiService {
       }
     }
 
+    // 2.5 WEB PLATFORM PRIORITY: Local proxy server (port 5001)
+    // On web, direct fetch to external sites is blocked by browser CORS, so proxy is tried first!
+    if (Platform.OS === 'web') {
+      try {
+        const localProxyUrl = `${getLocalProxyBaseUrl()}/api/live-train/${cleanTrainNo}`;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
+        const proxyRes = await fetch(localProxyUrl, { method: 'GET', signal: controller.signal });
+        clearTimeout(timeoutId);
+        if (proxyRes.ok) {
+          const proxyJson = await proxyRes.json();
+          if (proxyJson && proxyJson.success && Array.isArray(proxyJson.stations) && proxyJson.stations.length > 0) {
+            this.registerTrainFromRailRadar(cleanTrainNo, proxyJson);
+            TrainCache.set(cacheKey, proxyJson, 60 * 1000, 'api');
+            SafeStorage.setItem(`@cache_status_${cleanTrainNo}`, JSON.stringify({ data: proxyJson, savedAt: Date.now() })).catch(() => {});
+            this.lastKnownLiveStatus.set(cleanTrainNo, proxyJson);
+            return proxyJson;
+          }
+        }
+      } catch {
+        // Local proxy not reachable, proceed to fallbacks
+      }
+    }
+
     // 3. PRIORITY 2: DIRECT INTERNET SCRAPER (Direct Mobile RailRadar / RailYatri over Phone Network)
-    // Works right now without buying any API, and acts as an automatic backup if your paid quota ends!
+    // Works right now on native Android/iOS without CORS, and acts as automatic backup!
     if (cleanTrainNo.length >= 4) {
       try {
         const liveData = await this.fetchDirectRailRadarLive(cleanTrainNo);
@@ -399,25 +423,27 @@ class LiveTrainApiService {
       }
     }
 
-    // 3.1 RailRadar Local Proxy Bridge (For Local PC Chrome Environment)
-    try {
-      const localProxyUrl = `${getLocalProxyBaseUrl()}/api/live-train/${cleanTrainNo}`;
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000);
-      const proxyRes = await fetch(localProxyUrl, { method: 'GET', signal: controller.signal });
-      clearTimeout(timeoutId);
-      if (proxyRes.ok) {
-        const proxyJson = await proxyRes.json();
-        if (proxyJson && proxyJson.success && Array.isArray(proxyJson.stations) && proxyJson.stations.length > 0) {
-          this.registerTrainFromRailRadar(cleanTrainNo, proxyJson);
-          TrainCache.set(cacheKey, proxyJson, 60 * 1000, 'api');
-          SafeStorage.setItem(`@cache_status_${cleanTrainNo}`, JSON.stringify({ data: proxyJson, savedAt: Date.now() })).catch(() => {});
-          this.lastKnownLiveStatus.set(cleanTrainNo, proxyJson);
-          return proxyJson;
+    // 3.1 RailRadar Local Proxy Bridge (Fallback if not previously hit)
+    if (Platform.OS !== 'web') {
+      try {
+        const localProxyUrl = `${getLocalProxyBaseUrl()}/api/live-train/${cleanTrainNo}`;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
+        const proxyRes = await fetch(localProxyUrl, { method: 'GET', signal: controller.signal });
+        clearTimeout(timeoutId);
+        if (proxyRes.ok) {
+          const proxyJson = await proxyRes.json();
+          if (proxyJson && proxyJson.success && Array.isArray(proxyJson.stations) && proxyJson.stations.length > 0) {
+            this.registerTrainFromRailRadar(cleanTrainNo, proxyJson);
+            TrainCache.set(cacheKey, proxyJson, 60 * 1000, 'api');
+            SafeStorage.setItem(`@cache_status_${cleanTrainNo}`, JSON.stringify({ data: proxyJson, savedAt: Date.now() })).catch(() => {});
+            this.lastKnownLiveStatus.set(cleanTrainNo, proxyJson);
+            return proxyJson;
+          }
         }
+      } catch {
+        // Local proxy not active, fall through
       }
-    } catch {
-      // Local proxy not active, fall through
     }
 
     // 2.1 Return last known verified live GPS state if available before falling back to clock simulation
@@ -659,42 +685,51 @@ class LiveTrainApiService {
    * Native fetch on mobile (React Native) bypasses CORS and hits the real server directly!
    */
   public async fetchDirectRailRadarLive(cleanTrainNo: string): Promise<LiveTrainTrackingData> {
-    const url = `https://www.railyatri.in/live-train-status/${cleanTrainNo}`;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 7500);
+    let lastErr: any = null;
 
-    try {
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        },
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
+    for (const day of [1, 2, 0]) {
+      const url = `https://www.railyatri.in/live-train-status/${cleanTrainNo}?start_day=${day}`;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
 
-      if (!response.ok) {
-        throw new Error(`RailRadar HTTP ${response.status}`);
+      try {
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          },
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        if (!response.ok) continue;
+
+        const html = await response.text();
+        const match = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/);
+        if (!match) continue;
+
+        const nextData = JSON.parse(match[1]);
+        const lts = nextData.props?.pageProps?.ltsData;
+        const tt = nextData.props?.pageProps?.timeTableData?.[0] || {};
+        const hasStns = lts && (
+          (lts.previous_stations && lts.previous_stations.length > 0) ||
+          (lts.upcoming_stations && lts.upcoming_stations.length > 0) ||
+          (tt.route && tt.route.length > 0)
+        );
+
+        if (hasStns) {
+          const parsed = this.parseRailRadarNextData(cleanTrainNo, nextData);
+          this.registerTrainFromRailRadar(cleanTrainNo, parsed);
+          return parsed;
+        }
+      } catch (err) {
+        clearTimeout(timeoutId);
+        lastErr = err;
       }
-
-      const html = await response.text();
-      const match = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/);
-      if (!match) {
-        throw new Error('RailRadar data payload not found on page');
-      }
-
-      const nextData = JSON.parse(match[1]);
-      const parsed = this.parseRailRadarNextData(cleanTrainNo, nextData);
-
-      // Register parsed train into catalog so findOrGenerateTrain returns authentic route
-      this.registerTrainFromRailRadar(cleanTrainNo, parsed);
-
-      return parsed;
-    } catch (err) {
-      clearTimeout(timeoutId);
-      throw err;
     }
+
+    throw lastErr || new Error(`No live tracking data available for train ${cleanTrainNo}`);
   }
 
   /**

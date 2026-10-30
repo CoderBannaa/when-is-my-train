@@ -42,34 +42,56 @@ async function fetchLiveTrainData(trainNo) {
     }
   }
 
-  const url = `https://www.railyatri.in/live-train-status/${cleanTrainNo}`;
-  const response = await fetch(url, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    },
-  });
+  // Try query start_day=1 (today), then start_day=2 (yesterday), then start_day=0 (tomorrow/default)
+  let lts = null;
+  let tt = {};
+  let nextData = null;
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch from RailRadar: HTTP ${response.status}`);
+  for (const day of [1, 2, 0]) {
+    try {
+      const url = `https://www.railyatri.in/live-train-status/${cleanTrainNo}?start_day=${day}`;
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        },
+      });
+
+      if (!response.ok) continue;
+
+      const html = await response.text();
+      const scriptRegex = /<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/;
+      const match = html.match(scriptRegex);
+      if (!match) continue;
+
+      const parsedJson = JSON.parse(match[1]);
+      const pageProps = parsedJson.props?.pageProps;
+      const candidateLts = pageProps?.ltsData;
+      const candidateTt = pageProps?.timeTableData?.[0] || {};
+      const hasStations = candidateLts && (
+        (candidateLts.previous_stations && candidateLts.previous_stations.length > 0) ||
+        (candidateLts.upcoming_stations && candidateLts.upcoming_stations.length > 0) ||
+        (candidateTt.route && candidateTt.route.length > 0)
+      );
+
+      if (hasStations) {
+        nextData = parsedJson;
+        lts = candidateLts;
+        tt = candidateTt;
+        break;
+      } else if (!lts && candidateLts && typeof candidateLts === 'object' && !Array.isArray(candidateLts)) {
+        nextData = parsedJson;
+        lts = candidateLts;
+        tt = candidateTt;
+      }
+    } catch (dayErr) {
+      console.warn(`[Proxy] Error querying day ${day} for train ${cleanTrainNo}:`, dayErr.message);
+    }
   }
-
-  const html = await response.text();
-  const scriptRegex = /<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/;
-  const match = html.match(scriptRegex);
-
-  if (!match) {
-    throw new Error('RailRadar data payload not found on page');
-  }
-
-  const nextData = JSON.parse(match[1]);
-  const lts = nextData.props?.pageProps?.ltsData;
 
   if (!lts) {
     throw new Error(`No live tracking data available for train ${cleanTrainNo}`);
   }
-
-  const tt = nextData.props?.pageProps?.timeTableData?.[0] || {};
   const route = tt.route || [];
 
   const rawName = lts.train_name || tt.train_name || `Train ${cleanTrainNo}`;

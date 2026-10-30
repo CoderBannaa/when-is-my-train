@@ -954,6 +954,38 @@ Tracked on When is my train App`;
         </View>
       </View>
 
+      {/* ================= 2.5 ORIGIN-DESTINATION SUMMARY CARD (Matching Screenshot 1 & 2) ================= */}
+      <View style={[styles.routeSummaryCard, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+        <View style={styles.routeSummaryLeft}>
+          <Text style={[styles.routeSummaryStationCode, { color: colors.textPrimary }]}>{routeOriginCode}</Text>
+          <Text style={[styles.routeSummaryTime, { color: colors.textSecondary }]}>{routeOriginDepTime}</Text>
+        </View>
+
+        <View style={styles.routeSummaryCenter}>
+          <Text style={styles.routeSummaryDurationText}>{routeDuration}</Text>
+          <View style={styles.routeSummaryArrowRow}>
+            <View style={styles.routeSummaryDot} />
+            <View style={styles.routeSummaryLine} />
+            <Ionicons name="caret-forward" size={12} color="#0284C7" style={{ marginLeft: -2 }} />
+          </View>
+          <Text style={[styles.routeSummaryHaltText, { color: colors.textSecondary }]}>
+            {routeCommercialHalts === 0 ? 'Non-stop' : `${routeCommercialHalts} stops`}
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          style={styles.routeSummaryRight}
+          activeOpacity={0.7}
+          onPress={() => setShowDestModal(true)}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={[styles.routeSummaryStationCode, { color: colors.textPrimary }]}>{routeDestCode}</Text>
+            <Ionicons name="chevron-down" size={16} color="#0284C7" style={{ marginLeft: 3 }} />
+          </View>
+          <Text style={[styles.routeSummaryTime, { color: colors.textSecondary }]}>{routeDestArrTime}</Text>
+        </TouchableOpacity>
+      </View>
+
       {/* ================= 3. SUB TABS BAR (Journey, Live Map, Coach Position, Info) ================= */}
       <View style={[styles.subTabsBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         {[
@@ -982,11 +1014,11 @@ Tracked on When is my train App`;
       {/* ================= TAB 1: JOURNEY (TIMELINE VIEW) ================= */}
       {activeTab === 'journey' && (
         <View style={{ flex: 1, backgroundColor: colors.background }}>
-          {/* Solid Black Column Header Bar (Arrival | Date | Departure) */}
-          <View style={styles.screenshot2BlackHeaderBar}>
-            <Text style={styles.screenshot2HeaderColText}>Arrival</Text>
-            <Text style={styles.screenshot2HeaderDayText}>{formattedDayText}</Text>
-            <Text style={styles.screenshot2HeaderColText}>Departure</Text>
+          {/* Solid Header Bar (Arrival | Day 0 - Sat, 20 Sep | Departure) matching Screenshot 1 */}
+          <View style={[styles.screenshot1HeaderBar, { backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC', borderBottomColor: colors.border }]}>
+            <Text style={[styles.screenshot1HeaderColText, { color: colors.textSecondary }]}>Arrival</Text>
+            <Text style={[styles.screenshot1HeaderDayText, { color: colors.textPrimary }]}>{formattedDayText}</Text>
+            <Text style={[styles.screenshot1HeaderColText, { color: colors.textSecondary }]}>Departure</Text>
           </View>
 
           <ScrollView
@@ -1014,10 +1046,15 @@ Tracked on When is my train App`;
 
                         {/* 2. Center Track Column: 100% straight continuous blue railway line */}
                         <View style={styles.passingTrackColInteractive}>
-                          {/* Continuous straight blue railway line */}
-                          <View style={styles.trackLineContinuousBlue} />
+                          {/* Continuous straight railway line (Green if passed, Light Slate if upcoming) */}
+                          <View
+                            style={[
+                              styles.trackLineContinuousBlue,
+                              { backgroundColor: item.stations[0].originalIndex <= liveData.activeStopIndex ? '#16A34A' : '#CBD5E1' },
+                            ]}
+                          />
 
-                          {/* Visible + count badge centered on the straight blue line */}
+                          {/* Visible + count badge centered on the straight line */}
                           <View style={styles.trackCountBadge}>
                             <Text style={styles.trackCountBadgeText}>{`+${count}`}</Text>
                           </View>
@@ -1150,21 +1187,15 @@ Tracked on When is my train App`;
                 const index = item.originalIndex;
                 const isFirst = index === 0;
                 const isLast = index === liveData.stationDetails.length - 1;
-                const isPassed = liveData.state === 'NOT_STARTED'
-                  ? false
-                  : (liveData.state === 'RUNNING_BETWEEN_STATIONS'
-                      ? index <= liveData.activeStopIndex
-                      : index < liveData.activeStopIndex);
-                const isReaching = liveData.state === 'NOT_STARTED'
+                const isCurrent = liveData.state === 'NOT_STARTED'
                   ? index === 0
-                  : (liveData.state === 'RUNNING_BETWEEN_STATIONS'
-                      ? index === liveData.activeStopIndex + 1
-                      : index === liveData.activeStopIndex);
-                const isUpcoming = !isPassed && !isReaching;
-                const isCurrent = liveData.state === 'NOT_STARTED' ? index === 0 : index === liveData.activeStopIndex;
+                  : (liveData.state === 'COMPLETED' ? index === liveData.stationDetails.length - 1 : index === liveData.activeStopIndex);
+                const isPassed = !isCurrent && index < liveData.activeStopIndex;
+                const isUpcoming = !isCurrent && index > liveData.activeStopIndex;
 
                 const schedArrText = st.scheduledArr !== '--' ? st.scheduledArr : st.scheduledDep;
                 const schedDepText = st.scheduledDep !== '--' ? st.scheduledDep : st.scheduledArr;
+                const pfClean = st.platform ? st.platform.replace(/Platform\s*/i, '').trim() : '1';
 
                 return (
                   <TouchableOpacity
@@ -1174,128 +1205,119 @@ Tracked on When is my train App`;
                     style={[
                       styles.stationTimelineRow,
                       { backgroundColor: colors.surface, borderBottomColor: colors.border },
-                      isCurrent && { backgroundColor: isDarkMode ? '#1E3A5F' : '#EDF6FF' },
+                      isCurrent && { backgroundColor: isDarkMode ? '#1E3A5F' : '#F0F9FF' },
                     ]}
                   >
                     {/* 1. Left Arrival Column */}
                     <View style={styles.timeColLeft}>
                       {isUpcoming ? (
                         <>
-                          <Text style={[styles.schedTimeText, { color: colors.textSecondary }]}>{schedArrText}</Text>
-                          <Text style={[styles.expectedTimeText, { color: isDarkMode ? '#38BDF8' : '#0284C7' }]}>{st.actualArr || schedArrText}</Text>
+                          <Text style={styles.expectedLabelText}>Expected</Text>
+                          <Text style={[styles.expectedTimeText, { color: colors.textSecondary }]}>
+                            {st.actualArr && st.actualArr !== '--' ? st.actualArr : schedArrText}
+                          </Text>
                         </>
                       ) : (
                         <>
-                          <Text style={[styles.schedTimeText, { color: colors.textSecondary }]}>{schedArrText}</Text>
+                          <Text style={[styles.schedTimeText, { color: colors.textPrimary }]}>{schedArrText}</Text>
                           <Text
                             style={[
                               styles.actualTimeText,
                               st.isDelayed ? styles.textDelayedRed : styles.textPassedGreen,
                             ]}
                           >
-                            {st.actualArr || schedArrText}
+                            {st.actualArr && st.actualArr !== '--' ? st.actualArr : schedArrText}
                           </Text>
                         </>
                       )}
                     </View>
 
-                    {/* 2. Track & Node Column: 100% straight continuous blue railway line with colored dots */}
+                    {/* 2. Track & Node Column: 100% exact matching Screenshot 1 */}
                     <View style={styles.trackTrackWrapper}>
-                      {/* Straight Blue Railway Track Line */}
-                      <View
-                        style={[
-                          styles.trackLineContinuousBlue,
-                          isFirst && styles.trackLineFromMiddleDown,
-                          isLast && styles.trackLineFromTopToMiddle,
-                        ]}
-                      />
+                      {/* Top Half Line (Solid Green for traversed track, Light Gray for upcoming) */}
+                      {!isFirst && (
+                        <View
+                          style={[
+                            styles.trackLineHalfTop,
+                            { backgroundColor: index <= liveData.activeStopIndex ? '#16A34A' : '#CBD5E1' }
+                          ]}
+                        />
+                      )}
 
-                      {/* Station Node Badge:
-                          - Passed: Solid Green
-                          - Upcoming Reaching: Light Red
-                          - Future stations after upcoming: Light Yellow
-                      */}
-                      {isReaching ? (
+                      {/* Bottom Half Line (Solid Green if departed, Light Gray for current/upcoming) */}
+                      {!isLast && (
+                        <View
+                          style={[
+                            styles.trackLineHalfBottom,
+                            { backgroundColor: index < liveData.activeStopIndex ? '#16A34A' : '#CBD5E1' }
+                          ]}
+                        />
+                      )}
+
+                      {/* Node Icon on Track */}
+                      {isFirst ? (
+                        <View style={styles.originTrainBadge}>
+                          <MaterialCommunityIcons name="train" size={15} color="#FFFFFF" />
+                        </View>
+                      ) : isCurrent ? (
                         <View style={styles.reachingStationBadgeWrapper}>
                           <Animated.View
                             style={[
-                              styles.reachingLightRedPulseRing,
+                              styles.currentStationPulseHalo,
                               {
-                                transform: [{ scale: redPulseRing }],
-                                opacity: redBlinkAnim.interpolate({
-                                  inputRange: [0.2, 1],
-                                  outputRange: [0.2, 0.65],
-                                }),
+                                transform: [{ scale: pulseAnim }],
+                                opacity: 0.38,
                               },
                             ]}
                           />
-                          <Animated.View
-                            style={[
-                              styles.reachingLightRedDot,
-                              {
-                                opacity: redBlinkAnim.interpolate({
-                                  inputRange: [0.2, 1],
-                                  outputRange: [0.75, 1],
-                                }),
-                              },
-                            ]}
-                          >
-                            <View style={styles.innerWhiteCoreDot} />
-                          </Animated.View>
+                          <View style={styles.currentTrainBadge}>
+                            <MaterialCommunityIcons name="train" size={16} color="#FFFFFF" />
+                          </View>
                         </View>
                       ) : isPassed ? (
-                        <View style={styles.passedGreenCircle} />
-                      ) : (
-                        <View style={styles.futureLightYellowDot}>
-                          <View style={styles.innerYellowDot} />
+                        <View style={styles.passedCheckCircle}>
+                          <Ionicons name="checkmark" size={13} color="#FFFFFF" />
                         </View>
+                      ) : isLast ? (
+                        <View style={styles.destRedCircle} />
+                      ) : (
+                        <View style={styles.upcomingGrayCircle} />
                       )}
                     </View>
 
                     {/* 3. Center Station Details Column */}
                     <View style={styles.stationInfoCol}>
                       <Text style={[styles.stationNameText, { color: colors.textPrimary }]} numberOfLines={1}>
-                        {st.name}
+                        {st.name.includes('(') ? st.name : `${st.name} (${st.code})`}
                       </Text>
 
                       <View style={styles.screenshot2StationMetaRow}>
                         <Text style={[styles.screenshot2DistanceText, { color: colors.textSecondary }]}>
                           {st.distanceKm} km
                         </Text>
-                        {st.platform ? (
-                          <View style={[styles.screenshot2PlatformPill, isDarkMode && { backgroundColor: '#334155', borderColor: '#475569' }]}>
-                            <Text style={[styles.screenshot2PlatformPillText, { color: colors.textPrimary }]}>
-                              {st.platform.replace(/Platform\s*/i, '').trim() || '1'}
-                            </Text>
-                          </View>
-                        ) : null}
+                        <Text style={[styles.screenshot2DistanceText, { color: colors.textSecondary, marginLeft: 8 }]}>
+                          Platform <Text style={{ fontWeight: '800', color: colors.textPrimary }}>{pfClean}</Text>
+                        </Text>
                       </View>
 
                       {/* Status Badges */}
-                      {isReaching ? (
-                        <View style={styles.reachingRedStatusBadge}>
-                          <Animated.View style={[styles.reachingRedBlinkDot, { opacity: redBlinkAnim }]} />
-                          <Text style={styles.reachingRedStatusBadgeText}>
-                            {liveData.state === 'NOT_STARTED'
-                              ? `Scheduled • Departs ${st.scheduledDep || '08:00 PM'}`
-                              : isCurrent
-                                ? (st.isDelayed ? `Arrived • ${st.delayMinutes} min late` : 'Arrived • On Time')
-                                : (st.isDelayed ? `Reaching Next • ${st.delayMinutes} min late` : 'Reaching Next • On Time')}
+                      {isCurrent ? (
+                        <View style={styles.currentBlueStatusBadge}>
+                          <Text style={styles.currentBlueStatusBadgeText}>
+                            Current Station • {st.isDelayed ? `${st.delayMinutes} min late` : 'On Time'}
                           </Text>
                         </View>
-                      ) : isPassed && st.isDelayed ? (
-                        <View style={styles.lateBadge}>
-                          <Text style={styles.lateBadgeText}>{st.delayMinutes} min late</Text>
-                        </View>
                       ) : isPassed ? (
-                        <View style={styles.departedBadge}>
-                          <Text style={styles.departedBadgeText}>Departed</Text>
-                        </View>
-                      ) : (
-                        <View style={styles.upcomingYellowBadge}>
-                          <Text style={styles.upcomingYellowBadgeText}>Upcoming</Text>
-                        </View>
-                      )}
+                        st.isDelayed ? (
+                          <View style={styles.lateBadge}>
+                            <Text style={styles.lateBadgeText}>{st.delayMinutes} min late</Text>
+                          </View>
+                        ) : (
+                          <View style={styles.departedBadge}>
+                            <Text style={styles.departedBadgeText}>Departed</Text>
+                          </View>
+                        )
+                      ) : null}
                     </View>
 
                     {/* 4. Right Departure Column */}
@@ -1303,20 +1325,20 @@ Tracked on When is my train App`;
                       {isUpcoming ? (
                         <>
                           <Text style={styles.expectedLabelText}>Expected</Text>
-                          <Text style={[styles.expectedTimeText, { color: isDarkMode ? '#38BDF8' : '#0284C7' }]}>
-                            {st.actualDep || schedDepText}
+                          <Text style={[styles.expectedTimeText, { color: colors.textSecondary }]}>
+                            {st.actualDep && st.actualDep !== '--' ? st.actualDep : schedDepText}
                           </Text>
                         </>
                       ) : (
                         <>
-                          <Text style={[styles.schedTimeText, { color: colors.textSecondary }]}>{schedDepText}</Text>
+                          <Text style={[styles.schedTimeText, { color: colors.textPrimary }]}>{schedDepText}</Text>
                           <Text
                             style={[
                               styles.actualTimeText,
                               st.isDelayed ? styles.textDelayedRed : styles.textPassedGreen,
                             ]}
                           >
-                            {st.actualDep || schedDepText}
+                            {st.actualDep && st.actualDep !== '--' ? st.actualDep : schedDepText}
                           </Text>
                         </>
                       )}
@@ -2499,6 +2521,94 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
   },
+
+  // 1.5 Origin - Destination Route Summary Card (Matching Screenshots 1 & 2)
+  routeSummaryCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  routeSummaryLeft: {
+    alignItems: 'flex-start',
+    minWidth: 65,
+  },
+  routeSummaryRight: {
+    alignItems: 'flex-end',
+    minWidth: 65,
+  },
+  routeSummaryStationCode: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#0F172A',
+    letterSpacing: 0.2,
+  },
+  routeSummaryTime: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+    marginTop: 2,
+  },
+  routeSummaryCenter: {
+    alignItems: 'center',
+    flex: 1,
+    paddingHorizontal: 12,
+  },
+  routeSummaryDurationText: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#0284C7',
+    marginBottom: 4,
+  },
+  routeSummaryArrowRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '82%',
+    justifyContent: 'center',
+  },
+  routeSummaryDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#0284C7',
+  },
+  routeSummaryLine: {
+    flex: 1,
+    height: 1.5,
+    backgroundColor: '#0284C7',
+  },
+  routeSummaryHaltText: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#64748B',
+    marginTop: 4,
+  },
+
+  // 1.6 Screenshot 1 Header Bar
+  screenshot1HeaderBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  screenshot1HeaderColText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  screenshot1HeaderDayText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
   calendarDateBox: {
     width: 54,
     height: 66,
@@ -2965,44 +3075,63 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     bottom: '50%',
-    width: 6,
-    borderRadius: 3,
+    width: 3.5,
+    zIndex: 1,
+    alignSelf: 'center',
   },
   trackLineHalfBottom: {
     position: 'absolute',
     top: '50%',
     bottom: 0,
-    width: 6,
-    borderRadius: 3,
+    width: 3.5,
+    zIndex: 1,
+    alignSelf: 'center',
   },
   lineGreen: {
-    backgroundColor: '#0284C7',
+    backgroundColor: '#16A34A',
   },
   lineGrey: {
     backgroundColor: '#CBD5E1',
   },
   lineGreenThick: {
-    width: 6,
-    backgroundColor: '#0284C7',
-    borderRadius: 3,
+    width: 3.5,
+    backgroundColor: '#16A34A',
+    borderRadius: 2,
   },
   lineGreyThick: {
-    width: 6,
+    width: 3.5,
     backgroundColor: '#CBD5E1',
-    borderRadius: 3,
+    borderRadius: 2,
   },
   lineBluePassing: {
     backgroundColor: '#0284C7',
   },
 
   originTrainBadge: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: Colors.primary,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#0284C7',
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 4,
+  },
+  currentTrainBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#0284C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 4,
+  },
+  currentStationPulseHalo: {
+    position: 'absolute',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(2, 132, 199, 0.35)',
+    zIndex: 3,
   },
   originStartDot: {
     width: 14,
@@ -3021,20 +3150,72 @@ const styles = StyleSheet.create({
     borderWidth: 2.5,
     borderColor: '#FFFFFF',
     zIndex: 4,
-    elevation: 2,
-    shadowColor: '#16A34A',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.3,
-    shadowRadius: 2,
   },
   passedCheckCircle: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     backgroundColor: '#16A34A',
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 4,
+  },
+  upcomingGrayCircle: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#94A3B8',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    zIndex: 4,
+  },
+  destRedCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#DC2626',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    zIndex: 4,
+  },
+  currentBlueStatusBadge: {
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    alignSelf: 'flex-start',
+    marginTop: 4,
+  },
+  currentBlueStatusBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0284C7',
+  },
+  departedBadge: {
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    alignSelf: 'flex-start',
+    marginTop: 4,
+  },
+  departedBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#16A34A',
+  },
+  lateBadge: {
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    alignSelf: 'flex-start',
+    marginTop: 4,
+  },
+  lateBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#DC2626',
   },
   reachingStationBadgeWrapper: {
     position: 'relative',
@@ -3149,16 +3330,6 @@ const styles = StyleSheet.create({
     borderRadius: 17,
     backgroundColor: '#BAE6FD',
   },
-  currentTrainBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: Colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 6,
-    elevation: 3,
-  },
   upcomingGreyDot: {
     width: 11,
     height: 11,
@@ -3191,34 +3362,6 @@ const styles = StyleSheet.create({
     color: '#64748B',
     fontWeight: '500',
     marginTop: 2,
-  },
-
-  // Status Badges
-  departedBadge: {
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-    alignSelf: 'flex-start',
-    marginTop: 4,
-  },
-  departedBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#15803D',
-  },
-  lateBadge: {
-    backgroundColor: '#FEE2E2',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-    alignSelf: 'flex-start',
-    marginTop: 4,
-  },
-  lateBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#DC2626',
   },
   currentStatusBadge: {
     backgroundColor: '#DBEAFE',
