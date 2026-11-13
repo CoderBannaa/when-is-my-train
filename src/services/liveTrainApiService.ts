@@ -2,6 +2,7 @@ import { calculateLiveStatus, parseTimeToMinutes } from '../utils/liveStatusEngi
 import { CorridorTrain, findOrGenerateTrain, getTrainsBetweenStations, registerDynamicCorridorTrain, registerTrainsIntoCatalog, TrainBetweenStation } from '../data/trainsBetweenStations';
 import { SafeStorage } from '../context/PreferencesContext';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import { API_CONFIG, STORAGE_KEYS } from '../config/env';
 
 // ==========================================
@@ -210,6 +211,16 @@ export function getLocalProxyBaseUrl(): string {
       return `http://${host}:5001`;
     }
   }
+  // On Native Mobile (Expo Go on phone), dynamically resolve computer's LAN IP address
+  try {
+    const hostUri = Constants?.expoConfig?.hostUri || (Constants as any)?.manifest?.debuggerHost;
+    if (hostUri) {
+      const ip = hostUri.split(':')[0];
+      if (ip && ip !== 'localhost' && ip !== '127.0.0.1') {
+        return `http://${ip}:5001`;
+      }
+    }
+  } catch {}
   return 'http://localhost:5001';
 }
 
@@ -686,8 +697,10 @@ class LiveTrainApiService {
    */
   public async fetchDirectRailRadarLive(cleanTrainNo: string): Promise<LiveTrainTrackingData> {
     let lastErr: any = null;
+    const candidates: Array<{ day: number; parsed: LiveTrainTrackingData; status?: string }> = [];
 
-    for (const day of [1, 2, 0]) {
+    // Query 0 (today), 1 (yesterday), 2 (2 days ago)
+    for (const day of [0, 1, 2]) {
       const url = `https://www.railyatri.in/live-train-status/${cleanTrainNo}?start_day=${day}`;
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 6000);
@@ -720,13 +733,26 @@ class LiveTrainApiService {
 
         if (hasStns) {
           const parsed = this.parseRailRadarNextData(cleanTrainNo, nextData);
-          this.registerTrainFromRailRadar(cleanTrainNo, parsed);
-          return parsed;
+          candidates.push({ day, parsed, status: lts.status });
+          // If train is actively running right now (status === 'T'), use it immediately!
+          if (lts.status === 'T') {
+            this.registerTrainFromRailRadar(cleanTrainNo, parsed);
+            return parsed;
+          }
         }
       } catch (err) {
         clearTimeout(timeoutId);
         lastErr = err;
       }
+    }
+
+    if (candidates.length > 0) {
+      // Prioritize: 1) Active running (status === 'T'), 2) Today (day === 0), 3) First candidate
+      const selected = candidates.find(c => c.status === 'T')
+        || candidates.find(c => c.day === 0)
+        || candidates[0];
+      this.registerTrainFromRailRadar(cleanTrainNo, selected.parsed);
+      return selected.parsed;
     }
 
     throw lastErr || new Error(`No live tracking data available for train ${cleanTrainNo}`);

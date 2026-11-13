@@ -282,7 +282,7 @@ export const SearchResultsScreen: React.FC<SearchResultsScreenProps> = ({
       .slice(0, 5)
       .map(
         (t) =>
-          `• ${t.number} ${t.name}: Dep ${t.depTime} (${fromStation.code}) ➔ Arr ${t.arrTime} (${toStation.code}) • Fare: ₹${t.classes[0]?.price || 120}`
+          `• ${t.number} ${t.name}: Dep ${t.depTime} (${fromStation.code}) ➔ Arr ${t.arrTime} (${toStation.code})`
       )
       .join('\n');
 
@@ -423,10 +423,10 @@ Found on When is my train`;
             </View>
           </View>
 
-          {/* Coach Classes & Dynamic Fares Row */}
+          {/* Coach Classes Row */}
           {item.classes && item.classes.length > 0 && (
             <View style={styles.cardClassesRow}>
-              {item.classes.slice(0, 5).map((cls, idx) => (
+              {item.classes.slice(0, 6).map((cls, idx) => (
                 <View
                   key={idx}
                   style={[
@@ -437,9 +437,6 @@ Found on When is my train`;
                 >
                   <Text style={[styles.classChipTypeText, isDarkMode && { color: colors.textPrimary }]}>
                     {cls.type}
-                  </Text>
-                  <Text style={styles.classChipPriceText}>
-                    ₹{cls.price}
                   </Text>
                 </View>
               ))}
@@ -626,7 +623,6 @@ Found on When is my train`;
               { key: 'fastest', label: 'Fastest (Shortest Travel Time)', icon: 'flash-outline' },
               { key: 'early_dep', label: 'Departure: Earliest First', icon: 'time-outline' },
               { key: 'late_dep', label: 'Departure: Latest First', icon: 'moon-outline' },
-              { key: 'price_low', label: 'Fare: Lowest Price First', icon: 'cash-outline' },
             ].map((option) => (
               <TouchableOpacity
                 key={option.key}

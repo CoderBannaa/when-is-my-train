@@ -42,12 +42,14 @@ async function fetchLiveTrainData(trainNo) {
     }
   }
 
-  // Try query start_day=1 (today), then start_day=2 (yesterday), then start_day=0 (tomorrow/default)
+  // Try query start_day=0 (today), then 1 (yesterday), then 2 (2 days ago)
+  // Smart selection: prioritize actively running train (status === 'T') over completed/terminated ones
   let lts = null;
   let tt = {};
   let nextData = null;
+  const candidates = [];
 
-  for (const day of [1, 2, 0]) {
+  for (const day of [0, 1, 2]) {
     try {
       const url = `https://www.railyatri.in/live-train-status/${cleanTrainNo}?start_day=${day}`;
       const response = await fetch(url, {
@@ -75,23 +77,27 @@ async function fetchLiveTrainData(trainNo) {
       );
 
       if (hasStations) {
-        nextData = parsedJson;
-        lts = candidateLts;
-        tt = candidateTt;
-        break;
-      } else if (!lts && candidateLts && typeof candidateLts === 'object' && !Array.isArray(candidateLts)) {
-        nextData = parsedJson;
-        lts = candidateLts;
-        tt = candidateTt;
+        candidates.push({ day, parsedJson, lts: candidateLts, tt: candidateTt });
+        if (candidateLts.status === 'T') {
+          break; // Found actively travelling train!
+        }
       }
     } catch (dayErr) {
       console.warn(`[Proxy] Error querying day ${day} for train ${cleanTrainNo}:`, dayErr.message);
     }
   }
 
-  if (!lts) {
+  if (candidates.length === 0) {
     throw new Error(`No live tracking data available for train ${cleanTrainNo}`);
   }
+
+  const selectedCandidate = candidates.find(c => c.lts?.status === 'T')
+    || candidates.find(c => c.day === 0)
+    || candidates[0];
+
+  nextData = selectedCandidate.parsedJson;
+  lts = selectedCandidate.lts;
+  tt = selectedCandidate.tt;
   const route = tt.route || [];
 
   const rawName = lts.train_name || tt.train_name || `Train ${cleanTrainNo}`;

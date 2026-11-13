@@ -1756,7 +1756,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                       {item.name}
                     </Text>
                     <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 2 }}>
-                      Class: <Text style={{ fontWeight: '700' }}>{selectedSeatClass}</Text> • Fare: <Text style={{ fontWeight: '700', color: Colors.primary }}>{item.fare}</Text>
+                      Class: <Text style={{ fontWeight: '700' }}>{selectedSeatClass}</Text>
                     </Text>
                   </View>
                   <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: item.bg }}>

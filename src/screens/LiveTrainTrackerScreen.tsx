@@ -365,6 +365,27 @@ export const LiveTrainTrackerScreen: React.FC<LiveTrainTrackerScreenProps> = ({
   const [expandedPassingGroups, setExpandedPassingGroups] = useState<{ [key: string]: boolean }>({});
 
   const scrollRef = useRef<ScrollView>(null);
+  const currentStationY = useRef<number>(0);
+  const hasAutoScrolled = useRef<boolean>(false);
+  const groupYOffsets = useRef<{ [key: string]: number }>({});
+
+  const [currentIstMinutes, setCurrentIstMinutes] = useState<number>(() => {
+    const now = new Date();
+    const istOffsetMs = 5.5 * 60 * 60 * 1000;
+    const istDate = new Date(now.getTime() + (now.getTimezoneOffset() * 60 * 1000) + istOffsetMs);
+    return istDate.getHours() * 60 + istDate.getMinutes();
+  });
+
+  useEffect(() => {
+    const clockInterval = setInterval(() => {
+      const now = new Date();
+      const istOffsetMs = 5.5 * 60 * 60 * 1000;
+      const istDate = new Date(now.getTime() + (now.getTimezoneOffset() * 60 * 1000) + istOffsetMs);
+      const mins = istDate.getHours() * 60 + istDate.getMinutes();
+      setCurrentIstMinutes(mins);
+    }, 5000);
+    return () => clearInterval(clockInterval);
+  }, []);
   const spinAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const redBlinkAnim = useRef(new Animated.Value(1)).current;
@@ -496,13 +517,13 @@ export const LiveTrainTrackerScreen: React.FC<LiveTrainTrackerScreenProps> = ({
   }, [activeTrain.number]);
 
   useEffect(() => {
-    // Check 10-minute cache first - will NOT hit API if already cached
+    // Initial fetch from cache or live API
     fetchLiveTracking(false);
 
-    // Gentle 5-minute background cache sync (never forces API call)
+    // Dynamic 60-second live GPS tracking refresh
     const interval = setInterval(() => {
-      fetchLiveTracking(false);
-    }, 5 * 60 * 1000);
+      fetchLiveTracking(true);
+    }, 60 * 1000);
     return () => clearInterval(interval);
   }, [fetchLiveTracking]);
 
@@ -600,16 +621,41 @@ export const LiveTrainTrackerScreen: React.FC<LiveTrainTrackerScreenProps> = ({
 
     if (liveApiResponse && liveApiResponse.stations && liveApiResponse.stations.length > 0) {
       const apiStations = liveApiResponse.stations;
-      let activeIdx = apiStations.findIndex((s) => s.status === 'current');
+      let activeIdx = -1;
+
+      // 1. Prioritize authentic live satellite currentStationCode reported by RailRadar
+      if (liveApiResponse.currentStationCode) {
+        activeIdx = apiStations.findIndex(
+          (s) => s.stationCode?.trim().toUpperCase() === liveApiResponse.currentStationCode?.trim().toUpperCase()
+        );
+      }
+
+      // 2. Prioritize station explicitly marked 'current' by the live tracking response
+      if (activeIdx === -1) {
+        activeIdx = apiStations.findIndex((s) => s.status === 'current' || s.status === 'CURRENT');
+      }
+
+      // 3. Match by station name if code wasn't an exact match
+      if (activeIdx === -1 && liveApiResponse.currentStationName) {
+        const target = liveApiResponse.currentStationName.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        activeIdx = apiStations.findIndex((s) => {
+          const stName = (s.stationName || s.stationCode || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+          return stName.includes(target) || target.includes(stName);
+        });
+      }
+
+      // 4. Fallback to last departed station
       if (activeIdx === -1) {
         for (let i = apiStations.length - 1; i >= 0; i--) {
-          if (apiStations[i].status === 'departed') {
+          if (apiStations[i].status === 'departed' || apiStations[i].status === 'PASSED') {
             activeIdx = i;
             break;
           }
         }
       }
       if (activeIdx === -1) activeIdx = 0;
+
+      const totalDelay = liveApiResponse.totalDelayMinutes || 0;
 
       const stationDetails: StationLiveDetail[] = apiStations.map((st, idx) => {
         let pfStr = st.platform || '1';
@@ -627,9 +673,9 @@ export const LiveTrainTrackerScreen: React.FC<LiveTrainTrackerScreenProps> = ({
           scheduledDep: st.scheduledDeparture,
           actualArr: st.actualArrival,
           actualDep: st.actualDeparture,
-          delayMinutes: st.delayMinutes || 0,
-          delayAtStopMinutes: st.delayMinutes || 0,
-          isDelayed: (st.delayMinutes || 0) > 0,
+          delayMinutes: st.delayMinutes || totalDelay,
+          delayAtStopMinutes: st.delayMinutes || totalDelay,
+          isDelayed: (st.delayMinutes || totalDelay) > 0,
           platform: pfStr,
           distanceKm: st.distanceKm,
           haltDuration: st.isPassing ? 'Pass' : '2m',
@@ -640,27 +686,36 @@ export const LiveTrainTrackerScreen: React.FC<LiveTrainTrackerScreenProps> = ({
         };
       });
 
-      const covered = stationDetails[activeIdx]?.distanceKm || 0;
+      const curStn = stationDetails[activeIdx] || stationDetails[0];
+      const nextStn = activeIdx + 1 < stationDetails.length ? stationDetails[activeIdx + 1] : null;
+
+      const covered = curStn?.distanceKm || 0;
       const totalDist = stationDetails[stationDetails.length - 1]?.distanceKm || activeTrain.totalDistanceKm || 635;
-      const remainingDist = liveApiResponse.distanceLeftKm ?? Math.max(0, totalDist - covered);
+      const remainingDist = Math.max(0, totalDist - covered);
 
       let distNext = liveApiResponse.distanceToNextKm;
-      if (!distNext) {
-        if (activeIdx + 1 < stationDetails.length) {
-          distNext = Math.max(1, stationDetails[activeIdx + 1].distanceKm - covered);
+      if (!distNext || activeIdx !== apiStations.findIndex((s) => s.status === 'current')) {
+        if (nextStn) {
+          distNext = Math.max(1, nextStn.distanceKm - covered);
         } else {
-          distNext = 15;
+          distNext = 0;
         }
       }
 
-      const bannerLow = (liveApiResponse.statusBanner || '').toLowerCase();
+      const delayStr = totalDelay > 0 ? ` (+${totalDelay}m Late)` : ' (On Time)';
+      let statusTitle = liveApiResponse.statusBanner || `At ${curStn.name}${delayStr}`;
+      let statusSub = `${curStn.platform} • Speed ${liveApiResponse.currentSpeedKmH || 75} km/h${nextStn ? ` • Next: ${nextStn.name}` : ''}`;
       let determinedState: TrainOperationalState = 'RUNNING_BETWEEN_STATIONS';
-      if (activeIdx === 0 && (bannerLow.includes('scheduled') || bannerLow.includes('yet to') || apiStations[0]?.status !== 'departed')) {
+
+      const originDepMins = parseTimeToMinutes(apiStations[0].scheduledDeparture);
+      if (activeIdx === 0 && currentIstMinutes < originDepMins + totalDelay) {
         determinedState = 'NOT_STARTED';
-      } else if (activeIdx === apiStations.length - 1 && (bannerLow.includes('complete') || bannerLow.includes('arrived') || bannerLow.includes('reached') || bannerLow.includes('terminated'))) {
+        statusTitle = `Scheduled Departure at ${apiStations[0].scheduledDeparture}`;
+        statusSub = `${curStn.platform} • Right Time`;
+      } else if (activeIdx === stationDetails.length - 1 && (liveApiResponse.statusBanner?.toLowerCase().includes('arrived') || liveApiResponse.statusBanner?.toLowerCase().includes('reached'))) {
         determinedState = 'COMPLETED';
-      } else if (bannerLow.includes('platform') || (liveApiResponse.currentSpeedKmH ?? 0) === 0) {
-        determinedState = 'HALTED_AT_STATION';
+        statusTitle = `Arrived ${curStn.name}${delayStr}`;
+        statusSub = `${curStn.platform} • Train reached destination (Completed Run)`;
       }
 
       return {
@@ -669,33 +724,33 @@ export const LiveTrainTrackerScreen: React.FC<LiveTrainTrackerScreenProps> = ({
         type: activeTrain.type,
         isLocalEmu: activeTrain.isLocalEmu,
         state: determinedState,
-        currentPlatform: (liveApiResponse as any).currentPlatform || stationDetails[activeIdx]?.platform || 'Platform 1',
-        currentStationName: liveApiResponse.currentStationName,
-        currentStationCode: liveApiResponse.currentStationCode,
-        nextStationName: liveApiResponse.nextStationName,
-        nextStationCode: liveApiResponse.nextStationCode,
+        currentPlatform: curStn.platform,
+        currentStationName: curStn.name,
+        currentStationCode: curStn.code,
+        nextStationName: nextStn ? nextStn.name : 'Destination',
+        nextStationCode: nextStn ? nextStn.code : '',
         distanceToNextKm: distNext,
-        currentSpeed: liveApiResponse.currentSpeedKmH ?? (liveApiResponse as any).currentSpeed ?? 0,
+        currentSpeed: activeIdx === stationDetails.length - 1 ? 0 : (liveApiResponse.currentSpeedKmH || 75),
         distanceRemainingKm: remainingDist,
         totalDistanceKm: totalDist,
         distanceCoveredKm: covered,
         expectedArrivalAtDestination: liveApiResponse.expectedArrivalAtDestination,
-        lastUpdatedText: liveApiResponse.lastUpdated || 'RailRadar GPS Real-time',
-        etaNextStopMinutes: 15,
-        delayMinutes: liveApiResponse.totalDelayMinutes || 0,
-        isDelayed: (liveApiResponse.totalDelayMinutes || 0) > 0,
+        lastUpdatedText: 'Live GPS Real-time • Auto-advancing',
+        etaNextStopMinutes: Math.round(distNext / 1.2),
+        delayMinutes: totalDelay,
+        isDelayed: totalDelay > 0,
         activeStopIndex: activeIdx,
-        bannerStatusText: liveApiResponse.statusBanner || (liveApiResponse as any).statusTitle || 'Right Time',
-        bannerSubText: (liveApiResponse as any).statusSubtitle || `Speed ${liveApiResponse.currentSpeedKmH || 0} km/h • Next: ${liveApiResponse.nextStationName}`,
+        bannerStatusText: statusTitle,
+        bannerSubText: statusSub,
         stationDetails,
       };
     }
 
     // Engine calculation
     return calculateLiveStatus(activeTrain, simulationMinutes);
-  }, [liveApiResponse, activeTrain, simulationMinutes]);
+  }, [liveApiResponse, activeTrain, simulationMinutes, currentIstMinutes]);
 
-  // Clean station items mapping with collapsible intermediate passing groups
+  // Group stations into commercial halts and collapsible intermediate passing groups
   const timelineItems: TimelineItemType[] = useMemo(() => {
     const items: TimelineItemType[] = [];
     let currentPassing: { station: StationLiveDetail; originalIndex: number }[] = [];
@@ -763,25 +818,54 @@ export const LiveTrainTrackerScreen: React.FC<LiveTrainTrackerScreenProps> = ({
     return calculateDurationText(routeOriginDepTime, routeDestArrTime);
   }, [activeTrain.number, activeTrain.duration, customDestCode, routeOriginDepTime, routeDestArrTime]);
 
+  // Reset scroll state on train change
+  useEffect(() => {
+    hasAutoScrolled.current = false;
+    currentStationY.current = 0;
+  }, [activeTrain.number]);
+
+  // Auto-expand intermediate group if it contains the active station
+  const handleStationLayout = useCallback((y: number) => {
+    if (y > 0) {
+      currentStationY.current = y;
+      if (!hasAutoScrolled.current) {
+        hasAutoScrolled.current = true;
+        setTimeout(() => {
+          scrollRef.current?.scrollTo({
+            y: Math.max(0, y - 130),
+            animated: true,
+          });
+        }, 150);
+      }
+    }
+  }, []);
+
   const handleScrollToCurrent = useCallback(() => {
-    if (scrollRef.current && liveData.activeStopIndex >= 0) {
-      if (liveData.activeStopIndex > 2) {
+    if (scrollRef.current) {
+      if (currentStationY.current > 0) {
         scrollRef.current.scrollTo({
-          y: Math.max(0, (liveData.activeStopIndex - 2) * 60),
+          y: Math.max(0, currentStationY.current - 130),
           animated: true,
         });
       } else {
-        scrollRef.current.scrollTo({ y: 0, animated: true });
+        const targetCode = liveData.currentStationCode?.trim().toUpperCase();
+        const activeIdx = liveData.stationDetails.findIndex((s) => s.code?.trim().toUpperCase() === targetCode) !== -1
+          ? liveData.stationDetails.findIndex((s) => s.code?.trim().toUpperCase() === targetCode)
+          : liveData.activeStopIndex;
+        scrollRef.current.scrollTo({
+          y: Math.max(0, Math.max(0, activeIdx - 1) * 64),
+          animated: true,
+        });
       }
     }
-  }, [liveData.activeStopIndex]);
+  }, [liveData.stationDetails, liveData.currentStationCode, liveData.activeStopIndex]);
 
   // Auto-scroll to current train position when data loads or updates
   useEffect(() => {
     if (liveData.activeStopIndex > 0) {
       const timer = setTimeout(() => {
         handleScrollToCurrent();
-      }, 500);
+      }, 400);
       return () => clearTimeout(timer);
     }
   }, [liveData.activeStopIndex, handleScrollToCurrent]);
@@ -954,38 +1038,6 @@ Tracked on When is my train App`;
         </View>
       </View>
 
-      {/* ================= 2.5 ORIGIN-DESTINATION SUMMARY CARD (Matching Screenshot 1 & 2) ================= */}
-      <View style={[styles.routeSummaryCard, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <View style={styles.routeSummaryLeft}>
-          <Text style={[styles.routeSummaryStationCode, { color: colors.textPrimary }]}>{routeOriginCode}</Text>
-          <Text style={[styles.routeSummaryTime, { color: colors.textSecondary }]}>{routeOriginDepTime}</Text>
-        </View>
-
-        <View style={styles.routeSummaryCenter}>
-          <Text style={styles.routeSummaryDurationText}>{routeDuration}</Text>
-          <View style={styles.routeSummaryArrowRow}>
-            <View style={styles.routeSummaryDot} />
-            <View style={styles.routeSummaryLine} />
-            <Ionicons name="caret-forward" size={12} color="#0284C7" style={{ marginLeft: -2 }} />
-          </View>
-          <Text style={[styles.routeSummaryHaltText, { color: colors.textSecondary }]}>
-            {routeCommercialHalts === 0 ? 'Non-stop' : `${routeCommercialHalts} stops`}
-          </Text>
-        </View>
-
-        <TouchableOpacity
-          style={styles.routeSummaryRight}
-          activeOpacity={0.7}
-          onPress={() => setShowDestModal(true)}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={[styles.routeSummaryStationCode, { color: colors.textPrimary }]}>{routeDestCode}</Text>
-            <Ionicons name="chevron-down" size={16} color="#0284C7" style={{ marginLeft: 3 }} />
-          </View>
-          <Text style={[styles.routeSummaryTime, { color: colors.textSecondary }]}>{routeDestArrTime}</Text>
-        </TouchableOpacity>
-      </View>
-
       {/* ================= 3. SUB TABS BAR (Journey, Live Map, Coach Position, Info) ================= */}
       <View style={[styles.subTabsBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         {[
@@ -1028,322 +1080,364 @@ Tracked on When is my train App`;
             contentContainerStyle={{ paddingBottom: 85 }}
           >
             <View style={styles.timelineContentWrapper}>
-              {timelineItems.map((item, tIdx) => {
-                if (item.type === 'passingGroup') {
-                  const count = item.stations.length;
-                  const isExpanded = !!expandedPassingGroups[item.key];
+              {timelineItems.map((item, itemIdx) => {
+                const targetCode = liveData.currentStationCode?.trim().toUpperCase();
 
-                  if (!isExpanded) {
-                    return (
-                      <TouchableOpacity
-                        key={item.key}
-                        activeOpacity={0.8}
-                        onPress={() => togglePassingGroup(item.key)}
-                        style={[styles.passingCollapsedRow, { backgroundColor: colors.surface }]}
-                      >
-                        {/* 1. Left Arrival Column - empty/seamless */}
-                        <View style={styles.timeColLeft} />
+                if (item.type === 'commercial') {
+                  const st = item.station;
+                  const isFirst = itemIdx === 0;
+                  const isLast = itemIdx === timelineItems.length - 1;
+                  const isCurrent = st.code?.trim().toUpperCase() === targetCode || item.originalIndex === liveData.activeStopIndex;
+                  const isPassed = !isCurrent && item.originalIndex < liveData.activeStopIndex;
+                  const isUpcoming = !isCurrent && item.originalIndex > liveData.activeStopIndex;
 
-                        {/* 2. Center Track Column: 100% straight continuous blue railway line */}
-                        <View style={styles.passingTrackColInteractive}>
-                          {/* Continuous straight railway line (Green if passed, Light Slate if upcoming) */}
-                          <View
-                            style={[
-                              styles.trackLineContinuousBlue,
-                              { backgroundColor: item.stations[0].originalIndex <= liveData.activeStopIndex ? '#16A34A' : '#CBD5E1' },
-                            ]}
-                          />
+                  const schedArrText = st.scheduledArr !== '--' ? st.scheduledArr : st.scheduledDep;
+                  const schedDepText = st.scheduledDep !== '--' ? st.scheduledDep : st.scheduledArr;
+                  const pfClean = st.platform ? st.platform.replace(/Platform\s*/i, '').trim() : '1';
 
-                          {/* Visible + count badge centered on the straight line */}
-                          <View style={styles.trackCountBadge}>
-                            <Text style={styles.trackCountBadgeText}>{`+${count}`}</Text>
-                          </View>
-                        </View>
-
-                        {/* 3. Station Info Column */}
-                        <View style={styles.stationInfoCol} />
-
-                        {/* 4. Right Departure Column */}
-                        <View style={styles.timeColRight} />
-                      </TouchableOpacity>
-                    );
-                  }
-
-                  // EXPANDED STATE (Fade Blue)
                   return (
                     <View
-                      key={item.key}
+                      key={`${st.code}-${item.originalIndex}`}
+                      onLayout={(e) => {
+                        if (isCurrent) {
+                          handleStationLayout(e.nativeEvent.layout.y);
+                        }
+                      }}
                       style={[
-                        styles.passingExpandedFadeBlueContainer,
-                        {
-                          backgroundColor: isDarkMode ? 'rgba(14, 58, 108, 0.3)' : '#F0F7FF',
-                          borderColor: isDarkMode ? '#1E3A5F' : '#BAE6FD',
-                        },
+                        styles.stationTimelineRow,
+                        { backgroundColor: colors.surface },
+                        isCurrent && { backgroundColor: isDarkMode ? '#1E3A5F' : '#EDF6FF' },
                       ]}
                     >
-                      {/* Collapse Header Bar */}
-                      <TouchableOpacity
-                        activeOpacity={0.7}
-                        onPress={() => togglePassingGroup(item.key)}
-                        style={[
-                          styles.fadeBlueHeaderBar,
-                          { backgroundColor: isDarkMode ? 'rgba(30, 58, 95, 0.45)' : 'rgba(186, 230, 253, 0.4)' },
-                        ]}
-                      >
-                        <View style={styles.timeColLeft} />
-                        <View style={styles.trackTrackWrapper}>
-                          <View style={styles.trackLineContinuousBlue} />
-                          <View style={styles.trackCountBadgeExpanded}>
-                            <Ionicons name="chevron-up" size={11} color="#0284C7" />
-                            <Text style={styles.trackCountBadgeTextExpanded}>{`−${count}`}</Text>
+                      {/* 1. Left Arrival Column */}
+                      <View style={styles.timeColLeft}>
+                        {isUpcoming ? (
+                          <Text style={[styles.schedTimeText, { color: colors.textSecondary }]}>
+                            {schedArrText}
+                          </Text>
+                        ) : (
+                          <>
+                            <Text style={[styles.schedTimeText, { color: colors.textPrimary }]}>{schedArrText}</Text>
+                            <Text
+                              style={[
+                                styles.actualTimeText,
+                                st.isDelayed ? styles.textDelayedRed : styles.textPassedGreen,
+                              ]}
+                            >
+                              {st.actualArr && st.actualArr !== '--' ? st.actualArr : schedArrText}
+                            </Text>
+                          </>
+                        )}
+                      </View>
+
+                      {/* 2. Track & Node Column: 100% exact continuous line */}
+                      <View style={styles.trackTrackWrapper}>
+                        {!isFirst && (
+                          <View
+                            style={[
+                              styles.trackLineContinuousTop,
+                              { backgroundColor: item.originalIndex <= liveData.activeStopIndex ? '#16A34A' : '#94A3B8' }
+                            ]}
+                          />
+                        )}
+
+                        {!isLast && (
+                          <View
+                            style={[
+                              styles.trackLineContinuousBottom,
+                              { backgroundColor: item.originalIndex < liveData.activeStopIndex ? '#16A34A' : '#94A3B8' }
+                            ]}
+                          />
+                        )}
+
+                        {isCurrent ? (
+                          <View style={styles.reachingStationBadgeWrapper}>
+                            <Animated.View
+                              style={[
+                                styles.currentStationPulseHalo,
+                                {
+                                  transform: [{ scale: pulseAnim }],
+                                  opacity: 0.35,
+                                },
+                              ]}
+                            />
+                            <View style={styles.currentTrainBadge}>
+                              <MaterialCommunityIcons name="train" size={16} color="#FFFFFF" />
+                            </View>
                           </View>
-                        </View>
-                        <View style={styles.stationInfoCol}>
-                          <Text style={[styles.fadeBlueHeaderText, { color: isDarkMode ? '#93C5FD' : '#0369A1' }]}>
-                            {`${count} Intermediate Stations • Tap line to close`}
+                        ) : isPassed ? (
+                          <View style={styles.passedCheckCircle}>
+                            <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                          </View>
+                        ) : isLast ? (
+                          <View style={styles.destRedCircle} />
+                        ) : (
+                          <View style={styles.upcomingGrayCircle} />
+                        )}
+                      </View>
+
+                      {/* 3. Center Station Details Column */}
+                      <View style={styles.stationInfoCol}>
+                        <Text style={[styles.stationNameText, { color: colors.textPrimary }]} numberOfLines={1}>
+                          {st.name.includes('(') ? st.name : `${st.name} (${st.code})`}
+                        </Text>
+
+                        <View style={styles.screenshot2StationMetaRow}>
+                          <Text style={[styles.screenshot2DistanceText, { color: colors.textSecondary }]}>
+                            {st.distanceKm} km
+                          </Text>
+                          <Text style={[styles.screenshot2DistanceText, { color: colors.textSecondary, marginLeft: 8 }]}>
+                            Platform <Text style={{ fontWeight: '800', color: colors.textPrimary }}>{pfClean}</Text>
                           </Text>
                         </View>
-                        <View style={styles.timeColRight}>
-                          <Ionicons name="close-circle-outline" size={16} color={isDarkMode ? '#93C5FD' : '#0284C7'} />
-                        </View>
-                      </TouchableOpacity>
 
-                      {/* Intermediate Stations List */}
-                      {item.stations.map((pSub) => {
-                        const pSt = pSub.station;
-                        const pPassed = liveData.state === 'NOT_STARTED'
-                          ? false
-                          : (liveData.state === 'RUNNING_BETWEEN_STATIONS'
-                              ? pSub.originalIndex <= liveData.activeStopIndex
-                              : pSub.originalIndex < liveData.activeStopIndex);
-                        const pReaching = liveData.state === 'NOT_STARTED'
-                          ? false
-                          : (liveData.state === 'RUNNING_BETWEEN_STATIONS'
-                              ? pSub.originalIndex === liveData.activeStopIndex + 1
-                              : pSub.originalIndex === liveData.activeStopIndex);
-
-                        return (
-                          <View
-                            key={`passing-${pSt.code}-${pSub.originalIndex}`}
-                            style={[
-                              styles.passingStationRowFadeBlue,
-                              pReaching && { backgroundColor: isDarkMode ? 'rgba(2, 132, 199, 0.25)' : 'rgba(2, 132, 199, 0.12)' },
-                            ]}
-                          >
-                            <View style={styles.timeColLeft}>
-                              <Text style={[styles.passingTimeText, { color: colors.textSecondary }]}>
-                                {pSt.actualArr || pSt.scheduledArr || '--'}
-                              </Text>
-                            </View>
-                            <TouchableOpacity
-                              activeOpacity={0.8}
-                              onPress={() => togglePassingGroup(item.key)}
-                              style={styles.trackTrackWrapper}
-                            >
-                              <View style={styles.trackLineContinuousBlue} />
-                              {pReaching ? (
-                                <View style={styles.passingReachingDotWrapper}>
-                                  <Animated.View
-                                    style={[
-                                      styles.passingLightRedPulseRing,
-                                      {
-                                        transform: [{ scale: redPulseRing }],
-                                        opacity: redBlinkAnim.interpolate({
-                                          inputRange: [0.2, 1],
-                                          outputRange: [0.2, 0.7],
-                                        }),
-                                      },
-                                    ]}
-                                  />
-                                  <View style={styles.passingLightRedDot} />
-                                </View>
-                              ) : pPassed ? (
-                                <View style={styles.passingGreenDot} />
-                              ) : (
-                                <View style={styles.passingLightYellowDot} />
-                              )}
-                            </TouchableOpacity>
-                            <View style={styles.stationInfoCol}>
-                              <Text style={[styles.passingStationName, { color: colors.textPrimary }]} numberOfLines={1}>
-                                {pSt.name}
-                              </Text>
-                              <Text style={[styles.passingSpeedText, { color: colors.textSecondary }]}>
-                                Pass • {pSt.distanceKm} km
-                              </Text>
-                            </View>
-                            <View style={styles.timeColRight}>
-                              <Text style={[styles.passingTimeText, { color: colors.textSecondary }]}>
-                                {pSt.actualDep || pSt.scheduledDep || '--'}
-                              </Text>
-                            </View>
+                        {/* Status Badges */}
+                        {isCurrent ? (
+                          <View style={styles.currentBlueStatusBadge}>
+                            <Text style={styles.currentBlueStatusBadgeText}>
+                              Current Station • {st.isDelayed ? `${st.delayMinutes} min late` : 'On Time'}
+                            </Text>
                           </View>
-                        );
-                      })}
+                        ) : isPassed ? (
+                          st.isDelayed ? (
+                            <View style={styles.lateBadge}>
+                              <Text style={styles.lateBadgeText}>{st.delayMinutes} min late</Text>
+                            </View>
+                          ) : (
+                            <View style={styles.departedBadge}>
+                              <Text style={styles.departedBadgeText}>Departed</Text>
+                            </View>
+                          )
+                        ) : null}
+                      </View>
+
+                      {/* 4. Right Departure Column */}
+                      <View style={styles.timeColRight}>
+                        {isUpcoming ? (
+                          <>
+                            <Text style={styles.expectedLabelText}>Expected</Text>
+                            <Text style={[styles.expectedTimeText, { color: colors.textPrimary }]}>
+                              {st.actualDep && st.actualDep !== '--' ? st.actualDep : schedDepText}
+                            </Text>
+                          </>
+                        ) : (
+                          <>
+                            <Text style={[styles.schedTimeText, { color: colors.textPrimary }]}>{schedDepText}</Text>
+                            <Text
+                              style={[
+                                styles.actualTimeText,
+                                st.isDelayed ? styles.textDelayedRed : styles.textPassedGreen,
+                              ]}
+                            >
+                              {st.actualDep && st.actualDep !== '--' ? st.actualDep : schedDepText}
+                            </Text>
+                          </>
+                        )}
+                      </View>
                     </View>
                   );
                 }
 
-                const st = item.station;
-                const index = item.originalIndex;
-                const isFirst = index === 0;
-                const isLast = index === liveData.stationDetails.length - 1;
-                const isCurrent = liveData.state === 'NOT_STARTED'
-                  ? index === 0
-                  : (liveData.state === 'COMPLETED' ? index === liveData.stationDetails.length - 1 : index === liveData.activeStopIndex);
-                const isPassed = !isCurrent && index < liveData.activeStopIndex;
-                const isUpcoming = !isCurrent && index > liveData.activeStopIndex;
-
-                const schedArrText = st.scheduledArr !== '--' ? st.scheduledArr : st.scheduledDep;
-                const schedDepText = st.scheduledDep !== '--' ? st.scheduledDep : st.scheduledArr;
-                const pfClean = st.platform ? st.platform.replace(/Platform\s*/i, '').trim() : '1';
+                // PASSING GROUP (Intermediate Stations between halts)
+                const isExpanded = !!expandedPassingGroups[item.key];
+                const currentPassingItem = item.stations.find(
+                  (s) => s.station.code?.trim().toUpperCase() === targetCode || s.originalIndex === liveData.activeStopIndex
+                );
+                const hasCurrentTrain = !!currentPassingItem;
+                const lastStationIdx = item.stations[item.stations.length - 1].originalIndex;
+                const isGroupPassed = lastStationIdx < liveData.activeStopIndex;
 
                 return (
-                  <TouchableOpacity
-                    key={`${st.code}-${index}`}
-                    activeOpacity={0.7}
-                    onPress={() => setSelectedStationDetail(st)}
-                    style={[
-                      styles.stationTimelineRow,
-                      { backgroundColor: colors.surface, borderBottomColor: colors.border },
-                      isCurrent && { backgroundColor: isDarkMode ? '#1E3A5F' : '#F0F9FF' },
-                    ]}
-                  >
-                    {/* 1. Left Arrival Column */}
-                    <View style={styles.timeColLeft}>
-                      {isUpcoming ? (
-                        <>
-                          <Text style={styles.expectedLabelText}>Expected</Text>
-                          <Text style={[styles.expectedTimeText, { color: colors.textSecondary }]}>
-                            {st.actualArr && st.actualArr !== '--' ? st.actualArr : schedArrText}
-                          </Text>
-                        </>
-                      ) : (
-                        <>
-                          <Text style={[styles.schedTimeText, { color: colors.textPrimary }]}>{schedArrText}</Text>
-                          <Text
-                            style={[
-                              styles.actualTimeText,
-                              st.isDelayed ? styles.textDelayedRed : styles.textPassedGreen,
-                            ]}
-                          >
-                            {st.actualArr && st.actualArr !== '--' ? st.actualArr : schedArrText}
-                          </Text>
-                        </>
-                      )}
-                    </View>
-
-                    {/* 2. Track & Node Column: 100% exact matching Screenshot 1 */}
-                    <View style={styles.trackTrackWrapper}>
-                      {/* Top Half Line (Solid Green for traversed track, Light Gray for upcoming) */}
-                      {!isFirst && (
-                        <View
-                          style={[
-                            styles.trackLineHalfTop,
-                            { backgroundColor: index <= liveData.activeStopIndex ? '#16A34A' : '#CBD5E1' }
-                          ]}
-                        />
-                      )}
-
-                      {/* Bottom Half Line (Solid Green if departed, Light Gray for current/upcoming) */}
-                      {!isLast && (
-                        <View
-                          style={[
-                            styles.trackLineHalfBottom,
-                            { backgroundColor: index < liveData.activeStopIndex ? '#16A34A' : '#CBD5E1' }
-                          ]}
-                        />
-                      )}
-
-                      {/* Node Icon on Track */}
-                      {isFirst ? (
-                        <View style={styles.originTrainBadge}>
-                          <MaterialCommunityIcons name="train" size={15} color="#FFFFFF" />
+                  <View key={item.key}>
+                    {/* If train is currently at one of the intermediate stations, ALWAYS render it prominently! */}
+                    {hasCurrentTrain && !isExpanded && (
+                      <View
+                        onLayout={(e) => handleStationLayout(e.nativeEvent.layout.y)}
+                        style={[
+                          styles.stationTimelineRow,
+                          { backgroundColor: isDarkMode ? '#1E3A5F' : '#EDF6FF' },
+                        ]}
+                      >
+                        <View style={styles.timeColLeft}>
+                          {currentPassingItem.station.scheduledArr && currentPassingItem.station.scheduledArr !== '--' && (
+                            <Text style={[styles.schedTimeText, { color: colors.textPrimary }]}>
+                              {currentPassingItem.station.scheduledArr}
+                            </Text>
+                          )}
                         </View>
-                      ) : isCurrent ? (
-                        <View style={styles.reachingStationBadgeWrapper}>
-                          <Animated.View
+                        <View style={styles.trackTrackWrapper}>
+                          <View
                             style={[
-                              styles.currentStationPulseHalo,
-                              {
-                                transform: [{ scale: pulseAnim }],
-                                opacity: 0.38,
-                              },
+                              styles.trackLineContinuousTop,
+                              { backgroundColor: '#16A34A' }
                             ]}
                           />
-                          <View style={styles.currentTrainBadge}>
-                            <MaterialCommunityIcons name="train" size={16} color="#FFFFFF" />
+                          <View
+                            style={[
+                              styles.trackLineContinuousBottom,
+                              { backgroundColor: '#94A3B8' }
+                            ]}
+                          />
+                          <View style={styles.reachingStationBadgeWrapper}>
+                            <Animated.View
+                              style={[
+                                styles.currentStationPulseHalo,
+                                { transform: [{ scale: pulseAnim }], opacity: 0.35 },
+                              ]}
+                            />
+                            <View style={styles.currentTrainBadge}>
+                              <MaterialCommunityIcons name="train" size={16} color="#FFFFFF" />
+                            </View>
                           </View>
                         </View>
-                      ) : isPassed ? (
-                        <View style={styles.passedCheckCircle}>
-                          <Ionicons name="checkmark" size={13} color="#FFFFFF" />
+                        <View style={styles.stationInfoCol}>
+                          <Text style={[styles.stationNameText, { color: colors.textPrimary }]} numberOfLines={1}>
+                            {currentPassingItem.station.name.includes('(') ? currentPassingItem.station.name : `${currentPassingItem.station.name} (${currentPassingItem.station.code})`}
+                          </Text>
+                          <Text style={[styles.screenshot2DistanceText, { color: colors.textSecondary }]}>
+                            {currentPassingItem.station.distanceKm} km • Intermediate Station
+                          </Text>
+                          <View style={styles.currentBlueStatusBadge}>
+                            <Text style={styles.currentBlueStatusBadgeText}>
+                              Current Station • {currentPassingItem.station.isDelayed ? `${currentPassingItem.station.delayMinutes} min late` : 'On Time'}
+                            </Text>
+                          </View>
                         </View>
-                      ) : isLast ? (
-                        <View style={styles.destRedCircle} />
-                      ) : (
-                        <View style={styles.upcomingGrayCircle} />
-                      )}
-                    </View>
+                        <View style={styles.timeColRight}>
+                          {currentPassingItem.station.scheduledDep && currentPassingItem.station.scheduledDep !== '--' && (
+                            <Text style={[styles.schedTimeText, { color: colors.textPrimary }]}>
+                              {currentPassingItem.station.scheduledDep}
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+                    )}
 
-                    {/* 3. Center Station Details Column */}
-                    <View style={styles.stationInfoCol}>
-                      <Text style={[styles.stationNameText, { color: colors.textPrimary }]} numberOfLines={1}>
-                        {st.name.includes('(') ? st.name : `${st.name} (${st.code})`}
-                      </Text>
-
-                      <View style={styles.screenshot2StationMetaRow}>
-                        <Text style={[styles.screenshot2DistanceText, { color: colors.textSecondary }]}>
-                          {st.distanceKm} km
-                        </Text>
-                        <Text style={[styles.screenshot2DistanceText, { color: colors.textSecondary, marginLeft: 8 }]}>
-                          Platform <Text style={{ fontWeight: '800', color: colors.textPrimary }}>{pfClean}</Text>
+                    {/* Expand/Collapse Toggle Row on the Track (Clean chevron button - ZERO COUNT BADGES!) */}
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      onPress={() => togglePassingGroup(item.key)}
+                      style={[styles.stationTimelineRow, { minHeight: 36, backgroundColor: colors.surface }]}
+                    >
+                      <View style={styles.timeColLeft} />
+                      <View style={styles.trackTrackWrapper}>
+                        <View
+                          style={[
+                            styles.trackLineContinuousTop,
+                            { backgroundColor: isGroupPassed ? '#16A34A' : '#94A3B8' }
+                          ]}
+                        />
+                        <View
+                          style={[
+                            styles.trackLineContinuousBottom,
+                            { backgroundColor: isGroupPassed ? '#16A34A' : '#94A3B8' }
+                          ]}
+                        />
+                        <View
+                          style={[
+                            styles.trackChevronCircle,
+                            {
+                              backgroundColor: colors.surface,
+                              borderColor: isGroupPassed ? '#16A34A' : '#94A3B8',
+                            },
+                          ]}
+                        >
+                          <Ionicons
+                            name={isExpanded ? 'chevron-up' : 'chevron-down'}
+                            size={12}
+                            color={isGroupPassed ? '#16A34A' : '#64748B'}
+                          />
+                        </View>
+                      </View>
+                      <View style={styles.stationInfoCol}>
+                        <Text style={[styles.intermediateHintText, { color: colors.textSecondary }]}>
+                          {isExpanded ? 'Hide intermediate stations' : 'Intermediate stations'}
                         </Text>
                       </View>
+                      <View style={styles.timeColRight} />
+                    </TouchableOpacity>
 
-                      {/* Status Badges */}
-                      {isCurrent ? (
-                        <View style={styles.currentBlueStatusBadge}>
-                          <Text style={styles.currentBlueStatusBadgeText}>
-                            Current Station • {st.isDelayed ? `${st.delayMinutes} min late` : 'On Time'}
-                          </Text>
-                        </View>
-                      ) : isPassed ? (
-                        st.isDelayed ? (
-                          <View style={styles.lateBadge}>
-                            <Text style={styles.lateBadgeText}>{st.delayMinutes} min late</Text>
-                          </View>
-                        ) : (
-                          <View style={styles.departedBadge}>
-                            <Text style={styles.departedBadgeText}>Departed</Text>
-                          </View>
-                        )
-                      ) : null}
-                    </View>
+                    {/* Expanded Intermediate Stations List */}
+                    {isExpanded &&
+                      item.stations.map((passSt) => {
+                        const st = passSt.station;
+                        const origIdx = passSt.originalIndex;
+                        const isThisCurrent = st.code?.trim().toUpperCase() === targetCode || origIdx === liveData.activeStopIndex;
+                        const isThisPassed = !isThisCurrent && origIdx < liveData.activeStopIndex;
 
-                    {/* 4. Right Departure Column */}
-                    <View style={styles.timeColRight}>
-                      {isUpcoming ? (
-                        <>
-                          <Text style={styles.expectedLabelText}>Expected</Text>
-                          <Text style={[styles.expectedTimeText, { color: colors.textSecondary }]}>
-                            {st.actualDep && st.actualDep !== '--' ? st.actualDep : schedDepText}
-                          </Text>
-                        </>
-                      ) : (
-                        <>
-                          <Text style={[styles.schedTimeText, { color: colors.textPrimary }]}>{schedDepText}</Text>
-                          <Text
+                        return (
+                          <View
+                            key={`${st.code}-${origIdx}`}
+                            onLayout={(e) => {
+                              if (isThisCurrent) {
+                                handleStationLayout(e.nativeEvent.layout.y);
+                              }
+                            }}
                             style={[
-                              styles.actualTimeText,
-                              st.isDelayed ? styles.textDelayedRed : styles.textPassedGreen,
+                              styles.stationTimelineRow,
+                              { minHeight: 46, backgroundColor: colors.surface },
+                              isThisCurrent && { backgroundColor: isDarkMode ? '#1E3A5F' : '#EDF6FF' },
                             ]}
                           >
-                            {st.actualDep && st.actualDep !== '--' ? st.actualDep : schedDepText}
-                          </Text>
-                        </>
-                      )}
-                    </View>
-                  </TouchableOpacity>
+                            <View style={styles.timeColLeft}>
+                              {st.scheduledArr && st.scheduledArr !== '--' ? (
+                                <Text style={[styles.schedTimeText, { fontSize: 11, color: colors.textSecondary }]}>
+                                  {st.scheduledArr}
+                                </Text>
+                              ) : null}
+                            </View>
+                            <View style={styles.trackTrackWrapper}>
+                              <View
+                                style={[
+                                  styles.trackLineContinuousTop,
+                                  { backgroundColor: origIdx <= liveData.activeStopIndex ? '#16A34A' : '#94A3B8' }
+                                ]}
+                              />
+                              <View
+                                style={[
+                                  styles.trackLineContinuousBottom,
+                                  { backgroundColor: origIdx < liveData.activeStopIndex ? '#16A34A' : '#94A3B8' }
+                                ]}
+                              />
+                              {isThisCurrent ? (
+                                <View style={styles.reachingStationBadgeWrapper}>
+                                  <Animated.View
+                                    style={[
+                                      styles.currentStationPulseHalo,
+                                      { transform: [{ scale: pulseAnim }], opacity: 0.35 },
+                                    ]}
+                                  />
+                                  <View style={styles.currentTrainBadge}>
+                                    <MaterialCommunityIcons name="train" size={16} color="#FFFFFF" />
+                                  </View>
+                                </View>
+                              ) : isThisPassed ? (
+                                <View style={[styles.passedCheckCircle, { width: 16, height: 16, borderRadius: 8 }]}>
+                                  <Ionicons name="checkmark" size={11} color="#FFFFFF" />
+                                </View>
+                              ) : (
+                                <View style={[styles.upcomingGrayCircle, { width: 12, height: 12, borderRadius: 6 }]} />
+                              )}
+                            </View>
+                            <View style={styles.stationInfoCol}>
+                              <Text style={[styles.stationNameText, { fontSize: 12.5, color: colors.textPrimary }]} numberOfLines={1}>
+                                {st.name.includes('(') ? st.name : `${st.name} (${st.code})`}
+                              </Text>
+                              <Text style={[styles.screenshot2DistanceText, { fontSize: 11, color: colors.textSecondary }]}>
+                                {st.distanceKm} km
+                              </Text>
+                            </View>
+                            <View style={styles.timeColRight}>
+                              {st.scheduledDep && st.scheduledDep !== '--' ? (
+                                <Text style={[styles.schedTimeText, { fontSize: 11, color: colors.textSecondary }]}>
+                                  {st.scheduledDep}
+                                </Text>
+                              ) : null}
+                            </View>
+                          </View>
+                        );
+                      })}
+                  </View>
                 );
               })}
 
@@ -1657,10 +1751,10 @@ Tracked on When is my train App`;
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.coachSelectorChipsScroll}
               >
-                {trainCoaches.map((c) => {
+                {trainCoaches.map((c, idx) => {
                   const isSelected = selectedCoach === c.code;
                   return (
-                    <View key={c.code} style={styles.coachChipWrapper}>
+                    <View key={`${c.code}-${idx}`} style={styles.coachChipWrapper}>
                       <TouchableOpacity
                         style={[
                           styles.coachSelectorChip,
@@ -2990,8 +3084,9 @@ const styles = StyleSheet.create({
   stationTimelineRow: {
     flexDirection: 'row',
     alignItems: 'stretch',
-    minHeight: 56,
-    paddingHorizontal: 4,
+    minHeight: 68,
+    paddingHorizontal: 8,
+    paddingVertical: 0,
     backgroundColor: '#FFFFFF',
   },
   currentStationRowHighlight: {
@@ -3001,14 +3096,16 @@ const styles = StyleSheet.create({
   },
 
   timeColLeft: {
-    width: 68,
+    width: 70,
     alignItems: 'flex-start',
-    paddingVertical: 7,
+    justifyContent: 'center',
+    paddingVertical: 14,
   },
   timeColRight: {
-    width: 68,
+    width: 70,
     alignItems: 'flex-end',
-    paddingVertical: 7,
+    justifyContent: 'center',
+    paddingVertical: 14,
   },
   schedTimeText: {
     fontSize: 12,
@@ -3046,46 +3143,38 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflow: 'visible',
   },
+  trackLineContinuousTop: {
+    position: 'absolute',
+    top: -4,
+    bottom: '50%',
+    width: 6,
+    left: 15,
+    zIndex: 1,
+  },
+  trackLineContinuousBottom: {
+    position: 'absolute',
+    top: '50%',
+    bottom: -4,
+    width: 6,
+    left: 15,
+    zIndex: 1,
+  },
+  trackLineContinuousPassing: {
+    position: 'absolute',
+    top: -4,
+    bottom: -4,
+    width: 6,
+    left: 15,
+    zIndex: 1,
+  },
   trackLineContinuousBlue: {
     position: 'absolute',
-    top: -2,
-    bottom: -2,
+    top: -4,
+    bottom: -4,
     width: 6,
+    left: 15,
     backgroundColor: '#0284C7',
     zIndex: 1,
-  },
-  trackLineFromMiddleDown: {
-    top: '50%',
-    borderTopLeftRadius: 3,
-    borderTopRightRadius: 3,
-  },
-  trackLineFromTopToMiddle: {
-    bottom: '50%',
-    borderBottomLeftRadius: 3,
-    borderBottomRightRadius: 3,
-  },
-  verticalTrackLine: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    width: 6,
-    zIndex: 1,
-  },
-  trackLineHalfTop: {
-    position: 'absolute',
-    top: 0,
-    bottom: '50%',
-    width: 3.5,
-    zIndex: 1,
-    alignSelf: 'center',
-  },
-  trackLineHalfBottom: {
-    position: 'absolute',
-    top: '50%',
-    bottom: 0,
-    width: 3.5,
-    zIndex: 1,
-    alignSelf: 'center',
   },
   lineGreen: {
     backgroundColor: '#16A34A',
@@ -3105,6 +3194,22 @@ const styles = StyleSheet.create({
   },
   lineBluePassing: {
     backgroundColor: '#0284C7',
+  },
+
+  trackChevronCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 3,
+  },
+  intermediateHintText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#64748B',
   },
 
   originTrainBadge: {
@@ -3349,7 +3454,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingLeft: 10,
     paddingRight: 6,
-    paddingVertical: 7,
+    paddingVertical: 12,
     justifyContent: 'center',
   },
   stationNameText: {
