@@ -197,41 +197,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     toStation ? toStation.name : 'Lucknow Charbagh'
   );
 
-  // Selected Travel Date Option (Today, Tomorrow, Day After, Custom)
-  const [selectedDateOption, setSelectedDateOption] = useState<'today' | 'tomorrow' | 'day_after' | 'custom'>('today');
-  const [customTravelDate, setCustomTravelDate] = useState<Date>(new Date());
-  const [showHomeCalendarModal, setShowHomeCalendarModal] = useState<boolean>(false);
-
-  const dateOptions = useMemo(() => {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const d0 = new Date();
-    const d1 = new Date(Date.now() + 86400000);
-    const d2 = new Date(Date.now() + 86400000 * 2);
-    return [
-      { key: 'today', label: t('today') || (language === 'hi' ? 'आज' : 'Today'), dateStr: `${d0.getDate()} ${months[d0.getMonth()]}` },
-      { key: 'tomorrow', label: t('tomorrow') || (language === 'hi' ? 'कल' : 'Tomorrow'), dateStr: `${d1.getDate()} ${months[d1.getMonth()]}` },
-      { key: 'day_after', label: language === 'hi' ? 'परसों' : 'Day After', dateStr: `${d2.getDate()} ${months[d2.getMonth()]}` },
-    ];
-  }, [language, t]);
-
-  const homeCalendarDays = useMemo(() => {
-    const list: { label: string; date: Date; formatted: string }[] = [];
-    const now = new Date();
-    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    for (let i = 0; i < 35; i++) {
-      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
-      const dayName = days[d.getDay()];
-      const monthName = months[d.getMonth()];
-      list.push({
-        label: i === 0 ? (t('today') || 'Today') : i === 1 ? (t('tomorrow') || 'Tomorrow') : `${dayName}, ${d.getDate()} ${monthName}`,
-        date: d,
-        formatted: `${d.getDate()} ${monthName}`,
-      });
-    }
-    return list;
-  }, [t]);
-
   // Active inline dropdown state
   const [activeInlineSearch, setActiveInlineSearch] = useState<'from' | 'to' | null>(null);
 
@@ -698,17 +663,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
       if (onSearchTrains) {
         const now = new Date();
-        let targetDate = new Date();
-        if (selectedDateOption === 'tomorrow') {
-          targetDate = new Date(now.getTime() + 86400000);
-        } else if (selectedDateOption === 'day_after') {
-          targetDate = new Date(now.getTime() + 2 * 86400000);
-        } else if (selectedDateOption === 'custom') {
-          targetDate = customTravelDate;
-        }
-        const yyyy = targetDate.getFullYear();
-        const mm = String(targetDate.getMonth() + 1).padStart(2, '0');
-        const dd = String(targetDate.getDate()).padStart(2, '0');
+        const yyyy = now.getFullYear();
+        const mm = String(now.getMonth() + 1).padStart(2, '0');
+        const dd = String(now.getDate()).padStart(2, '0');
         const travelDateStr = `${yyyy}-${mm}-${dd}`;
         
         // Save to dynamic recent searches list
@@ -1036,89 +993,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               </ScrollView>
             </View>
           )}
-
-          {/* TRAVEL DATE SELECTOR (Today / Tomorrow / Day after + Calendar) */}
-          <View style={styles.homeDateRow}>
-            {dateOptions.map((opt) => {
-              const isSelected = selectedDateOption === opt.key;
-              return (
-                <TouchableOpacity
-                  key={opt.key}
-                  style={[
-                    styles.homeDatePill,
-                    {
-                      backgroundColor: isSelected
-                        ? (isDarkMode ? '#0284C7' : Colors.primary)
-                        : (isDarkMode ? '#1E293B' : '#F1F5F9'),
-                      borderColor: isSelected
-                        ? (isDarkMode ? '#38BDF8' : Colors.primary)
-                        : (isDarkMode ? colors.border : '#E2E8F0'),
-                    },
-                  ]}
-                  onPress={() => setSelectedDateOption(opt.key as any)}
-                  activeOpacity={0.75}
-                  accessible={true}
-                  accessibilityLabel={`Select travel date ${opt.label}`}
-                >
-                  <Text
-                    style={[
-                      styles.homeDatePillLabel,
-                      {
-                        color: isSelected
-                          ? '#FFFFFF'
-                          : (isDarkMode ? colors.textPrimary : '#334155'),
-                        fontWeight: isSelected ? '800' : '600',
-                      },
-                    ]}
-                  >
-                    {opt.label}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.homeDatePillSub,
-                      {
-                        color: isSelected
-                          ? 'rgba(255, 255, 255, 0.85)'
-                          : (isDarkMode ? colors.textMuted : '#64748B'),
-                      },
-                    ]}
-                  >
-                    {opt.dateStr}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-
-            {/* Calendar Icon Button */}
-            <TouchableOpacity
-              style={[
-                styles.homeCalendarBtn,
-                {
-                  backgroundColor: selectedDateOption === 'custom'
-                    ? (isDarkMode ? '#0284C7' : Colors.primary)
-                    : (isDarkMode ? '#1E293B' : '#F1F5F9'),
-                  borderColor: selectedDateOption === 'custom'
-                    ? (isDarkMode ? '#38BDF8' : Colors.primary)
-                    : (isDarkMode ? colors.border : '#E2E8F0'),
-                },
-              ]}
-              onPress={() => setShowHomeCalendarModal(true)}
-              activeOpacity={0.75}
-              accessible={true}
-              accessibilityLabel="Open calendar date picker"
-            >
-              <Ionicons
-                name="calendar-outline"
-                size={18}
-                color={selectedDateOption === 'custom' ? '#FFFFFF' : (isDarkMode ? '#38BDF8' : Colors.primary)}
-              />
-              {selectedDateOption === 'custom' && (
-                <Text style={styles.homeCustomDateText}>
-                  {customTravelDate.getDate()}/{customTravelDate.getMonth() + 1}
-                </Text>
-              )}
-            </TouchableOpacity>
-          </View>
 
           {/* 3. FIND TRAINS ACTION BUTTON (WITH SPRING PRESS MICRO-ANIMATION) */}
           <Animated.View style={{ transform: [{ scale: findBtnScale }] }}>
@@ -2069,89 +1943,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </View>
       </View>
     </Modal>
-    {/* HOME CALENDAR PICKER MODAL (35 DAYS) */}
-    <Modal
-      visible={showHomeCalendarModal}
-      transparent
-      animationType="fade"
-      onRequestClose={() => setShowHomeCalendarModal(false)}
-    >
-      <TouchableOpacity
-        style={styles.homeModalOverlay}
-        activeOpacity={1}
-        onPress={() => setShowHomeCalendarModal(false)}
-      >
-        <TouchableOpacity
-          activeOpacity={1}
-          style={[
-            styles.homeCalendarModalCard,
-            {
-              backgroundColor: isDarkMode ? colors.surface : '#FFFFFF',
-              borderColor: isDarkMode ? colors.border : '#E2E8F0',
-            },
-          ]}
-        >
-          <View style={[styles.homeCalendarModalHeader, { borderBottomColor: isDarkMode ? colors.border : '#E2E8F0' }]}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Ionicons name="calendar" size={18} color={isDarkMode ? '#38BDF8' : Colors.primary} style={{ marginRight: 8 }} />
-              <Text style={[styles.homeCalendarModalTitle, { color: isDarkMode ? colors.textPrimary : '#0F172A' }]}>
-                {t('travelDate') || 'Select Travel Date'}
-              </Text>
-            </View>
-            <TouchableOpacity onPress={() => setShowHomeCalendarModal(false)}>
-              <Ionicons name="close" size={20} color={isDarkMode ? colors.textSecondary : '#64748B'} />
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
-            {homeCalendarDays.map((item) => {
-              const isSelected =
-                selectedDateOption === 'custom' &&
-                customTravelDate.getFullYear() === item.date.getFullYear() &&
-                customTravelDate.getMonth() === item.date.getMonth() &&
-                customTravelDate.getDate() === item.date.getDate();
-
-              return (
-                <TouchableOpacity
-                  key={item.date.toISOString()}
-                  style={[
-                    styles.homeCalendarRow,
-                    {
-                      backgroundColor: isSelected
-                        ? (isDarkMode ? '#0369A1' : '#E0F2FE')
-                        : 'transparent',
-                    },
-                  ]}
-                  onPress={() => {
-                    setCustomTravelDate(item.date);
-                    setSelectedDateOption('custom');
-                    setShowHomeCalendarModal(false);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Text
-                    style={[
-                      styles.homeCalendarRowText,
-                      {
-                        color: isSelected
-                          ? (isDarkMode ? '#FFFFFF' : Colors.primary)
-                          : (isDarkMode ? colors.textPrimary : '#1E293B'),
-                        fontWeight: isSelected ? '800' : '600',
-                      },
-                    ]}
-                  >
-                    {item.label}
-                  </Text>
-                  {isSelected && (
-                    <Ionicons name="checkmark-circle" size={18} color={isDarkMode ? '#38BDF8' : Colors.primary} />
-                  )}
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        </TouchableOpacity>
-      </TouchableOpacity>
-    </Modal>
   </View>
 );
 };
@@ -2161,86 +1952,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F0F7FD',
     position: 'relative',
-  },
-  homeDateRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 12,
-    marginTop: 4,
-  },
-  homeDatePill: {
-    flex: 1,
-    paddingVertical: 7,
-    paddingHorizontal: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  homeDatePillLabel: {
-    fontSize: 12,
-  },
-  homeDatePillSub: {
-    fontSize: 10,
-    marginTop: 1,
-  },
-  homeCalendarBtn: {
-    width: 44,
-    height: 40,
-    borderRadius: 8,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  homeCustomDateText: {
-    fontSize: 8.5,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    marginTop: 1,
-  },
-  homeModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  homeCalendarModalCard: {
-    width: '100%',
-    maxWidth: 380,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-  },
-  homeCalendarModalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    marginBottom: 8,
-  },
-  homeCalendarModalTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  homeCalendarRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 11,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginVertical: 2,
-  },
-  homeCalendarRowText: {
-    fontSize: 13.5,
   },
   topCenterToastBox: {
     position: 'absolute',
@@ -2391,11 +2102,12 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   stationRowContainer: {
+    position: 'relative',
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 7,
     paddingLeft: 40,
-    paddingRight: 6,
+    paddingRight: 40,
     borderRadius: 12,
   },
   leftTrackColumn: {
@@ -2547,6 +2259,7 @@ const styles = StyleSheet.create({
   },
   stationModernInput: {
     flex: 1,
+    minWidth: 0,
     fontSize: 15.5,
     fontWeight: '700',
     color: '#0F172A',
@@ -2569,13 +2282,17 @@ const styles = StyleSheet.create({
     color: '#0284C7',
   },
   clearStationBtn: {
+    position: 'absolute',
+    right: 6,
+    top: '50%',
+    transform: [{ translateY: -13 }],
     width: 26,
     height: 26,
     borderRadius: 13,
     backgroundColor: 'rgba(148, 163, 184, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 4,
+    zIndex: 15,
   },
   singleDotColumn: {
     position: 'absolute',
