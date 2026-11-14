@@ -8,7 +8,9 @@ import {
   parseDurationMinutes,
   formatDuration,
   getArrivalDayOffset,
+  formatClock,
 } from '../../utils/trainTime';
+import { usePreferences } from '../../context/PreferencesContext';
 
 export function deriveTrainTypeName(trainName: string, fallbackType: string): string {
   const upper = (trainName || '').toUpperCase();
@@ -61,6 +63,7 @@ export const TrainResultCard: React.FC<TrainResultCardProps> = React.memo(({
   onPress,
   t = (s: any) => s,
 }) => {
+  const { timeFormat } = usePreferences();
   const selectedDayIndex = selectedDate.getDay();
   const runsOn = train.runsOn || [true, true, true, true, true, true, true];
   const runsToday = !!runsOn[selectedDayIndex];
@@ -86,9 +89,11 @@ export const TrainResultCard: React.FC<TrainResultCardProps> = React.memo(({
   const currentDayName = SHORT_DAY_NAMES[selectedDayIndex];
 
   // Accessible string representation
-  const a11yLabel = `Train ${train.number} ${train.name}, departs ${formatTime12h(
-    train.depTime
-  )}, arrives ${formatTime12h(train.arrTime)}, duration ${formatDuration(durationMin)}, ${
+  const a11yLabel = `Train ${train.number} ${train.name}, departs ${formatClock(
+    train.depTime,
+    timeFormat,
+    '12h'
+  )}, arrives ${formatClock(train.arrTime, timeFormat, '12h')}, duration ${formatDuration(durationMin)}, ${
     runsDaily ? 'runs daily' : runsToday ? 'runs today' : 'not running today'
   }`;
 
@@ -127,14 +132,14 @@ export const TrainResultCard: React.FC<TrainResultCardProps> = React.memo(({
           {/* Times: 11:25 AM — 7h 15m — 6:40 PM */}
           <View style={styles.timeGroup}>
             <Text style={[styles.timeBold, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]}>
-              {formatTime12h(train.depTime)}
+              {formatClock(train.depTime, timeFormat, '12h')}
             </Text>
             <Text style={[styles.durationDash, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
               {' '}—{' '}{formatDuration(durationMin)}{' '}—{' '}
             </Text>
             <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
               <Text style={[styles.timeBold, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]}>
-                {formatTime12h(train.arrTime)}
+                {formatClock(train.arrTime, timeFormat, '12h')}
               </Text>
               {dayOffset > 0 && (
                 <Text style={styles.superscriptDay}>+{dayOffset}</Text>

@@ -137,7 +137,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onSetFromStation,
   onSetToStation,
 }) => {
-  const { colors, language, isDarkMode, t } = usePreferences();
+  const { colors, language, isDarkMode, t, historyVersion } = usePreferences();
   const [validationError, setValidationError] = useState<string | null>(null);
   const [sourceHasError, setSourceHasError] = useState(false);
   const [destHasError, setDestHasError] = useState(false);
@@ -183,11 +183,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed) && parsed.length >= 4) {
             setRecentSearches(parsed);
+            return;
           }
         }
+        setRecentSearches(DEFAULT_RECENT_SEARCHES);
       })
-      .catch(() => {});
-  }, []);
+      .catch(() => {
+        setRecentSearches(DEFAULT_RECENT_SEARCHES);
+      });
+  }, [historyVersion]);
 
   // Free text typing states (User has complete freedom to type any text, never blocked or cleared)
   const [fromText, setFromText] = useState(

@@ -27,6 +27,7 @@ import {
 import { AlarmStore } from '../utils/alarmStore';
 import { SavedTrainsStore } from '../utils/savedTrainsStore';
 import { CORRIDOR_TRAINS_MASTER } from '../data/trainsBetweenStations';
+import { formatClock, ClockPreference } from '../utils/trainTime';
 
 // ==========================================
 // DUPLICATE SWITCHES (Rule configuration)
@@ -75,19 +76,9 @@ type TimelineItem = CommercialTimelineItem | PassingGroupTimelineItem | DayHeade
 // ==========================================
 // DATE & TIME HELPERS (24h strict & real math)
 // ==========================================
-function formatTo24h(timeStr?: string): string {
+function formatTo24h(timeStr?: string, pref: ClockPreference = 'auto'): string {
   if (!timeStr || timeStr === '--' || timeStr === '--:--') return '--';
-  const clean = timeStr.trim().toUpperCase();
-  const match = clean.match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/i);
-  if (!match) return timeStr;
-  let h = parseInt(match[1], 10);
-  const m = match[2];
-  const mer = match[3];
-  if (mer) {
-    if (mer === 'PM' && h !== 12) h += 12;
-    if (mer === 'AM' && h === 12) h = 0;
-  }
-  return `${h.toString().padStart(2, '0')}:${m}`;
+  return formatClock(timeStr, pref, '24h');
 }
 
 function getStartDateForMode(mode: 'today' | 'yesterday' | 'tomorrow' | 'custom', customDate?: Date): Date {
@@ -613,7 +604,7 @@ export const LiveTrainTrackerScreen: React.FC<LiveTrainTrackerScreenProps> = ({
   toStationName,
   onBack,
 }) => {
-  const { isDarkMode, colors, t } = usePreferences();
+  const { isDarkMode, colors, t, timeFormat, defaultAlarmTiming } = usePreferences();
 
   // Screen UI state
   const [selectedDateMode, setSelectedDateMode] = useState<'today' | 'yesterday' | 'tomorrow' | 'custom'>('today');
@@ -622,7 +613,7 @@ export const LiveTrainTrackerScreen: React.FC<LiveTrainTrackerScreenProps> = ({
   const [showAlarmModal, setShowAlarmModal] = useState(false);
   const [showMenuModal, setShowMenuModal] = useState(false);
   const [alarmStation, setAlarmStation] = useState<string | null>(null);
-  const [alarmInterval, setAlarmInterval] = useState<'10m' | '15m' | '30m' | '5km' | '10km'>('15m');
+  const [alarmInterval, setAlarmInterval] = useState<'10m' | '15m' | '30m' | '5km' | '10km'>(defaultAlarmTiming || '15m');
   const [isAlarmActive, setIsAlarmActive] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'journey' | 'live_map' | 'coach_position' | 'info'>('journey');
   const [selectedCoach, setSelectedCoach] = useState<string>('C3');

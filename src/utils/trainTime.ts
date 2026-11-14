@@ -179,3 +179,38 @@ export function getNextRunningDate(
   return null;
 }
 
+/**
+ * Formats time string into standard 24-hour display: e.g. "14:15", "09:05".
+ */
+export function formatTime24h(timeStr: string): string {
+  if (!timeStr || typeof timeStr !== 'string') return '--';
+  const clean = timeStr.trim();
+  if (clean === '--' || clean === '--:--') return '--';
+  const totalMins = parseTimeToMinutes(clean);
+  const h = Math.floor(totalMins / 60) % 24;
+  const m = totalMins % 60;
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+}
+
+export type ClockPreference = 'auto' | '12h' | '24h';
+
+/**
+ * Formats clock time based on user preference and screen auto default.
+ * @param timeStr Raw time string (12h or 24h)
+ * @param pref User preference ('auto' | '12h' | '24h')
+ * @param autoFormat Screen auto default ('12h' for search, '24h' for tracker)
+ */
+export function formatClock(
+  timeStr: string,
+  pref: ClockPreference = 'auto',
+  autoFormat: '12h' | '24h' = '12h'
+): string {
+  if (!timeStr || timeStr === '--' || timeStr === '--:--') return '--';
+  const effectiveFormat = pref === 'auto' ? autoFormat : pref;
+  if (effectiveFormat === '24h') {
+    return formatTime24h(timeStr);
+  }
+  return formatTime12h(timeStr);
+}
+
+

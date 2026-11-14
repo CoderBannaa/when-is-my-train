@@ -14,7 +14,7 @@
 import { Platform } from 'react-native';
 import { SafeStorage } from '../context/PreferencesContext';
 import { getActiveRailRadarKey, FORCE_PROVIDER_FAIL } from '../config/env';
-import { LiveTrainApi, getLocalProxyBaseUrl, LiveTrainTrackingData } from './liveTrainApiService';
+import { LiveTrainApi, getLocalProxyBaseUrl, LiveTrainTrackingData, TrainCache } from './liveTrainApiService';
 import { TrainBetweenStation } from '../data/trainsBetweenStations';
 import { DataResult, DataSource, DataErrorKind, CoachLayout } from './dataTypes';
 
@@ -125,6 +125,8 @@ interface StoredCacheEntry<T> {
 export class TrainDataService {
   private breaker = new CircuitBreaker();
   private rateGuard = new RailRadarRateGuard();
+  private lastSuccessfulProvider?: string;
+  private lastSuccessTimestamp?: number;
 
   // In-flight request de-duplication
   private inFlightSearch: Map<string, Promise<DataResult<TrainBetweenStation[]>>> = new Map();
@@ -446,6 +448,8 @@ export class TrainDataService {
 
       if (result.success && result.data) {
         this.breaker.recordSuccess(provider.name);
+        this.lastSuccessfulProvider = provider.name;
+        this.lastSuccessTimestamp = Date.now();
         await this.setCachedEntry(cacheKey, result.data, provider.name);
         this.logDev(cacheKey, provider.name, Date.now() - startTime, 'live');
         return {
@@ -622,6 +626,8 @@ export class TrainDataService {
 
       if (result.success && result.data) {
         this.breaker.recordSuccess(provider.name);
+        this.lastSuccessfulProvider = provider.name;
+        this.lastSuccessTimestamp = Date.now();
         await this.setCachedEntry(cacheKey, result.data, provider.name);
         this.logDev(cacheKey, provider.name, Date.now() - startTime, 'live');
         return {
@@ -842,6 +848,58 @@ export class TrainDataService {
       success: false,
       error: { kind: 'network', message: `Provider ${providerName} failed after retry` },
     };
+  }
+
+  // --------------------------------------------------------
+  // HEALTH & CACHE CLEANUP
+  // --------------------------------------------------------
+
+  public getHealth(): {
+    lastSuccessfulProvider?: string;
+    lastSuccessTimestamp?: number;
+    searchProviders: { name: string; status: 'OK' | 'Circuit open (cooling down)'; retryInSeconds?: number }[];
+    liveProviders: { name: string; status: 'OK' | 'Circuit open (cooling down)'; retryInSeconds?: number }[];
+  } {
+    const evaluate = (name: string) => {
+      const circuit = this.breaker.getCircuitStatus(name);
+      if (circuit.isOpen) {
+        return {
+          name,
+          status: 'Circuit open (cooling down)' as const,
+          retryInSeconds: circuit.retryInSeconds,
+        };
+      }
+      return { name, status: 'OK' as const };
+    };
+
+    return {
+      lastSuccessfulProvider: this.lastSuccessfulProvider,
+      lastSuccessTimestamp: this.lastSuccessTimestamp,
+      searchProviders: ['native-direct', 'proxy', 'web-direct', 'railradar-api'].map(evaluate),
+      liveProviders: ['railyatri', 'proxy', 'railradar-api'].map(evaluate),
+    };
+  }
+
+  public async clearCache(): Promise<number> {
+    let count = this.memoryCache.size;
+    this.memoryCache.clear();
+
+    try {
+      TrainCache.clearAll();
+    } catch {}
+
+    try {
+      const allKeys = await SafeStorage.getAllKeys();
+      const tdKeys = allKeys.filter(k => k.startsWith('@td_') || k.startsWith('@cache_status_'));
+      if (tdKeys.length > 0) {
+        count += tdKeys.length;
+        await SafeStorage.multiRemove(tdKeys);
+      }
+    } catch (err) {
+      console.warn('[TrainDataService] clearCache storage error:', err);
+    }
+
+    return count;
   }
 
   // --------------------------------------------------------

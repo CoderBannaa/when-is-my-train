@@ -176,4 +176,20 @@ export const SavedTrainsStore = {
     const trimmed = list.slice(0, 20);
     await SafeStorage.setItem(STORAGE_KEYS.SAVED_TRAINS, JSON.stringify(trimmed));
   },
+
+  /**
+   * Clears recent unpinned/unsaved trains, retaining starred/saved trains.
+   */
+  async clearUnpinnedRecents(): Promise<void> {
+    const list = await this.getUnifiedList();
+    const kept = list.filter((t) => t.isSaved);
+    await SafeStorage.setItem(STORAGE_KEYS.SAVED_TRAINS, JSON.stringify(kept));
+  },
+
+  /**
+   * Clears all saved trains completely.
+   */
+  async clearAllSaved(): Promise<void> {
+    await SafeStorage.removeItem(STORAGE_KEYS.SAVED_TRAINS);
+  },
 };

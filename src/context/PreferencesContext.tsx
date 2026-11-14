@@ -1,8 +1,8 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
-import { Platform } from 'react-native';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, ReactNode } from 'react';
+import { Platform, useColorScheme, StatusBar } from 'react-native';
 import { Colors } from '../theme/colors';
-
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { STORAGE_KEYS } from '../config/env';
 
 // Universal Safe Storage (persists on native via AsyncStorage and web via localStorage)
 const memoryStore: Record<string, string> = {};
@@ -39,72 +39,29 @@ export const SafeStorage = {
         return;
       }
       await AsyncStorage.removeItem(key);
+    } catch {}
+  },
+  getAllKeys: async (): Promise<string[]> => {
+    try {
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+        return Object.keys(window.localStorage);
+      }
+      const keys = await AsyncStorage.getAllKeys();
+      return keys ? [...keys] : [];
     } catch {
-      // fallback
+      return Object.keys(memoryStore);
     }
   },
-};
-
-export type Language = 'en' | 'hi' | 'mr' | 'bn' | 'ta' | 'te' | 'gu';
-export type ThemeMode = 'light' | 'dark';
-export type SpeedUnit = 'kmh' | 'mph';
-export type TimeFormat = '12h' | '24h';
-export type DefaultTrackingSource = 'cell' | 'gps' | 'internet';
-export type AlarmRingtone = 'horn' | 'whistle' | 'chime' | 'bell';
-
-export interface ThemeColors {
-  primary: string;
-  primaryDark: string;
-  primaryLight: string;
-  primarySoft: string;
-  searchBtnGreen: string;
-  searchBtnGreenDark: string;
-  searchBtnGreenLight: string;
-  background: string;
-  surface: string;
-  card: string;
-  cardSecondary: string;
-  textPrimary: string;
-  textSecondary: string;
-  textMuted: string;
-  textWhite: string;
-  textBlue: string;
-  secondary: string;
-  secondaryLight: string;
-  accent: string;
-  accentLight: string;
-  danger: string;
-  dangerLight: string;
-  border: string;
-  borderLight: string;
-  borderBlue: string;
-  activeTab: string;
-  inactiveTab: string;
-  isDark: boolean;
-}
-
-const lightThemeColors: ThemeColors = {
-  ...Colors,
-  isDark: false,
-};
-
-const darkThemeColors: ThemeColors = {
-  ...Colors,
-  primary: '#0284C7',
-  primaryDark: '#0369A1',
-  primaryLight: '#38BDF8',
-  primarySoft: 'rgba(2, 132, 199, 0.2)',
-  background: '#0B1120',      // Deep OLED Navy
-  surface: '#1E293B',         // Dark Slate Surface
-  card: '#1E293B',            // Dark Card
-  cardSecondary: '#0F172A',   // Secondary Dark Card
-  textPrimary: '#F8FAFC',     // Bright Off-White Text
-  textSecondary: '#94A3B8',   // Light Slate
-  textMuted: '#64748B',       // Muted Slate
-  border: '#334155',          // Dark Border
-  borderLight: '#1E293B',     // Subtle Dark Divider
-  borderBlue: '#0284C7',
-  isDark: true,
+  multiRemove: async (keys: string[]): Promise<void> => {
+    keys.forEach((k) => delete memoryStore[k]);
+    try {
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+        keys.forEach((k) => window.localStorage.removeItem(k));
+        return;
+      }
+      await AsyncStorage.multiRemove(keys);
+    } catch {}
+  },
 };
 
 export const translations = {
@@ -153,40 +110,50 @@ export const translations = {
     evening: 'Evening (17-21)',
     night: 'Night (21-5)',
     runningOnThisDate: 'Running on this date',
-    clearAll: 'Clear all',
-    clearFilters: 'Clear filters',
-    noTrainsFound: 'No trains found matching filters',
+    clearAll: 'Clear All',
+    clearFilters: 'Clear Filters',
+    noTrainsFound: 'No trains match your filters',
     tryAnotherDate: 'Try selecting another date or check nearby stations',
-    offlineEstimatedBanner: 'Showing estimated schedule (offline). Timings may not be accurate.',
-    liveSchedule: 'Live schedule',
+    offlineEstimatedBanner: 'Showing estimated offline timetable. Times may vary.',
+    liveSchedule: 'Live Schedule',
     trainType: 'Train Type',
     allTrainTypes: 'All Types',
-    departedAt: 'Left',
-    onTime: 'On time',
+    departedAt: 'Departed',
+    onTime: 'On Time',
     delayedBy: 'Late',
-    stops: 'Stops',
+    stops: 'stops',
     nonStop: 'Non-stop',
     sortFastest: 'Fastest',
-    sortEarlyDep: 'Early Dep.',
-    sortLateDep: 'Late Dep.',
+    sortEarlyDep: 'Early Departure',
+    sortLateDep: 'Late Departure',
     allClasses: 'All Classes',
     filters: 'Filters',
 
     // Live Tracking
-    journeyTab: 'Journey',
+    journeyTab: 'Journey Timeline',
     liveMapTab: 'Live Map',
     coachTab: 'Coach Position',
-    infoTab: 'Info',
+    infoTab: 'Train Info',
+    journey: 'Journey',
+    live_map: 'Live Map',
+    coach_position: 'Coach Position',
+    info: 'Info',
     speed: 'Speed',
-    distanceLeft: 'Distance Left',
+    distanceLeft: 'Distance left',
     expectedArrival: 'Expected Arrival',
-    refreshStatus: 'REFRESH STATUS',
+    refreshStatus: 'Refresh Status',
     currentLocation: 'Current Location',
     nextStation: 'Next Station',
     departed: 'Departed',
     arrived: 'Arrived',
     expected: 'Expected',
     currentStation: 'Current Station',
+    alarm: 'Alarm',
+    coach: 'Coach',
+    share: 'Share',
+    retry: 'Retry',
+    on_time: 'On time',
+    min_late: 'min late',
 
     // Coach Position
     engineSide: 'Engine Side',
@@ -196,7 +163,7 @@ export const translations = {
 
     // PNR Screen
     pnrTitle: 'Check PNR Status',
-    pnrPlaceholder: 'Enter 10-digit PNR Number',
+    pnrPlaceholder: 'Enter 10-digit PNR number',
     checkPnrBtn: 'CHECK PNR STATUS',
     chartPrepared: 'Chart Prepared',
     chartNotPrepared: 'Chart Not Prepared',
@@ -214,6 +181,26 @@ export const translations = {
     continueBtn: 'CONTINUE / आगे बढ़ें',
     changeLang: 'Language',
     changeTheme: 'Theme',
+
+    // Settings Drawer
+    settingsTitle: 'Settings',
+    appearance: 'Appearance',
+    liveData: 'Live Data & API',
+    alarms: 'Station Alarms',
+    storage: 'Storage & Cache',
+    helpSafety: 'Help & Safety',
+    about: 'About & Community',
+    timeFormat: 'Time Format',
+    systemTheme: 'System Default',
+    lightTheme: 'Light',
+    darkTheme: 'Dark',
+    clearCache: 'Clear cached train data',
+    clearHistory: 'Clear recent searches & trains',
+    clearSaved: 'Clear saved trains',
+    railwayHelpline: 'Railway Helplines (139)',
+    reportIssue: 'Report a problem / suggest a feature',
+    starGithub: 'Star the project on GitHub',
+    shareApp: 'Share App',
   },
   hi: {
     // Brand & Header
@@ -284,6 +271,10 @@ export const translations = {
     liveMapTab: 'लाइव रूट मैप',
     coachTab: 'कोच स्थिति',
     infoTab: 'ट्रेन जानकारी',
+    journey: 'यात्रा',
+    live_map: 'लाइव मैप',
+    coach_position: 'कोच स्थिति',
+    info: 'जानकारी',
     speed: 'गति',
     distanceLeft: 'शेष दूरी',
     expectedArrival: 'संभावित आगमन',
@@ -294,6 +285,12 @@ export const translations = {
     arrived: 'पहुंची',
     expected: 'संभावित',
     currentStation: 'वर्तमान स्टेशन',
+    alarm: 'अलार्म',
+    coach: 'कोच',
+    share: 'शेयर',
+    retry: 'पुनः प्रयास करें',
+    on_time: 'समय पर',
+    min_late: 'मिनट देरी',
 
     // Coach Position
     engineSide: 'इंजन की तरफ',
@@ -321,161 +318,369 @@ export const translations = {
     continueBtn: 'आगे बढ़ें / CONTINUE',
     changeLang: 'भाषा',
     changeTheme: 'थीम',
+
+    // Settings Drawer
+    settingsTitle: 'सेटिंग्स',
+    appearance: 'दिखावट',
+    liveData: 'लाइव डेटा और एपीआई',
+    alarms: 'स्टेशन अलार्म',
+    storage: 'स्टोरेज और कैशे',
+    helpSafety: 'मदद और सुरक्षा',
+    about: 'के बारे में',
+    timeFormat: 'समय प्रारूप',
+    systemTheme: 'सिस्टम डिफ़ॉल्ट',
+    lightTheme: 'लाइट',
+    darkTheme: 'डार्क',
+    clearCache: 'कैश डेटा साफ़ करें',
+    clearHistory: 'हाल की खोजें साफ़ करें',
+    clearSaved: 'सेव की गई ट्रेनें हटाएं',
+    railwayHelpline: 'रेलवे हेल्पलाइन (139)',
+    reportIssue: 'समस्या की रिपोर्ट करें / सुझाव दें',
+    starGithub: 'GitHub पर स्टार दें',
+    shareApp: 'ऐप शेयर करें',
   },
 };
+
+/**
+ * Derived from translations object keys.
+ * To add a new language: add a new dictionary object to translations above
+ * and add its display label here.
+ */
+export type Language = keyof typeof translations;
+
+export const SUPPORTED_LANGUAGES: { code: Language; label: string; nativeLabel: string }[] = (
+  Object.keys(translations) as Language[]
+).map((code) => {
+  if (code === 'hi') {
+    return { code: 'hi', label: 'Hindi', nativeLabel: 'हिन्दी' };
+  }
+  return { code: 'en', label: 'English', nativeLabel: 'English' };
+});
+
+export type ThemeChoice = 'light' | 'dark' | 'system';
+export type TimeFormat = 'auto' | '12h' | '24h';
+export type AlarmTiming = '10m' | '15m' | '30m' | '5km' | '10km';
+
+// Deprecated stubs for backwards-compatibility
+export type SpeedUnit = 'kmh' | 'mph';
+export type DefaultTrackingSource = 'cell' | 'gps' | 'internet';
+export type AlarmRingtone = 'horn' | 'whistle' | 'chime' | 'bell';
+
+export interface ThemeColors {
+  primary: string;
+  primaryDark: string;
+  primaryLight: string;
+  primarySoft: string;
+  searchBtnGreen: string;
+  searchBtnGreenDark: string;
+  searchBtnGreenLight: string;
+  background: string;
+  surface: string;
+  card: string;
+  cardSecondary: string;
+  textPrimary: string;
+  textSecondary: string;
+  textMuted: string;
+  textWhite: string;
+  textBlue: string;
+  secondary: string;
+  secondaryLight: string;
+  accent: string;
+  accentLight: string;
+  danger: string;
+  dangerLight: string;
+  border: string;
+  borderLight: string;
+  borderBlue: string;
+  activeTab: string;
+  inactiveTab: string;
+  isDark: boolean;
+}
+
+const lightThemeColors: ThemeColors = {
+  ...Colors,
+  isDark: false,
+};
+
+const darkThemeColors: ThemeColors = {
+  ...Colors,
+  primary: '#0284C7',
+  primaryDark: '#0369A1',
+  primaryLight: '#38BDF8',
+  primarySoft: 'rgba(2, 132, 199, 0.2)',
+  background: '#0B1120', // Deep OLED Navy
+  surface: '#1E293B', // Dark Slate Surface
+  card: '#1E293B', // Dark Card
+  cardSecondary: '#0F172A', // Secondary Dark Card
+  textPrimary: '#F8FAFC', // Bright Off-White Text
+  textSecondary: '#94A3B8', // Light Slate
+  textMuted: '#64748B', // Muted Slate
+  border: '#334155', // Dark Border
+  borderLight: '#1E293B', // Subtle Dark Divider
+  borderBlue: '#0284C7',
+  isDark: true,
+};
+
+export interface AppPreferencesV2 {
+  schemaVersion: number;
+  language: Language;
+  themeChoice: ThemeChoice;
+  timeFormat: TimeFormat;
+  defaultAlarmTiming: AlarmTiming;
+  railRadarApiKey?: string;
+}
+
+const PREFS_V2_KEY = '@prefs_v2';
+const DEFAULT_PREFS: AppPreferencesV2 = {
+  schemaVersion: 2,
+  language: 'en',
+  themeChoice: 'system',
+  timeFormat: 'auto',
+  defaultAlarmTiming: '15m',
+};
+
+function safeParsePrefs(raw: string | null): AppPreferencesV2 {
+  if (!raw) return DEFAULT_PREFS;
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') {
+      return {
+        schemaVersion: parsed.schemaVersion || 2,
+        language: parsed.language in translations ? parsed.language : 'en',
+        themeChoice: ['light', 'dark', 'system'].includes(parsed.themeChoice) ? parsed.themeChoice : 'system',
+        timeFormat: ['auto', '12h', '24h'].includes(parsed.timeFormat) ? parsed.timeFormat : 'auto',
+        defaultAlarmTiming: ['10m', '15m', '30m', '5km', '10km'].includes(parsed.defaultAlarmTiming)
+          ? parsed.defaultAlarmTiming
+          : '15m',
+        railRadarApiKey: parsed.railRadarApiKey || undefined,
+      };
+    }
+  } catch {}
+  return DEFAULT_PREFS;
+}
 
 interface PreferencesContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
+  themeChoice: ThemeChoice;
+  setThemeChoice: (choice: ThemeChoice) => void;
   isDarkMode: boolean;
   toggleTheme: () => void;
-  setThemeMode: (mode: ThemeMode) => void;
-  speedUnit: SpeedUnit;
-  setSpeedUnit: (unit: SpeedUnit) => void;
+  setThemeMode: (mode: 'light' | 'dark') => void;
   timeFormat: TimeFormat;
   setTimeFormat: (fmt: TimeFormat) => void;
-  trackingSource: DefaultTrackingSource;
-  setTrackingSource: (source: DefaultTrackingSource) => void;
-  alarmSound: AlarmRingtone;
-  setAlarmSound: (sound: AlarmRingtone) => void;
+  defaultAlarmTiming: AlarmTiming;
+  setDefaultAlarmTiming: (timing: AlarmTiming) => void;
+  railRadarApiKey: string;
+  setRailRadarApiKey: (key: string) => Promise<void>;
+  historyVersion: number;
+  incrementHistoryVersion: () => void;
   colors: ThemeColors;
   t: (key: keyof typeof translations.en) => string;
   showWelcomeModal: boolean;
   setShowWelcomeModal: (show: boolean) => void;
+
+  // Backward compatible stubs
+  speedUnit: SpeedUnit;
+  setSpeedUnit: (unit: SpeedUnit) => void;
+  trackingSource: DefaultTrackingSource;
+  setTrackingSource: (source: DefaultTrackingSource) => void;
+  alarmSound: AlarmRingtone;
+  setAlarmSound: (sound: AlarmRingtone) => void;
 }
 
 const PreferencesContext = createContext<PreferencesContextType | undefined>(undefined);
 
-const PREF_LANG_KEY = '@train_app_lang';
-const PREF_THEME_KEY = '@train_app_theme';
-const PREF_FIRST_LAUNCH_KEY = '@train_app_first_launch';
-const PREF_SPEED_KEY = '@pref_speed_unit';
-const PREF_TIME_FMT_KEY = '@pref_time_format';
-const PREF_TRACK_SRC_KEY = '@pref_tracking_source';
-const PREF_ALARM_SND_KEY = '@pref_alarm_sound';
-
 export const PreferencesProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [language, setLanguageState] = useState<Language>('en');
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
+  // Render immediate defaults without blocking splash
+  const [language, setLanguageState] = useState<Language>(DEFAULT_PREFS.language);
+  const [themeChoice, setThemeChoiceState] = useState<ThemeChoice>(DEFAULT_PREFS.themeChoice);
+  const [timeFormat, setTimeFormatState] = useState<TimeFormat>(DEFAULT_PREFS.timeFormat);
+  const [defaultAlarmTiming, setDefaultAlarmTimingState] = useState<AlarmTiming>(DEFAULT_PREFS.defaultAlarmTiming);
+  const [railRadarApiKey, setRailRadarApiKeyState] = useState<string>('');
+  const [historyVersion, setHistoryVersion] = useState<number>(0);
   const [showWelcomeModal, setShowWelcomeModal] = useState<boolean>(false);
-  const [speedUnit, setSpeedUnitState] = useState<SpeedUnit>('kmh');
-  const [timeFormat, setTimeFormatState] = useState<TimeFormat>('24h');
-  const [trackingSource, setTrackingSourceState] = useState<DefaultTrackingSource>('cell');
-  const [alarmSound, setAlarmSoundState] = useState<AlarmRingtone>('horn');
 
-  // Load saved preferences on startup
+  // System color scheme hook
+  const systemScheme = useColorScheme();
+
+  // Load and migrate on mount
   useEffect(() => {
     (async () => {
       try {
-        const savedLang = await SafeStorage.getItem(PREF_LANG_KEY);
-        const savedTheme = await SafeStorage.getItem(PREF_THEME_KEY);
-        const hasLaunched = await SafeStorage.getItem(PREF_FIRST_LAUNCH_KEY);
-        const savedSpeed = await SafeStorage.getItem(PREF_SPEED_KEY);
-        const savedTimeFmt = await SafeStorage.getItem(PREF_TIME_FMT_KEY);
-        const savedTrackSrc = await SafeStorage.getItem(PREF_TRACK_SRC_KEY);
-        const savedAlarmSnd = await SafeStorage.getItem(PREF_ALARM_SND_KEY);
+        const v2Raw = await SafeStorage.getItem(PREFS_V2_KEY);
+        if (v2Raw) {
+          const prefs = safeParsePrefs(v2Raw);
+          setLanguageState(prefs.language);
+          setThemeChoiceState(prefs.themeChoice);
+          setTimeFormatState(prefs.timeFormat);
+          setDefaultAlarmTimingState(prefs.defaultAlarmTiming);
+          if (prefs.railRadarApiKey) setRailRadarApiKeyState(prefs.railRadarApiKey);
+          return;
+        }
 
-        if (savedLang) {
-          setLanguageState(savedLang as Language);
-        }
-        if (savedTheme === 'dark') {
-          setIsDarkMode(true);
-        }
-        if (savedSpeed === 'kmh' || savedSpeed === 'mph') {
-          setSpeedUnitState(savedSpeed);
-        }
-        if (savedTimeFmt === '12h' || savedTimeFmt === '24h') {
-          setTimeFormatState(savedTimeFmt);
-        }
-        if (savedTrackSrc === 'cell' || savedTrackSrc === 'gps' || savedTrackSrc === 'internet') {
-          setTrackingSourceState(savedTrackSrc);
-        }
-        if (savedAlarmSnd === 'horn' || savedAlarmSnd === 'whistle' || savedAlarmSnd === 'chime' || savedAlarmSnd === 'bell') {
-          setAlarmSoundState(savedAlarmSnd);
-        }
-        // Ensure first launch is flagged without blocking screen with popup
-        if (!hasLaunched) {
-          await SafeStorage.setItem(PREF_FIRST_LAUNCH_KEY, 'true');
-        }
-      } catch {
-        // Fallback default
-      }
+        // Migration from legacy keys
+        const legacyLang = await SafeStorage.getItem('@train_app_lang');
+        const legacyTheme = await SafeStorage.getItem('@train_app_theme');
+        const legacyTimeFmt = await SafeStorage.getItem('@pref_time_format');
+        const legacyApiKey = await SafeStorage.getItem(STORAGE_KEYS.RAILRADAR_API_KEY);
+
+        const migrated: AppPreferencesV2 = {
+          schemaVersion: 2,
+          language: legacyLang && legacyLang in translations ? (legacyLang as Language) : 'en',
+          themeChoice: legacyTheme === 'dark' || legacyTheme === 'light' ? legacyTheme : 'system',
+          timeFormat: legacyTimeFmt === '12h' || legacyTimeFmt === '24h' ? legacyTimeFmt : 'auto',
+          defaultAlarmTiming: '15m',
+          railRadarApiKey: legacyApiKey || undefined,
+        };
+
+        setLanguageState(migrated.language);
+        setThemeChoiceState(migrated.themeChoice);
+        setTimeFormatState(migrated.timeFormat);
+        setDefaultAlarmTimingState(migrated.defaultAlarmTiming);
+        if (migrated.railRadarApiKey) setRailRadarApiKeyState(migrated.railRadarApiKey);
+
+        // Save v2
+        await SafeStorage.setItem(PREFS_V2_KEY, JSON.stringify(migrated));
+      } catch {}
     })();
   }, []);
 
-  const setLanguage = (lang: Language) => {
+  const savePreferences = useCallback(async (updates: Partial<AppPreferencesV2>) => {
+    try {
+      const v2Raw = await SafeStorage.getItem(PREFS_V2_KEY);
+      const current = safeParsePrefs(v2Raw);
+      const next: AppPreferencesV2 = { ...current, ...updates };
+      await SafeStorage.setItem(PREFS_V2_KEY, JSON.stringify(next));
+    } catch {}
+  }, []);
+
+  const setLanguage = useCallback((lang: Language) => {
     setLanguageState(lang);
-    SafeStorage.setItem(PREF_LANG_KEY, lang).catch(() => {});
-  };
+    savePreferences({ language: lang });
+  }, [savePreferences]);
 
-  const setThemeMode = (mode: ThemeMode) => {
-    const dark = mode === 'dark';
-    setIsDarkMode(dark);
-    SafeStorage.setItem(PREF_THEME_KEY, mode).catch(() => {});
-  };
+  const setThemeChoice = useCallback((choice: ThemeChoice) => {
+    setThemeChoiceState(choice);
+    savePreferences({ themeChoice: choice });
+  }, [savePreferences]);
 
-  const setSpeedUnit = (unit: SpeedUnit) => {
-    setSpeedUnitState(unit);
-    SafeStorage.setItem(PREF_SPEED_KEY, unit).catch(() => {});
-  };
+  const setThemeMode = useCallback((mode: 'light' | 'dark') => {
+    setThemeChoice(mode);
+  }, [setThemeChoice]);
 
-  const setTimeFormat = (fmt: TimeFormat) => {
+  const setTimeFormat = useCallback((fmt: TimeFormat) => {
     setTimeFormatState(fmt);
-    SafeStorage.setItem(PREF_TIME_FMT_KEY, fmt).catch(() => {});
-  };
+    savePreferences({ timeFormat: fmt });
+  }, [savePreferences]);
 
-  const setTrackingSource = (source: DefaultTrackingSource) => {
-    setTrackingSourceState(source);
-    SafeStorage.setItem(PREF_TRACK_SRC_KEY, source).catch(() => {});
-  };
+  const setDefaultAlarmTiming = useCallback((timing: AlarmTiming) => {
+    setDefaultAlarmTimingState(timing);
+    savePreferences({ defaultAlarmTiming: timing });
+  }, [savePreferences]);
 
-  const setAlarmSound = (sound: AlarmRingtone) => {
-    setAlarmSoundState(sound);
-    SafeStorage.setItem(PREF_ALARM_SND_KEY, sound).catch(() => {});
-  };
-
-  const toggleTheme = () => {
-    setThemeMode(isDarkMode ? 'light' : 'dark');
-  };
-
-  const dismissWelcomeModal = (show: boolean) => {
-    setShowWelcomeModal(show);
-    if (!show) {
-      SafeStorage.setItem(PREF_FIRST_LAUNCH_KEY, 'true').catch(() => {});
+  const setRailRadarApiKey = useCallback(async (key: string) => {
+    const trimmed = (key || '').trim();
+    setRailRadarApiKeyState(trimmed);
+    await savePreferences({ railRadarApiKey: trimmed });
+    if (trimmed) {
+      await SafeStorage.setItem(STORAGE_KEYS.RAILRADAR_API_KEY, trimmed);
+    } else {
+      await SafeStorage.removeItem(STORAGE_KEYS.RAILRADAR_API_KEY);
     }
-  };
+  }, [savePreferences]);
+
+  const incrementHistoryVersion = useCallback(() => {
+    setHistoryVersion((v) => v + 1);
+  }, []);
+
+  // Derived isDarkMode from themeChoice + systemScheme
+  const isDarkMode = useMemo(() => {
+    if (themeChoice === 'system') {
+      return systemScheme === 'dark';
+    }
+    return themeChoice === 'dark';
+  }, [themeChoice, systemScheme]);
+
+  const toggleTheme = useCallback(() => {
+    const next = isDarkMode ? 'light' : 'dark';
+    setThemeChoice(next);
+  }, [isDarkMode, setThemeChoice]);
 
   const colors = useMemo(() => {
     return isDarkMode ? darkThemeColors : lightThemeColors;
   }, [isDarkMode]);
 
-  const t = (key: keyof typeof translations.en): string => {
-    const dict = translations[language as 'en' | 'hi'] || translations.en;
-    return (dict as any)[key] || translations.en[key] || String(key);
-  };
+  // Derived typed t function with English fallback and zero casts
+  const t = useCallback((key: keyof typeof translations.en): string => {
+    const dict = translations[language] || translations.en;
+    return dict[key] || translations.en[key] || String(key);
+  }, [language]);
+
+  // Deprecated stubs
+  const speedUnit: SpeedUnit = 'kmh';
+  const setSpeedUnit = useCallback(() => {}, []);
+  const trackingSource: DefaultTrackingSource = 'cell';
+  const setTrackingSource = useCallback(() => {}, []);
+  const alarmSound: AlarmRingtone = 'horn';
+  const setAlarmSound = useCallback(() => {}, []);
+
+  const contextValue = useMemo<PreferencesContextType>(() => ({
+    language,
+    setLanguage,
+    themeChoice,
+    setThemeChoice,
+    isDarkMode,
+    toggleTheme,
+    setThemeMode,
+    timeFormat,
+    setTimeFormat,
+    defaultAlarmTiming,
+    setDefaultAlarmTiming,
+    railRadarApiKey,
+    setRailRadarApiKey,
+    historyVersion,
+    incrementHistoryVersion,
+    colors,
+    t,
+    showWelcomeModal,
+    setShowWelcomeModal,
+    speedUnit,
+    setSpeedUnit,
+    trackingSource,
+    setTrackingSource,
+    alarmSound,
+    setAlarmSound,
+  }), [
+    language,
+    setLanguage,
+    themeChoice,
+    setThemeChoice,
+    isDarkMode,
+    toggleTheme,
+    setThemeMode,
+    timeFormat,
+    setTimeFormat,
+    defaultAlarmTiming,
+    setDefaultAlarmTiming,
+    railRadarApiKey,
+    setRailRadarApiKey,
+    historyVersion,
+    incrementHistoryVersion,
+    colors,
+    t,
+    showWelcomeModal,
+    speedUnit,
+    setSpeedUnit,
+    trackingSource,
+    setTrackingSource,
+    alarmSound,
+    setAlarmSound,
+  ]);
 
   return (
-    <PreferencesContext.Provider
-      value={{
-        language,
-        setLanguage,
-        isDarkMode,
-        toggleTheme,
-        setThemeMode,
-        speedUnit,
-        setSpeedUnit,
-        timeFormat,
-        setTimeFormat,
-        trackingSource,
-        setTrackingSource,
-        alarmSound,
-        setAlarmSound,
-        colors,
-        t,
-        showWelcomeModal,
-        setShowWelcomeModal: dismissWelcomeModal,
-      }}
-    >
+    <PreferencesContext.Provider value={contextValue}>
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} backgroundColor="transparent" translucent={true} />
       {children}
     </PreferencesContext.Provider>
   );
