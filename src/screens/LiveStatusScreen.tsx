@@ -6,20 +6,13 @@ import { CORRIDOR_TRAINS_MASTER, CorridorTrain, findOrGenerateTrain } from '../d
 import { searchAndRankTrains } from '../utils/searchRanker';
 import { calculateLiveStatus, parseTimeToMinutes } from '../utils/liveStatusEngine';
 import { usePreferences } from '../context/PreferencesContext';
+import { SavedTrainsStore, SavedRecentTrain } from '../utils/savedTrainsStore';
+import { TrainData } from '../services/trainDataService';
 
 interface LiveStatusScreenProps {
   initialTrainNumber?: string;
   onTrackTrain?: (trainNumber: string, trainName: string) => void;
 }
-
-const QUICK_TRAINS = [
-  { number: '22436', name: 'Vande Bharat Express' },
-  { number: '12417', name: 'Prayagraj Express' },
-  { number: '12002', name: 'NDLS - Bhopal Shatabdi' },
-  { number: '64902', name: 'New Delhi - Mathura EMU' },
-  { number: '05379', name: 'Lucknow Jn. - Kasganj Passenger' },
-  { number: '64901', name: 'Mathura - New Delhi EMU' },
-];
 
 export interface StationDepartureItem {
   number: string;
@@ -84,16 +77,53 @@ export const LiveStatusScreen: React.FC<LiveStatusScreenProps> = ({ initialTrain
   const [departureStationQuery, setDepartureStationQuery] = useState('New Delhi (NDLS)');
   const [departureFilter, setDepartureFilter] = useState<'all' | 'express' | 'local'>('all');
 
-  const [trainQuery, setTrainQuery] = useState(initialTrainNumber || '22436');
-  const [selectedTrainNum, setSelectedTrainNum] = useState(initialTrainNumber || '22436');
+  const [trainQuery, setTrainQuery] = useState(initialTrainNumber || '');
+  const [selectedTrainNum, setSelectedTrainNum] = useState(initialTrainNumber || '');
   const [trackingMode, setTrackingMode] = useState<'gps' | 'internet'>('gps');
   const [timeMode, setTimeMode] = useState<'real' | 'simulated'>('simulated');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastRefreshedAt, setLastRefreshedAt] = useState('Just now');
   const refreshTimerRef = useRef<any>(null);
 
+  // Unified Saved & Recent Trains State (Zero Network on open)
+  const [unifiedTrains, setUnifiedTrains] = useState<SavedRecentTrain[]>([]);
+  const [cachedStatuses, setCachedStatuses] = useState<Record<string, { stationName?: string; delayMinutes?: number; ageMinutes?: number } | null>>({});
+
+  const loadUnifiedTrains = useCallback(async () => {
+    try {
+      const list = await SavedTrainsStore.getUnifiedList();
+      setUnifiedTrains(list);
+
+      // Read status from cache ONLY - zero network calls
+      const statusMap: Record<string, { stationName?: string; delayMinutes?: number; ageMinutes?: number } | null> = {};
+      for (const t of list) {
+        const summary = await TrainData.getCachedLiveSummary(t.number);
+        statusMap[t.number] = summary;
+      }
+      setCachedStatuses(statusMap);
+    } catch {}
+  }, []);
+
   useEffect(() => {
-    if (initialTrainNumber) {
+    loadUnifiedTrains();
+  }, [loadUnifiedTrains]);
+
+  const handleToggleSaveItem = useCallback(async (t: SavedRecentTrain) => {
+    await SavedTrainsStore.toggleSaveTrain(t.number, t.name, t.fromCode, t.toCode);
+    loadUnifiedTrains();
+  }, [loadUnifiedTrains]);
+
+  const handlePressTrainItem = useCallback((item: SavedRecentTrain) => {
+    if (onTrackTrain) {
+      onTrackTrain(item.number, item.name);
+    } else {
+      setSelectedTrainNum(item.number);
+      setTrainQuery(item.number);
+    }
+  }, [onTrackTrain]);
+
+  useEffect(() => {
+    if (initialTrainNumber !== undefined) {
       setTrainQuery(initialTrainNumber);
       setSelectedTrainNum(initialTrainNumber);
     }
@@ -111,14 +141,15 @@ export const LiveStatusScreen: React.FC<LiveStatusScreenProps> = ({ initialTrain
     return searchAndRankTrains(trainQuery, CORRIDOR_TRAINS_MASTER).slice(0, 5);
   }, [trainQuery, selectedTrainNum]);
 
-  // Find active train in master database or dynamically generate
+  // Find active train in master database or dynamically generate (only if valid train number selected)
   const activeTrain = useMemo(() => {
+    if (!selectedTrainNum.trim()) return null;
     return findOrGenerateTrain(selectedTrainNum);
   }, [selectedTrainNum]);
 
   // Compute simulation time: halfway through the train's route
   const simulationMinutes = useMemo(() => {
-    if (!activeTrain.stops || activeTrain.stops.length < 2) return 8 * 60;
+    if (!activeTrain || !activeTrain.stops || activeTrain.stops.length < 2) return 8 * 60;
     const originMins = parseTimeToMinutes(activeTrain.stops[0].dep === '--' ? activeTrain.stops[0].arr : activeTrain.stops[0].dep);
     const destMins = parseTimeToMinutes(activeTrain.stops[activeTrain.stops.length - 1].arr);
     return Math.floor((originMins + destMins) / 2) + 12; // Middle + 12m running
@@ -126,6 +157,7 @@ export const LiveStatusScreen: React.FC<LiveStatusScreenProps> = ({ initialTrain
 
   // Calculate real-time live status data
   const liveData = useMemo(() => {
+    if (!activeTrain) return null;
     const minutesToUse = timeMode === 'simulated' ? simulationMinutes : undefined;
     return calculateLiveStatus(activeTrain, minutesToUse, 7); // 7 mins delay for realistic tracking
   }, [activeTrain, timeMode, simulationMinutes, lastRefreshedAt]);
@@ -324,35 +356,133 @@ export const LiveStatusScreen: React.FC<LiveStatusScreenProps> = ({ initialTrain
           </View>
         )}
 
-        {/* Quick Corridor Trains Chips */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickScroll}>
-          {QUICK_TRAINS.map((train) => {
-            const isSelected = selectedTrainNum === train.number;
-            return (
-              <TouchableOpacity
-                key={train.number}
-                style={[styles.quickChip, isSelected && styles.quickChipActive]}
-                onPress={() => handleSelectTrain(train.number)}
-              >
-                <Text style={[styles.quickChipText, isSelected && styles.quickChipTextActive]}>
-                  {train.number}
-                </Text>
-                <Text style={[styles.quickChipSub, isSelected && styles.quickChipSubActive]}>
-                  {train.name.split('-')[1]?.trim() || train.name}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+        {/* Unified Saved & Recent Trains Section */}
+        <View style={styles.savedSectionWrapper}>
+          <View style={styles.savedSectionHeader}>
+            <Text style={[styles.savedSectionTitle, { color: isDarkMode ? colors.textSecondary : '#475569' }]}>
+              SAVED & RECENT TRAINS
+            </Text>
+            {unifiedTrains.length > 0 && (
+              <Text style={[styles.savedSectionCount, { color: isDarkMode ? colors.textMuted : '#94A3B8' }]}>
+                {unifiedTrains.length} trains
+              </Text>
+            )}
+          </View>
+
+          {unifiedTrains.length === 0 ? (
+            <View style={[styles.savedEmptyCard, isDarkMode && { backgroundColor: colors.cardSecondary }]}>
+              <Ionicons name="bookmark-outline" size={20} color={isDarkMode ? colors.textMuted : '#94A3B8'} style={{ marginRight: 8 }} />
+              <Text style={[styles.savedEmptyText, { color: isDarkMode ? colors.textMuted : '#64748B' }]}>
+                No saved or recent trains yet. Search or track any train to pin it here.
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.savedTrainsList}>
+              {unifiedTrains.map((item) => {
+                const isSelected = selectedTrainNum === item.number;
+                const cached = cachedStatuses[item.number];
+                let statusText = 'No data yet';
+                if (cached?.stationName) {
+                  const delayStr = typeof cached.delayMinutes === 'number'
+                    ? (cached.delayMinutes > 0 ? `• +${cached.delayMinutes}m late` : '• On time')
+                    : '';
+                  const ageStr = cached.ageMinutes !== undefined
+                    ? (cached.ageMinutes <= 1 ? 'Just now' : `${cached.ageMinutes}m ago`)
+                    : '';
+                  statusText = `At ${cached.stationName} ${delayStr} • ${ageStr}`.trim();
+                }
+
+                return (
+                  <TouchableOpacity
+                    key={item.number}
+                    style={[
+                      styles.savedTrainCard,
+                      {
+                        backgroundColor: isDarkMode ? colors.surface : '#FFFFFF',
+                        borderColor: isSelected ? colors.primary : (isDarkMode ? colors.border : '#E2E8F0'),
+                      },
+                      isSelected && styles.savedTrainCardActive,
+                    ]}
+                    activeOpacity={0.75}
+                    onPress={() => handlePressTrainItem(item)}
+                  >
+                    <View style={[styles.savedTrainNumBadge, { backgroundColor: isDarkMode ? '#1E293B' : '#EFF6FF' }]}>
+                      <Text style={[styles.savedTrainNumText, { color: isDarkMode ? '#38BDF8' : colors.primary }]}>
+                        {item.number}
+                      </Text>
+                    </View>
+
+                    <View style={{ flex: 1, marginHorizontal: 10 }}>
+                      <Text
+                        style={[styles.savedTrainNameText, { color: isDarkMode ? colors.textPrimary : '#0F172A' }]}
+                        numberOfLines={1}
+                      >
+                        {item.name}
+                      </Text>
+                      {item.fromCode && item.toCode ? (
+                        <Text style={[styles.savedTrainRouteText, { color: isDarkMode ? colors.textMuted : '#64748B' }]}>
+                          {item.fromCode} ➔ {item.toCode}
+                        </Text>
+                      ) : null}
+                      <Text
+                        style={[
+                          styles.savedTrainStatusText,
+                          {
+                            color: cached?.stationName
+                              ? (cached.delayMinutes && cached.delayMinutes > 15 ? '#EF4444' : '#10B981')
+                              : (isDarkMode ? colors.textMuted : '#94A3B8'),
+                          },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {statusText}
+                      </Text>
+                    </View>
+
+                    <TouchableOpacity
+                      style={styles.savedStarButton}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      onPress={() => handleToggleSaveItem(item)}
+                    >
+                      <Ionicons
+                        name={item.isSaved ? 'star' : 'star-outline'}
+                        size={20}
+                        color={item.isSaved ? '#F59E0B' : (isDarkMode ? colors.textMuted : '#94A3B8')}
+                      />
+                    </TouchableOpacity>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+        </View>
       </View>
 
-      {/* 3. Iconic Live Running Status Banner */}
-      <View
-        style={[
-          styles.liveBannerCard,
-          liveData.isDelayed ? styles.bannerDelayed : styles.bannerOnTime,
-        ]}
-      >
+      {/* 3. Live Train View or Empty Guide Prompt */}
+      {!selectedTrainNum || !activeTrain || !liveData ? (
+        <View style={[styles.emptyPromptCard, isDarkMode && { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <MaterialCommunityIcons
+            name="train"
+            size={42}
+            color={isDarkMode ? '#38BDF8' : colors.primary}
+            style={{ marginBottom: 12, opacity: 0.9 }}
+          />
+          <Text style={[styles.emptyPromptTitle, { color: isDarkMode ? colors.textPrimary : '#0F172A' }]}>
+            Spot a Train
+          </Text>
+          <Text style={[styles.emptyPromptSub, { color: isDarkMode ? colors.textSecondary : '#64748B' }]}>
+            Type a train number or name above, or tap any train in your Saved & Recent list to inspect its route and live progress.
+          </Text>
+        </View>
+      ) : (
+        <>
+          {/* 3. Iconic Live Running Status Banner */}
+          <View
+            style={[
+              styles.liveBannerCard,
+              liveData.isDelayed ? styles.bannerDelayed : styles.bannerOnTime,
+            ]}
+          >
         <View style={styles.bannerTopRow}>
           <View style={styles.bannerIconBox}>
             <MaterialCommunityIcons
@@ -555,6 +685,8 @@ export const LiveStatusScreen: React.FC<LiveStatusScreenProps> = ({ initialTrain
           })}
         </View>
       </View>
+        </>
+      )}
     </>
   ) : (
     <View style={styles.deptMainWrapper}>
@@ -908,38 +1040,98 @@ const styles = StyleSheet.create({
     fontSize: 10.5,
     color: Colors.textSecondary,
   },
-  quickScroll: {
-    marginTop: 12,
+  savedSectionWrapper: {
+    marginTop: 14,
   },
-  quickChip: {
+  savedSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+    paddingHorizontal: 2,
+  },
+  savedSectionTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  savedSectionCount: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  savedEmptyCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
     backgroundColor: '#F8FAFC',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 10,
-    marginRight: 8,
+  },
+  savedEmptyText: {
+    fontSize: 12,
+    flex: 1,
+    lineHeight: 17,
+  },
+  savedTrainsList: {
+    gap: 8,
+  },
+  savedTrainCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 2,
+  },
+  savedTrainCardActive: {
+    borderWidth: 1.5,
+  },
+  savedTrainNumBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  savedTrainNumText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  savedTrainNameText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  savedTrainRouteText: {
+    fontSize: 11,
+    marginTop: 1,
+  },
+  savedTrainStatusText: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  savedStarButton: {
+    padding: 6,
+  },
+  emptyPromptCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    marginBottom: 16,
   },
-  quickChipActive: {
-    backgroundColor: Colors.primarySoft,
-    borderColor: Colors.primary,
-  },
-  quickChipText: {
-    fontSize: 11.5,
+  emptyPromptTitle: {
+    fontSize: 16,
     fontWeight: '800',
-    color: Colors.primary,
+    marginBottom: 6,
   },
-  quickChipTextActive: {
-    color: Colors.primaryDark,
-  },
-  quickChipSub: {
-    fontSize: 9.5,
-    color: Colors.textSecondary,
-    fontWeight: '500',
-  },
-  quickChipSubActive: {
-    color: Colors.primary,
-    fontWeight: '700',
+  emptyPromptSub: {
+    fontSize: 12.5,
+    textAlign: 'center',
+    lineHeight: 18,
+    maxWidth: 280,
   },
   liveBannerCard: {
     borderRadius: 18,

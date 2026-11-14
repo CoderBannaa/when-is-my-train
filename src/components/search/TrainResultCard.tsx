@@ -170,17 +170,11 @@ export const TrainResultCard: React.FC<TrainResultCardProps> = React.memo(({
         </View>
 
         <View style={styles.daysContainer}>
-          {runsDaily ? (
-            <Text style={[styles.runsDailyText, { color: isDarkMode ? '#38BDF8' : '#2563EB' }]}>
-              {t('runsDaily') || 'Runs Daily'}
-            </Text>
-          ) : (
-            <DayChips
-              runsOn={runsOn}
-              selectedDayIndex={selectedDayIndex}
-              isDarkMode={isDarkMode}
-            />
-          )}
+          <DayChips
+            runsOn={runsOn}
+            selectedDayIndex={selectedDayIndex}
+            isDarkMode={isDarkMode}
+          />
         </View>
       </View>
 

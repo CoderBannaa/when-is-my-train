@@ -445,8 +445,6 @@ Found on When is my train`;
             ? `${sortedTrains.length} ${t('trainsFound') || 'trains available'} • Live${provider ? ` • Source: ${formatProviderLabel(provider)}` : ''}`
             : source === 'cache'
             ? `${sortedTrains.length} ${t('trainsFound') || 'trains available'} • Updated ${formatAgeText(ageSeconds)}${provider ? ` • Source: ${formatProviderLabel(provider)}` : ''}`
-            : source === 'stale'
-            ? `${sortedTrains.length} ${t('trainsFound') || 'trains available'} • Offline (${formatAgeText(ageSeconds)})${provider ? ` • Source: ${formatProviderLabel(provider)}` : ''}`
             : `${sortedTrains.length} ${t('trainsFound') || 'trains available'}`}
         </Text>
       </View>

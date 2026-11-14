@@ -16,7 +16,7 @@ import { SafeStorage } from '../context/PreferencesContext';
 import { getActiveRailRadarKey, FORCE_PROVIDER_FAIL } from '../config/env';
 import { LiveTrainApi, getLocalProxyBaseUrl, LiveTrainTrackingData } from './liveTrainApiService';
 import { TrainBetweenStation } from '../data/trainsBetweenStations';
-import { DataResult, DataSource, DataErrorKind } from './dataTypes';
+import { DataResult, DataSource, DataErrorKind, CoachLayout } from './dataTypes';
 
 // ==========================================
 // CONSTANTS & TIMEOUTS
@@ -26,6 +26,7 @@ const SEARCH_FRESH_TTL_MS = 15 * 60 * 1000; // 15 minutes
 const SEARCH_MAX_STALE_MS = 24 * 60 * 60 * 1000; // 24 hours
 const LIVE_FRESH_TTL_MS = 60 * 1000; // 60 seconds
 const LIVE_MAX_STALE_MS = 2 * 60 * 60 * 1000; // 2 hours
+const COACH_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 const PER_PROVIDER_TIMEOUT_MS = 6000;
 const OVERALL_BUDGET_MS = 12000;
@@ -496,6 +497,32 @@ export class TrainDataService {
   }
 
   // --------------------------------------------------------
+  // GET CACHED LIVE SUMMARY (Zero Network)
+  // --------------------------------------------------------
+
+  public async getCachedLiveSummary(
+    trainNumber: string
+  ): Promise<{ stationName?: string; delayMinutes?: number; ageMinutes?: number } | null> {
+    const clean = (trainNumber || '').trim().replace(/\D/g, '');
+    if (!clean) return null;
+    const entry = await this.getCachedEntry<LiveTrainTrackingData>(`live_${clean}`);
+    if (!entry || !entry.data) return null;
+    const d = entry.data;
+    const stationName =
+      d.currentStationName ||
+      d.stations?.find((s) => s.status === 'current')?.stationName ||
+      d.stations?.find((s) => s.status === 'departed')?.stationName;
+    const delayMinutes =
+      typeof d.delayMinutes === 'number'
+        ? d.delayMinutes
+        : typeof d.totalDelayMinutes === 'number'
+        ? d.totalDelayMinutes
+        : undefined;
+    const ageMinutes = Math.round((Date.now() - entry.fetchedAt) / 60000);
+    return { stationName, delayMinutes, ageMinutes };
+  }
+
+  // --------------------------------------------------------
   // GET LIVE STATUS
   // --------------------------------------------------------
 
@@ -643,6 +670,110 @@ export class TrainDataService {
       ageSeconds: null,
       error,
     };
+  }
+
+  // --------------------------------------------------------
+  // GET COACH LAYOUT (RailRadar Official API only when key exists & quota >= 5)
+  // --------------------------------------------------------
+
+  public async getCoachLayout(trainNumber: string): Promise<DataResult<CoachLayout>> {
+    const cleanTrainNo = (trainNumber || '').trim().replace(/\D/g, '');
+    const cacheKey = `coach_${cleanTrainNo}`;
+
+    // 1. Check persistent cache (30 days TTL)
+    const cached = await this.getCachedEntry<CoachLayout>(cacheKey);
+    if (cached) {
+      const age = Date.now() - cached.fetchedAt;
+      if (age < COACH_CACHE_TTL_MS) {
+        return {
+          data: cached.data,
+          source: 'cache',
+          fetchedAt: cached.fetchedAt,
+          ageSeconds: Math.round(age / 1000),
+          provider: cached.provider,
+        };
+      }
+    }
+
+    // 2. Check if RailRadar API key configured and rate quota allowed
+    const key = await getActiveRailRadarKey();
+    if (!key || !key.trim() || !this.rateGuard.canUse()) {
+      return {
+        data: null,
+        source: 'unavailable',
+        fetchedAt: null,
+        ageSeconds: null,
+        error: { kind: 'not_found', message: 'Coach layout not available' },
+      };
+    }
+
+    // 3. Official API Fetch (6s timeout)
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), PER_PROVIDER_TIMEOUT_MS);
+
+    try {
+      const url = `https://api.railradar.in/v1/trains/${cleanTrainNo}/coaches`;
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${key.trim()}`, Accept: 'application/json' },
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      this.rateGuard.updateRemaining(res.headers);
+
+      if (!res.ok) {
+        return {
+          data: null,
+          source: 'unavailable',
+          fetchedAt: null,
+          ageSeconds: null,
+          error: { kind: 'not_found', message: `Coach API error: ${res.status}` },
+        };
+      }
+
+      const json = await res.json();
+      const rakeSequence = json?.data?.rakeSequence || json?.data?.coaches;
+
+      if (!json || !json.success || !Array.isArray(rakeSequence) || rakeSequence.length === 0) {
+        return {
+          data: null,
+          source: 'unavailable',
+          fetchedAt: null,
+          ageSeconds: null,
+          error: { kind: 'parse', message: 'Coach layout not available' },
+        };
+      }
+
+      const layout: CoachLayout = {
+        trainNumber: cleanTrainNo,
+        trainName: json.data?.trainName,
+        rakeSequence: rakeSequence.map((c: any, idx: number) => ({
+          index: c.index || idx + 1,
+          coachCode: c.coachCode || c.code || `C${idx + 1}`,
+          coachType: c.coachType || c.type || 'Coach',
+          position: c.position,
+          class: c.class,
+        })),
+        classSummary: json.data?.classSummary,
+      };
+
+      await this.setCachedEntry(cacheKey, layout, 'railradar-api');
+      return {
+        data: layout,
+        source: 'live',
+        fetchedAt: Date.now(),
+        ageSeconds: 0,
+        provider: 'railradar-api',
+      };
+    } catch (err: any) {
+      clearTimeout(timeout);
+      return {
+        data: null,
+        source: 'unavailable',
+        fetchedAt: null,
+        ageSeconds: null,
+        error: { kind: 'network', message: err?.message || 'Coach layout fetch failed' },
+      };
+    }
   }
 
   // --------------------------------------------------------
