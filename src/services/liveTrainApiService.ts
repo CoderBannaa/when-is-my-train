@@ -23,7 +23,7 @@ class SixtySecondCacheEngine {
   /**
    * Retrieves data if present and not expired (within 10 minutes)
    */
-  public get<T>(key: string): { data: T; isCached: true; ageSeconds: number } | null {
+  public get<T>(key: string): { data: T; isCached: true; ageSeconds: number; source?: 'api' | 'fallback' } | null {
     const entry = this.cache.get(key);
     if (!entry) return null;
 
@@ -38,6 +38,7 @@ class SixtySecondCacheEngine {
       data: entry.data as T,
       isCached: true,
       ageSeconds,
+      source: entry.source,
     };
   }
 
@@ -330,6 +331,9 @@ class LiveTrainApiService {
   private lastKnownLiveStatus: Map<string, LiveTrainTrackingData> = new Map();
 
   /**
+   * @deprecated Uses procedural clock-based simulation when offline.
+   * Use TrainData.getLiveStatus() from './trainDataService' for real data with honest freshness.
+   *
    * Fetches Real Live Train Running Status from Indian Railway IRCTC NTES / RailRadar API
    * with 60-Second In-Memory Caching (bypassed when forceRefresh=true)
    */
@@ -1011,7 +1015,7 @@ class LiveTrainApiService {
   /**
    * Transforms raw RailRadar.in API response into standardized LiveTrainTrackingData
    */
-  private transformRailRadarApiResponse(trainNumber: string, liveJson: any, scheduleJson?: any): LiveTrainTrackingData {
+  public transformRailRadarApiResponse(trainNumber: string, liveJson: any, scheduleJson?: any): LiveTrainTrackingData {
     const rawData = liveJson?.data || liveJson || {};
     const catalogTrain = findOrGenerateTrain(trainNumber);
     const resolvedTrainName = rawData.trainName || catalogTrain?.name || `Train ${trainNumber}`;
@@ -1311,13 +1315,12 @@ class LiveTrainApiService {
     }
 
     const html = await response.text();
-    const regex = /<div class=['"]OneTrain['"][^>]*data-train=['"]([^'"]+)['"][^>]*>([\s\S]*?)<\/div>/g;
+    const regex = /<div[^>]*class=['"][^'"]*OneTrain[^'"]*['"][^>]*data-train=['"]([^'"]+)['"][^>]*>/g;
     let match;
     const trains: TrainBetweenStation[] = [];
 
     while ((match = regex.exec(html)) !== null) {
       const rawData = match[1];
-      const innerHtml = match[2];
       const parts = rawData.split('_');
       if (parts.length >= 10) {
         const number = parts[0].trim();
@@ -1350,7 +1353,7 @@ class LiveTrainApiService {
         else if (upperName.includes('INTERCITY')) type = 'Intercity';
         else if (upperName.includes('SPL') || upperName.includes('SPECIAL')) type = 'Special';
 
-        const classMatches = [...innerHtml.matchAll(/<td>([1-3][A-Z]|CC|EC|SL|2S|EA|FC)<\/td>/g)].map((m) => m[1]);
+        const classMatches = [...html.matchAll(/<td>([1-3][A-Z]|CC|EC|SL|2S|EA|FC)<\/td>/g)].map((m) => m[1]);
         const classTypes = classMatches.length > 0 ? classMatches : ['SL', '3A', '2A'];
 
         const classes = classTypes.map((cType) => {
@@ -1421,6 +1424,9 @@ class LiveTrainApiService {
   }
 
   /**
+   * @deprecated Uses procedural fake trains (generateDynamicTrainsForRoute) when offline.
+   * Use TrainData.searchTrains() from './trainDataService' for real data with honest freshness.
+   *
    * Fetches authentic Trains Between Stations from direct mobile eRail fetch or local proxy backend,
    * with automatic fallback to dynamically seeded realistic route trains.
    */
@@ -1487,6 +1493,78 @@ class LiveTrainApiService {
     const fallbackList = getTrainsBetweenStations(normFrom, normTo);
     TrainCache.set(cacheKey, fallbackList, 5 * 60 * 1000, 'fallback');
     return fallbackList;
+  }
+
+  /**
+   * Honest data source accessor: Returns trains along with metadata on whether
+   * the data is from 'live' network scraper, memory 'cache', or estimated 'fallback'.
+   */
+  public async getTrainsBetweenStationsWithMeta(
+    fromCode: string,
+    toCode: string,
+    forceRefresh: boolean = false
+  ): Promise<{ trains: TrainBetweenStation[]; source: 'live' | 'cache' | 'fallback' }> {
+    const normFrom = (fromCode || '').trim().toUpperCase();
+    const normTo = (toCode || '').trim().toUpperCase();
+    const cacheKey = `tbs_${normFrom}__${normTo}`;
+
+    if (!forceRefresh) {
+      const cached = TrainCache.get<TrainBetweenStation[]>(cacheKey);
+      if (cached && cached.data && cached.data.length > 0) {
+        return {
+          trains: cached.data,
+          source: cached.source === 'fallback' ? 'fallback' : 'cache',
+        };
+      }
+    }
+
+    // 1. Direct eRail fetch on native mobile
+    if (Platform.OS !== 'web') {
+      try {
+        const directTrains = await this.fetchDirectErailTrains(normFrom, normTo);
+        if (directTrains && directTrains.length > 0) {
+          TrainCache.set(cacheKey, directTrains, 10 * 60 * 1000, 'api');
+          return { trains: directTrains, source: 'live' };
+        }
+      } catch {}
+    }
+
+    // 2. Try proxy server (port 5001) for web browser or local dev
+    try {
+      const baseUrl = getLocalProxyBaseUrl();
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4500);
+
+      const res = await fetch(`${baseUrl}/api/trains-between-stations?from=${normFrom}&to=${normTo}`, {
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      if (res.ok) {
+        const json = await res.json();
+        if (json && json.success && Array.isArray(json.trains) && json.trains.length > 0) {
+          registerTrainsIntoCatalog(json.trains);
+          TrainCache.set(cacheKey, json.trains, 10 * 60 * 1000, 'api');
+          return { trains: json.trains, source: 'live' };
+        }
+      }
+    } catch {
+      // Proxy unavailable or timed out; smoothly continue to direct or fallback
+    }
+
+    // 3. If on web and proxy failed, also try direct eRail in case CORS is open
+    try {
+      const directTrains = await this.fetchDirectErailTrains(normFrom, normTo);
+      if (directTrains && directTrains.length > 0) {
+        TrainCache.set(cacheKey, directTrains, 10 * 60 * 1000, 'api');
+        return { trains: directTrains, source: 'live' };
+      }
+    } catch {}
+
+    // 4. Fallback to procedural route-seeded trains
+    const fallbackList = getTrainsBetweenStations(normFrom, normTo);
+    TrainCache.set(cacheKey, fallbackList, 5 * 60 * 1000, 'fallback');
+    return { trains: fallbackList, source: 'fallback' };
   }
 }
 

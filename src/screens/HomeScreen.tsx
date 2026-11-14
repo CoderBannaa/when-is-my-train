@@ -197,8 +197,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     toStation ? toStation.name : 'Lucknow Charbagh'
   );
 
-  // Selected Travel Date Option (Today, Tomorrow, Day After)
-  const [selectedDateOption, setSelectedDateOption] = useState<'today' | 'tomorrow' | 'day_after'>('today');
+  // Selected Travel Date Option (Today, Tomorrow, Day After, Custom)
+  const [selectedDateOption, setSelectedDateOption] = useState<'today' | 'tomorrow' | 'day_after' | 'custom'>('today');
+  const [customTravelDate, setCustomTravelDate] = useState<Date>(new Date());
+  const [showHomeCalendarModal, setShowHomeCalendarModal] = useState<boolean>(false);
 
   const dateOptions = useMemo(() => {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -206,11 +208,29 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     const d1 = new Date(Date.now() + 86400000);
     const d2 = new Date(Date.now() + 86400000 * 2);
     return [
-      { key: 'today', label: language === 'hi' ? 'आज' : 'Today', dateStr: `${d0.getDate()} ${months[d0.getMonth()]}` },
-      { key: 'tomorrow', label: language === 'hi' ? 'कल' : 'Tomorrow', dateStr: `${d1.getDate()} ${months[d1.getMonth()]}` },
+      { key: 'today', label: t('today') || (language === 'hi' ? 'आज' : 'Today'), dateStr: `${d0.getDate()} ${months[d0.getMonth()]}` },
+      { key: 'tomorrow', label: t('tomorrow') || (language === 'hi' ? 'कल' : 'Tomorrow'), dateStr: `${d1.getDate()} ${months[d1.getMonth()]}` },
       { key: 'day_after', label: language === 'hi' ? 'परसों' : 'Day After', dateStr: `${d2.getDate()} ${months[d2.getMonth()]}` },
     ];
-  }, [language]);
+  }, [language, t]);
+
+  const homeCalendarDays = useMemo(() => {
+    const list: { label: string; date: Date; formatted: string }[] = [];
+    const now = new Date();
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    for (let i = 0; i < 35; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
+      const dayName = days[d.getDay()];
+      const monthName = months[d.getMonth()];
+      list.push({
+        label: i === 0 ? (t('today') || 'Today') : i === 1 ? (t('tomorrow') || 'Tomorrow') : `${dayName}, ${d.getDate()} ${monthName}`,
+        date: d,
+        formatted: `${d.getDate()} ${monthName}`,
+      });
+    }
+    return list;
+  }, [t]);
 
   // Active inline dropdown state
   const [activeInlineSearch, setActiveInlineSearch] = useState<'from' | 'to' | null>(null);
@@ -678,8 +698,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
       if (onSearchTrains) {
         const now = new Date();
-        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        const travelDateStr = `Today, ${now.getDate()} ${months[now.getMonth()]}`;
+        let targetDate = new Date();
+        if (selectedDateOption === 'tomorrow') {
+          targetDate = new Date(now.getTime() + 86400000);
+        } else if (selectedDateOption === 'day_after') {
+          targetDate = new Date(now.getTime() + 2 * 86400000);
+        } else if (selectedDateOption === 'custom') {
+          targetDate = customTravelDate;
+        }
+        const yyyy = targetDate.getFullYear();
+        const mm = String(targetDate.getMonth() + 1).padStart(2, '0');
+        const dd = String(targetDate.getDate()).padStart(2, '0');
+        const travelDateStr = `${yyyy}-${mm}-${dd}`;
         
         // Save to dynamic recent searches list
         const newRec: RecentSearchItem = {
@@ -1007,22 +1037,107 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             </View>
           )}
 
+          {/* TRAVEL DATE SELECTOR (Today / Tomorrow / Day after + Calendar) */}
+          <View style={styles.homeDateRow}>
+            {dateOptions.map((opt) => {
+              const isSelected = selectedDateOption === opt.key;
+              return (
+                <TouchableOpacity
+                  key={opt.key}
+                  style={[
+                    styles.homeDatePill,
+                    {
+                      backgroundColor: isSelected
+                        ? (isDarkMode ? '#0284C7' : Colors.primary)
+                        : (isDarkMode ? '#1E293B' : '#F1F5F9'),
+                      borderColor: isSelected
+                        ? (isDarkMode ? '#38BDF8' : Colors.primary)
+                        : (isDarkMode ? colors.border : '#E2E8F0'),
+                    },
+                  ]}
+                  onPress={() => setSelectedDateOption(opt.key as any)}
+                  activeOpacity={0.75}
+                  accessible={true}
+                  accessibilityLabel={`Select travel date ${opt.label}`}
+                >
+                  <Text
+                    style={[
+                      styles.homeDatePillLabel,
+                      {
+                        color: isSelected
+                          ? '#FFFFFF'
+                          : (isDarkMode ? colors.textPrimary : '#334155'),
+                        fontWeight: isSelected ? '800' : '600',
+                      },
+                    ]}
+                  >
+                    {opt.label}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.homeDatePillSub,
+                      {
+                        color: isSelected
+                          ? 'rgba(255, 255, 255, 0.85)'
+                          : (isDarkMode ? colors.textMuted : '#64748B'),
+                      },
+                    ]}
+                  >
+                    {opt.dateStr}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+
+            {/* Calendar Icon Button */}
+            <TouchableOpacity
+              style={[
+                styles.homeCalendarBtn,
+                {
+                  backgroundColor: selectedDateOption === 'custom'
+                    ? (isDarkMode ? '#0284C7' : Colors.primary)
+                    : (isDarkMode ? '#1E293B' : '#F1F5F9'),
+                  borderColor: selectedDateOption === 'custom'
+                    ? (isDarkMode ? '#38BDF8' : Colors.primary)
+                    : (isDarkMode ? colors.border : '#E2E8F0'),
+                },
+              ]}
+              onPress={() => setShowHomeCalendarModal(true)}
+              activeOpacity={0.75}
+              accessible={true}
+              accessibilityLabel="Open calendar date picker"
+            >
+              <Ionicons
+                name="calendar-outline"
+                size={18}
+                color={selectedDateOption === 'custom' ? '#FFFFFF' : (isDarkMode ? '#38BDF8' : Colors.primary)}
+              />
+              {selectedDateOption === 'custom' && (
+                <Text style={styles.homeCustomDateText}>
+                  {customTravelDate.getDate()}/{customTravelDate.getMonth() + 1}
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+
           {/* 3. FIND TRAINS ACTION BUTTON (WITH SPRING PRESS MICRO-ANIMATION) */}
           <Animated.View style={{ transform: [{ scale: findBtnScale }] }}>
             <TouchableOpacity
               style={[
                 styles.modernFindTrainsBtn,
                 {
-                  backgroundColor: isDarkMode ? '#059669' : colors.searchBtnGreen,
-                  shadowColor: isDarkMode ? '#10B981' : colors.searchBtnGreen,
+                  backgroundColor: isDarkMode ? '#059669' : '#16A34A',
+                  shadowColor: isDarkMode ? '#10B981' : '#16A34A',
                 },
               ]}
-              activeOpacity={0.9}
+              activeOpacity={0.88}
               onPressIn={() => Animated.spring(findBtnScale, { toValue: 0.96, useNativeDriver: true }).start()}
               onPressOut={() => Animated.spring(findBtnScale, { toValue: 1, friction: 4, useNativeDriver: true }).start()}
               onPress={() => handleFindTrains()}
             >
-              <Text style={styles.modernFindTrainsText}>{t('findTrains')}</Text>
+              <MaterialCommunityIcons name="train" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
+              <Text style={styles.modernFindTrainsText}>{t('findTrains') || 'FIND TRAINS'}</Text>
+              <Ionicons name="arrow-forward" size={17} color="#FFFFFF" style={{ marginLeft: 8 }} />
             </TouchableOpacity>
           </Animated.View>
         </View>
@@ -1040,9 +1155,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         >
           {/* Header */}
           <View style={styles.spotCardHeader}>
-            <Text style={[styles.spotCardTitle, { color: colors.textPrimary }]}>
-              {t('spotYourTrain') || 'Spot Your Train'}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Ionicons name="compass-outline" size={18} color={Colors.primary} style={{ marginRight: 7 }} />
+              <Text style={[styles.spotCardTitle, { color: colors.textPrimary }]}>
+                {t('spotYourTrain') || 'Spot Your Train'}
+              </Text>
+            </View>
           </View>
 
           {/* Search Input Row with Train Name/No. and Green Search Icon */}
@@ -1163,84 +1281,84 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           )}
         </View>
 
-        {/* 4 LARGE QUICK RAILWAY CARDS (2x2 GRID IN SIGNATURE BLUE) */}
+        {/* 4 LARGE QUICK RAILWAY CARDS (2x2 GRID WITH INDIVIDUAL SIGNATURE ACCENTS) */}
         <View style={styles.grid}>
-          {/* 1. Live Status Card */}
+          {/* 1. Live Status Card (Emerald Theme) */}
           <TouchableOpacity
             style={[
               styles.gridItem,
               {
                 backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
-                borderColor: isDarkMode ? '#334155' : '#BAE6FD',
+                borderColor: isDarkMode ? '#334155' : '#E2E8F0',
               },
             ]}
             activeOpacity={0.7}
             onPress={() => setShowSpotTrainModal(true)}
           >
             <View style={styles.cardHeaderRow}>
-              <View style={[styles.gridIconCircle, { backgroundColor: isDarkMode ? '#0C4A6E' : Colors.primarySoft }]}>
-                <Ionicons name="navigate" size={24} color={Colors.primary} />
+              <View style={[styles.gridIconCircle, { backgroundColor: isDarkMode ? '#064E3B' : '#ECFDF5' }]}>
+                <Ionicons name="navigate" size={22} color="#10B981" />
               </View>
-              <View style={styles.liveIndicatorPill}>
-                <View style={styles.livePulseDot} />
-                <Text style={styles.liveIndicatorText}>LIVE</Text>
+              <View style={[styles.liveIndicatorPill, { backgroundColor: isDarkMode ? '#064E3B' : '#DCFCE7' }]}>
+                <View style={[styles.livePulseDot, { backgroundColor: '#10B981' }]} />
+                <Text style={[styles.liveIndicatorText, { color: '#10B981' }]}>LIVE</Text>
               </View>
             </View>
             <Text style={[styles.gridItemTitle, { color: colors.textPrimary }]}>Live Status</Text>
             <Text style={[styles.gridItemSubtitle, { color: colors.textSecondary }]}>Spot train location</Text>
           </TouchableOpacity>
 
-          {/* 2. PNR Status Card */}
+          {/* 2. PNR Status Card (Indigo Theme) */}
           <TouchableOpacity
             style={[
               styles.gridItem,
               {
                 backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
-                borderColor: isDarkMode ? '#334155' : '#BAE6FD',
+                borderColor: isDarkMode ? '#334155' : '#E2E8F0',
               },
             ]}
             activeOpacity={0.7}
             onPress={() => onNavigateToTab('pnr')}
           >
             <View style={styles.cardHeaderRow}>
-              <View style={[styles.gridIconCircle, { backgroundColor: isDarkMode ? '#0C4A6E' : Colors.primarySoft }]}>
-                <Ionicons name="ticket" size={24} color={Colors.primary} />
+              <View style={[styles.gridIconCircle, { backgroundColor: isDarkMode ? '#312E81' : '#EEF2FF' }]}>
+                <Ionicons name="ticket" size={22} color="#6366F1" />
               </View>
-              <Ionicons name="chevron-forward" size={18} color={isDarkMode ? '#64748B' : '#94A3B8'} />
+              <Ionicons name="chevron-forward" size={17} color={isDarkMode ? '#818CF8' : '#C7D2FE'} />
             </View>
             <Text style={[styles.gridItemTitle, { color: colors.textPrimary }]}>PNR Status</Text>
             <Text style={[styles.gridItemSubtitle, { color: colors.textSecondary }]}>Check confirmation & chart</Text>
           </TouchableOpacity>
 
-          {/* 3. Time Table Card */}
+          {/* 3. Time Table Card (Sky Blue Theme) */}
           <TouchableOpacity
             style={[
               styles.gridItem,
               {
                 backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
-                borderColor: isDarkMode ? '#334155' : '#BAE6FD',
+                borderColor: isDarkMode ? '#334155' : '#E2E8F0',
               },
             ]}
             activeOpacity={0.7}
             onPress={() => onNavigateToTab('schedule')}
           >
             <View style={styles.cardHeaderRow}>
-              <View style={[styles.gridIconCircle, { backgroundColor: isDarkMode ? '#0C4A6E' : Colors.primarySoft }]}>
-                <Ionicons name="calendar" size={24} color={Colors.primary} />
+              <View style={[styles.gridIconCircle, { backgroundColor: isDarkMode ? '#0C4A6E' : '#E0F2FE' }]}>
+                <Ionicons name="calendar" size={22} color="#0284C7" />
               </View>
-              <Ionicons name="chevron-forward" size={18} color={isDarkMode ? '#64748B' : '#94A3B8'} />
+              <Ionicons name="chevron-forward" size={17} color={isDarkMode ? '#38BDF8' : '#BAE6FD'} />
             </View>
             <Text style={[styles.gridItemTitle, { color: colors.textPrimary }]}>Time Table</Text>
             <Text style={[styles.gridItemSubtitle, { color: colors.textSecondary }]}>Offline train schedule</Text>
           </TouchableOpacity>
 
-          {/* 4. Station Alarm Card (side me station alarm) */}
+          {/* 4. Station Alarm Card (Amber / Sunset Theme) */}
           <TouchableOpacity
             style={[
               styles.gridItem,
               {
                 backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
-                borderColor: alarmActive ? '#16A34A' : (isDarkMode ? '#334155' : '#BAE6FD'),
+                borderColor: alarmActive ? '#16A34A' : (isDarkMode ? '#334155' : '#E2E8F0'),
               },
             ]}
             activeOpacity={0.7}
@@ -1253,14 +1371,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   {
                     backgroundColor: alarmActive
                       ? '#DCFCE7'
-                      : (isDarkMode ? '#0C4A6E' : Colors.primarySoft),
+                      : (isDarkMode ? '#78350F' : '#FEF3C7'),
                   },
                 ]}
               >
                 <Ionicons
                   name="alarm"
-                  size={24}
-                  color={alarmActive ? '#16A34A' : Colors.primary}
+                  size={22}
+                  color={alarmActive ? '#16A34A' : '#D97706'}
                 />
               </View>
               {alarmActive ? (
@@ -1268,7 +1386,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   <Text style={styles.alarmActivePillText}>ARMED</Text>
                 </View>
               ) : (
-                <Ionicons name="chevron-forward" size={18} color={isDarkMode ? '#64748B' : '#94A3B8'} />
+                <Ionicons name="chevron-forward" size={17} color={isDarkMode ? '#F59E0B' : '#FDE68A'} />
               )}
             </View>
             <Text style={[styles.gridItemTitle, { color: colors.textPrimary }]}>Station Alarm</Text>
@@ -1329,22 +1447,32 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             recentlyTracked.map((item) => (
               <TouchableOpacity
                 key={item.id}
-                style={[styles.trackedRowCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                style={[
+                  styles.trackedRowCard,
+                  {
+                    backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
+                    borderColor: isDarkMode ? '#334155' : '#E2E8F0',
+                  },
+                ]}
                 activeOpacity={0.7}
                 onPress={() => handleSpotTrain(item.trainNumber, item.trainName)}
               >
                 <View style={styles.trackedRowLeft}>
+                  <View style={[styles.trackedTrainBadge, { backgroundColor: isDarkMode ? '#0F172A' : '#EFF6FF' }]}>
+                    <Text style={[styles.trackedTrainBoldNum, { color: Colors.primary }]}>{item.trainNumber}</Text>
+                  </View>
                   <Text style={[styles.trackedTrainTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-                    <Text style={styles.trackedTrainBoldNum}>{item.trainNumber} </Text>
                     {item.trainName}
                   </Text>
                 </View>
 
                 <View style={styles.trackedRowRight}>
-                  <Text style={[styles.trackedRouteBadgeText, { color: colors.textSecondary }]}>
-                    {item.fromCode} - {item.toCode}
-                  </Text>
-                  <Ionicons name="chevron-forward" size={17} color="#94A3B8" style={{ marginLeft: 4 }} />
+                  <View style={[styles.trackedRoutePill, { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9' }]}>
+                    <Text style={[styles.trackedRouteBadgeText, { color: isDarkMode ? '#94A3B8' : '#475569' }]}>
+                      {item.fromCode} ➔ {item.toCode}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={isDarkMode ? '#64748B' : '#94A3B8'} style={{ marginLeft: 6 }} />
                 </View>
               </TouchableOpacity>
             ))
@@ -1941,6 +2069,89 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </View>
       </View>
     </Modal>
+    {/* HOME CALENDAR PICKER MODAL (35 DAYS) */}
+    <Modal
+      visible={showHomeCalendarModal}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setShowHomeCalendarModal(false)}
+    >
+      <TouchableOpacity
+        style={styles.homeModalOverlay}
+        activeOpacity={1}
+        onPress={() => setShowHomeCalendarModal(false)}
+      >
+        <TouchableOpacity
+          activeOpacity={1}
+          style={[
+            styles.homeCalendarModalCard,
+            {
+              backgroundColor: isDarkMode ? colors.surface : '#FFFFFF',
+              borderColor: isDarkMode ? colors.border : '#E2E8F0',
+            },
+          ]}
+        >
+          <View style={[styles.homeCalendarModalHeader, { borderBottomColor: isDarkMode ? colors.border : '#E2E8F0' }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Ionicons name="calendar" size={18} color={isDarkMode ? '#38BDF8' : Colors.primary} style={{ marginRight: 8 }} />
+              <Text style={[styles.homeCalendarModalTitle, { color: isDarkMode ? colors.textPrimary : '#0F172A' }]}>
+                {t('travelDate') || 'Select Travel Date'}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={() => setShowHomeCalendarModal(false)}>
+              <Ionicons name="close" size={20} color={isDarkMode ? colors.textSecondary : '#64748B'} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
+            {homeCalendarDays.map((item) => {
+              const isSelected =
+                selectedDateOption === 'custom' &&
+                customTravelDate.getFullYear() === item.date.getFullYear() &&
+                customTravelDate.getMonth() === item.date.getMonth() &&
+                customTravelDate.getDate() === item.date.getDate();
+
+              return (
+                <TouchableOpacity
+                  key={item.date.toISOString()}
+                  style={[
+                    styles.homeCalendarRow,
+                    {
+                      backgroundColor: isSelected
+                        ? (isDarkMode ? '#0369A1' : '#E0F2FE')
+                        : 'transparent',
+                    },
+                  ]}
+                  onPress={() => {
+                    setCustomTravelDate(item.date);
+                    setSelectedDateOption('custom');
+                    setShowHomeCalendarModal(false);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.homeCalendarRowText,
+                      {
+                        color: isSelected
+                          ? (isDarkMode ? '#FFFFFF' : Colors.primary)
+                          : (isDarkMode ? colors.textPrimary : '#1E293B'),
+                        fontWeight: isSelected ? '800' : '600',
+                      },
+                    ]}
+                  >
+                    {item.label}
+                  </Text>
+                  {isSelected && (
+                    <Ionicons name="checkmark-circle" size={18} color={isDarkMode ? '#38BDF8' : Colors.primary} />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
   </View>
 );
 };
@@ -1950,6 +2161,86 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F0F7FD',
     position: 'relative',
+  },
+  homeDateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 12,
+    marginTop: 4,
+  },
+  homeDatePill: {
+    flex: 1,
+    paddingVertical: 7,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  homeDatePillLabel: {
+    fontSize: 12,
+  },
+  homeDatePillSub: {
+    fontSize: 10,
+    marginTop: 1,
+  },
+  homeCalendarBtn: {
+    width: 44,
+    height: 40,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  homeCustomDateText: {
+    fontSize: 8.5,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginTop: 1,
+  },
+  homeModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  homeCalendarModalCard: {
+    width: '100%',
+    maxWidth: 380,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+  },
+  homeCalendarModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    marginBottom: 8,
+  },
+  homeCalendarModalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  homeCalendarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 11,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginVertical: 2,
+  },
+  homeCalendarRowText: {
+    fontSize: 13.5,
   },
   topCenterToastBox: {
     position: 'absolute',
@@ -1991,27 +2282,27 @@ const styles = StyleSheet.create({
   },
   modernSearchCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    borderRadius: 22,
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 16,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.07,
-    shadowRadius: 10,
-    elevation: 3,
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
     marginBottom: 14,
   },
   spotTrainCard: {
-    borderRadius: 14,
-    padding: 13,
+    borderRadius: 18,
+    padding: 15,
     borderWidth: 1,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
     elevation: 2,
-    marginBottom: 12,
+    marginBottom: 14,
   },
   spotCardHeader: {
     marginBottom: 8,
@@ -2102,15 +2393,16 @@ const styles = StyleSheet.create({
   stationRowContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingLeft: 30,
+    paddingVertical: 7,
+    paddingLeft: 40,
+    paddingRight: 6,
     borderRadius: 12,
   },
   leftTrackColumn: {
     position: 'absolute',
     left: 14,
-    top: 26,
-    height: 78,
+    top: 24,
+    height: 82,
     width: 20,
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -2120,7 +2412,7 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#16A34A',
+    backgroundColor: '#10B981',
     borderWidth: 2,
     borderColor: '#DCFCE7',
   },
@@ -2128,7 +2420,7 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#DC2626',
+    backgroundColor: '#EF4444',
     borderWidth: 2,
     borderColor: '#FEE2E2',
   },
@@ -2144,7 +2436,7 @@ const styles = StyleSheet.create({
     width: 3,
     height: 3,
     borderRadius: 1.5,
-    backgroundColor: '#94A3B8',
+    backgroundColor: '#CBD5E1',
   },
   movingTrainBadge: {
     position: 'absolute',
@@ -2184,19 +2476,19 @@ const styles = StyleSheet.create({
   },
   stationCodeBadgeSolid: {
     backgroundColor: Colors.primary,
-    paddingHorizontal: 7,
-    paddingVertical: 3.5,
-    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 7,
     marginRight: 10,
-    minWidth: 44,
+    minWidth: 46,
     alignItems: 'center',
     justifyContent: 'center',
   },
   stationCodeBadgeSolidText: {
-    fontSize: 11.5,
+    fontSize: 12,
     fontWeight: '800',
     color: '#FFFFFF',
-    letterSpacing: 0.3,
+    letterSpacing: 0.4,
   },
   stationRowError: {
     backgroundColor: '#FEF2F2',
@@ -2277,7 +2569,12 @@ const styles = StyleSheet.create({
     color: '#0284C7',
   },
   clearStationBtn: {
-    padding: 6,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: 'rgba(148, 163, 184, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginLeft: 4,
   },
   singleDotColumn: {
@@ -2435,44 +2732,44 @@ const styles = StyleSheet.create({
   modernDividerRow: {
     position: 'relative',
     justifyContent: 'center',
-    height: 18,
-    marginVertical: 4,
+    height: 20,
+    marginVertical: 2,
     zIndex: 10,
   },
   modernDividerLine: {
     height: 1,
     backgroundColor: '#E2E8F0',
-    marginLeft: 34,
-    marginRight: 56,
+    marginLeft: 40,
+    marginRight: 52,
   },
   modernSwapBtn: {
     position: 'absolute',
-    right: 12,
-    top: -9,
+    right: 8,
+    top: -8,
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: Colors.primary,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-    elevation: 4,
-    shadowColor: Colors.primary,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    elevation: 3,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3,
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
     zIndex: 20,
   },
   modernFindTrainsBtn: {
     flexDirection: 'row',
-    backgroundColor: Colors.searchBtnGreen,
+    backgroundColor: '#16A34A',
     paddingVertical: 14,
-    borderRadius: 14,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 14,
-    shadowColor: Colors.searchBtnGreen,
+    shadowColor: '#16A34A',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.28,
     shadowRadius: 8,
@@ -2482,7 +2779,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '800',
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
   },
   quickServicesMasterContainer: {
     marginVertical: 14,
@@ -2523,29 +2820,49 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 12,
+    paddingVertical: 11,
+    paddingHorizontal: 13,
+    borderRadius: 14,
     borderWidth: 1,
     marginBottom: 8,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
   },
   trackedRowLeft: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingRight: 8,
   },
+  trackedTrainBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginRight: 9,
+  },
   trackedTrainTitle: {
-    fontSize: 13.5,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '700',
+    flex: 1,
   },
   trackedTrainBoldNum: {
     fontWeight: '800',
+    fontSize: 11.5,
   },
   trackedRowRight: {
     flexDirection: 'row',
     alignItems: 'center',
   },
+  trackedRoutePill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: 7,
+  },
   trackedRouteBadgeText: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '700',
   },
   promoCard: {
@@ -2650,26 +2967,26 @@ const styles = StyleSheet.create({
     width: '48.5%',
     backgroundColor: '#FFFFFF',
     borderRadius: 18,
-    padding: 15,
+    padding: 14,
     marginBottom: 12,
-    borderWidth: 1.5,
-    borderColor: '#BAE6FD',
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
   },
   cardHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    marginBottom: 12,
   },
   gridIconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+    width: 42,
+    height: 42,
+    borderRadius: 13,
     alignItems: 'center',
     justifyContent: 'center',
   },

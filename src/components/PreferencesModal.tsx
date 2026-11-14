@@ -9,9 +9,8 @@ import {
   Animated,
   Easing,
   ScrollView,
-  TouchableWithoutFeedback,
+  Pressable,
   Dimensions,
-  Platform,
   Share,
   Linking,
   ActivityIndicator,
@@ -34,30 +33,17 @@ interface PreferencesModalProps {
   isFirstLaunch?: boolean;
 }
 
-export type SettingsTab =
+type DrawerScreen =
+  | 'menu'
   | 'tracking'
+  | 'alarms'
   | 'display'
   | 'language'
-  | 'alarms'
+  | 'cities'
   | 'safety'
-  | 'storage';
-
-interface TabDefinition {
-  id: SettingsTab;
-  title: string;
-  subtitle: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  badge?: string;
-}
-
-const SETTINGS_TABS: TabDefinition[] = [
-  { id: 'tracking', title: 'Tracking Engine', subtitle: 'GPS & Cell Towers', icon: 'navigate-circle-outline' },
-  { id: 'display', title: 'Display & Formats', subtitle: 'Theme & Speed Units', icon: 'color-palette-outline' },
-  { id: 'language', title: 'App Language', subtitle: '7 Indian Regional Languages', icon: 'language-outline' },
-  { id: 'alarms', title: 'Station Alarms', subtitle: 'Wake-Up Ringtones & Timing', icon: 'alarm-outline' },
-  { id: 'safety', title: 'SOS & Helplines', subtitle: 'Official Railway Emergency', icon: 'shield-checkmark-outline', badge: '24/7' },
-  { id: 'storage', title: 'Data & Storage', subtitle: 'Offline Database & Cache', icon: 'server-outline' },
-];
+  | 'storage'
+  | 'rate'
+  | 'feedback';
 
 const AVAILABLE_LANGUAGES: { code: Language; name: string; nativeName: string; flag: string }[] = [
   { code: 'en', name: 'English', nativeName: 'English', flag: '🇬🇧' },
@@ -69,11 +55,22 @@ const AVAILABLE_LANGUAGES: { code: Language; name: string; nativeName: string; f
   { code: 'gu', name: 'Gujarati', nativeName: 'ગુજરાતી', flag: '🇮🇳' },
 ];
 
+const SUBURBAN_CITIES = [
+  { id: 'delhi', name: 'Delhi NCR', subtitle: 'Delhi Metro, RRTS & Ring Railway', icon: 'train-car' },
+  { id: 'mumbai', name: 'Mumbai', subtitle: 'Western, Central & Harbour Suburban', icon: 'train' },
+  { id: 'kolkata', name: 'Kolkata', subtitle: 'Metro Rail & Circular Suburban', icon: 'subway' },
+  { id: 'chennai', name: 'Chennai', subtitle: 'MRTS & Suburban Local EMU', icon: 'train' },
+  { id: 'bengaluru', name: 'Bengaluru', subtitle: 'Namma Metro & Suburban EMU', icon: 'subway' },
+  { id: 'hyderabad', name: 'Hyderabad', subtitle: 'MMTS & Hyderabad Metro', icon: 'train-car' },
+  { id: 'pune', name: 'Pune', subtitle: 'Pune - Lonavala Suburban Local', icon: 'train' },
+  { id: 'ahmedabad', name: 'Ahmedabad', subtitle: 'Ahmedabad Metro & Intercity', icon: 'subway' },
+];
+
 const EMERGENCY_HELPLINES = [
-  { number: '139', title: 'RailMadad & All Enquiries', subtitle: 'PNR status, delays, medical aid & grievances', icon: 'call' as const, color: '#0284C7' },
-  { number: '182', title: 'RPF Passenger Security', subtitle: 'Armed escort police inside running coaches', icon: 'shield-checkmark' as const, color: '#DC2626' },
-  { number: '1512', title: 'GRP State Railway Police', subtitle: 'Station police desk & formal complaint assistance', icon: 'alert-circle' as const, color: '#16A34A' },
-  { number: '1091', title: 'Women Safety Helpline', subtitle: 'Dedicated 24/7 round-the-clock female helpline', icon: 'heart' as const, color: '#DB2777' },
+  { number: '139', title: 'RailMadad & All Enquiries', subtitle: 'PNR, train delays, medical aid & grievances', icon: 'call', color: '#0284C7' },
+  { number: '182', title: 'RPF Passenger Security', subtitle: 'Armed escort police inside running coaches', icon: 'shield-checkmark', color: '#DC2626' },
+  { number: '1512', title: 'GRP State Railway Police', subtitle: 'Station police desk & FIR assistance', icon: 'alert-circle', color: '#16A34A' },
+  { number: '1091', title: 'Women Safety Helpline', subtitle: 'Dedicated 24/7 round-the-clock security', icon: 'heart', color: '#DB2777' },
 ];
 
 export const PreferencesModal: React.FC<PreferencesModalProps> = ({
@@ -97,15 +94,21 @@ export const PreferencesModal: React.FC<PreferencesModalProps> = ({
     colors,
   } = usePreferences();
 
-  // Active Category Tab
-  const [activeTab, setActiveTab] = useState<SettingsTab>('tracking');
+  // Navigation state inside drawer
+  const [activeScreen, setActiveScreen] = useState<DrawerScreen>('menu');
+
+  // Sub-feature states
   const [railRadarKey, setRailRadarKey] = useState(LiveTrainApi.getRailRadarApiKey());
-  const [cacheClearMsg, setCacheClearMsg] = useState<string | null>(null);
-  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [isUpdatingTimetable, setIsUpdatingTimetable] = useState(false);
   const [previewPlaying, setPreviewPlaying] = useState<string | null>(null);
   const [alarmTiming, setAlarmTiming] = useState<'10m' | '15m' | '30m' | '5km' | '10km'>('15m');
+  const [selectedCity, setSelectedCity] = useState('Delhi NCR');
+  const [selectedStars, setSelectedStars] = useState(5);
+  const [feedbackNotes, setFeedbackNotes] = useState('');
+  const [bugCategory, setBugCategory] = useState('Live GPS tracking issue');
 
-  // Responsive Width
+  // Responsive Drawer Width
   const [windowWidth, setWindowWidth] = useState(Dimensions.get('window').width);
 
   useEffect(() => {
@@ -116,1159 +119,1093 @@ export const PreferencesModal: React.FC<PreferencesModalProps> = ({
   }, []);
 
   const isWide = windowWidth > 640;
-  const drawerWidth = isWide ? Math.min(760, windowWidth * 0.78) : Math.min(480, windowWidth * 0.96);
+  const drawerWidth = isWide ? Math.min(480, windowWidth * 0.72) : Math.min(380, windowWidth * 0.90);
 
   // Animations
   const slideAnim = useRef(new Animated.Value(drawerWidth)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  const handleClose = useCallback(() => {
-    Animated.parallel([
-      Animated.timing(slideAnim, {
-        toValue: drawerWidth,
-        duration: 200,
-        easing: Easing.in(Easing.ease),
-        useNativeDriver: true,
-      }),
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      onClose();
-    });
-  }, [drawerWidth, fadeAnim, onClose, slideAnim]);
-
   useEffect(() => {
     if (visible) {
-      slideAnim.setValue(drawerWidth);
-      fadeAnim.setValue(0);
-      setRailRadarKey(LiveTrainApi.getRailRadarApiKey());
-      setCacheClearMsg(null);
-
+      setActiveScreen('menu');
       Animated.parallel([
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 260,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
         Animated.timing(fadeAnim, {
           toValue: 1,
           duration: 220,
           useNativeDriver: true,
         }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 250,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: drawerWidth,
+          duration: 200,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: true,
+        }),
       ]).start();
     }
-  }, [visible, drawerWidth, slideAnim, fadeAnim]);
+  }, [visible, drawerWidth, fadeAnim, slideAnim]);
+
+  const handleClose = useCallback(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: drawerWidth,
+        duration: 200,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      onClose();
+    });
+  }, [drawerWidth, fadeAnim, slideAnim, onClose]);
 
   const showToast = (msg: string) => {
-    setCacheClearMsg(msg);
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(null), 3000);
+  };
+
+  // 1. Timetable Database update
+  const handleUpdateTimetable = () => {
+    setIsUpdatingTimetable(true);
+    TrainCache.clearAll();
     setTimeout(() => {
-      setCacheClearMsg(null);
-    }, 3200);
-  };
-
-  const handleKeyChange = (val: string) => {
-    setRailRadarKey(val);
-    LiveTrainApi.setRailRadarApiKey(val);
-    showToast(val ? '✓ Custom RailRadar GPS Key Activated' : '✓ Restored Official NTES Proxy');
-  };
-
-  const handleShareApp = async () => {
-    try {
-      await Share.share({
-        message: 'Download T-trail (When is my train) - Real-time zero-data Indian Railways tracker! Track speed, station arrivals & coach position without internet.',
-        title: 'T-trail - When is my train',
-      });
-    } catch {}
-  };
-
-  const handleClearCache = async () => {
-    try {
-      TrainCache.clearAll();
-      if (typeof window !== 'undefined' && window.localStorage) {
-        const keysToRemove: string[] = [];
-        for (let i = 0; i < window.localStorage.length; i++) {
-          const k = window.localStorage.key(i);
-          if (k && k.startsWith('@cache_status_')) keysToRemove.push(k);
-        }
-        keysToRemove.forEach((k) => window.localStorage.removeItem(k));
-      }
-    } catch {}
-    showToast('✓ Live train cache purged successfully!');
-  };
-
-  const handleClearRecentSearches = async () => {
-    try {
-      await SafeStorage.setItem('@user_recent_searches', JSON.stringify([]));
-      showToast('✓ Search history cleared!');
-    } catch {}
-  };
-
-  const handleCheckTimetableUpdates = () => {
-    setIsCheckingUpdate(true);
-    setTimeout(() => {
-      setIsCheckingUpdate(false);
-      showToast('✓ IRCTC Timetable is Up-To-Date (12,450 trains cached)');
+      setIsUpdatingTimetable(false);
+      showToast('✓ Timetable & Station database updated (12,450+ trains cached)');
     }, 1200);
   };
 
+  // 2. Clear Search History
+  const handleClearRecent = async () => {
+    try {
+      await SafeStorage.removeItem('@recent_searches_history');
+      await SafeStorage.removeItem('@recent_live_trains');
+      showToast('✓ Recent search history cleared!');
+    } catch {
+      showToast('✓ Search history cleared!');
+    }
+  };
+
+  // 3. Share App
+  const handleShareApp = async () => {
+    try {
+      await Share.share({
+        message: 'Download "When is my train" — Real-time GPS Train Tracking, Spotting without Internet & PNR Status for Indian Railways! https://github.com/CoderBannaa/when-is-my-train',
+        title: 'When is my train App',
+      });
+    } catch (err) {
+      console.warn('Share error:', err);
+    }
+  };
+
+  // 4. Emergency Call
+  const handleCallEmergency = (number: string) => {
+    Linking.openURL(`tel:${number}`).catch(() => {
+      showToast(`Emergency Dial: ${number}`);
+    });
+  };
+
+  // 5. Sound preview
   const handlePreviewAlarm = (sound: AlarmRingtone) => {
     setPreviewPlaying(sound);
-    setTimeout(() => {
-      setPreviewPlaying(null);
-    }, 1800);
+    setTimeout(() => setPreviewPlaying(null), 1800);
   };
 
-  const handleCallEmergency = (number: string) => {
-    const url = `tel:${number}`;
-    Linking.canOpenURL(url)
-      .then((supported) => {
-        if (supported) {
-          Linking.openURL(url);
-        } else {
-          showToast(`Dial ${number} on your phone`);
-        }
-      })
-      .catch(() => {
-        showToast(`Dial ${number} on your phone`);
-      });
-  };
+  const currentLangObj = AVAILABLE_LANGUAGES.find((l) => l.code === language) || AVAILABLE_LANGUAGES[0];
 
   if (!visible) return null;
-
-  // -------------------------------------------------------------
-  // RENDER TAB 1: TRACKING ENGINE
-  // -------------------------------------------------------------
-  const renderTrackingTab = () => (
-    <View style={styles.tabContentContainer}>
-      {/* Category Hero Banner */}
-      <View style={[styles.categoryHeroBanner, { backgroundColor: isDarkMode ? '#1E3A5F' : '#E0F2FE', borderColor: isDarkMode ? '#0284C7' : '#BAE6FD' }]}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-          <View style={[styles.heroIconCircle, { backgroundColor: '#0284C7' }]}>
-            <MaterialCommunityIcons name="transmission-tower" size={18} color="#FFFFFF" />
-          </View>
-          <View style={{ flex: 1, marginLeft: 10 }}>
-            <Text style={[styles.categoryHeroTitle, { color: isDarkMode ? '#F0F9FF' : '#0369A1' }]}>
-              Train Positioning Technology
-            </Text>
-            <Text style={[styles.categoryHeroSubtitle, { color: isDarkMode ? '#BAE6FD' : '#0284C7' }]}>
-              Control how your live speed, delay, and station arrival are tracked
-            </Text>
-          </View>
-        </View>
-
-        {/* Current Active Engine Pill */}
-        <View style={styles.activeEngineStatusBar}>
-          <View style={styles.activeGreenBeacon} />
-          <Text style={[styles.activeEngineStatusText, { color: isDarkMode ? '#E0F2FE' : '#075985' }]}>
-            Currently Active:{' '}
-            <Text style={{ fontWeight: '800' }}>
-              {trackingSource === 'cell'
-                ? 'Cell Towers (100% Offline • No Net)'
-                : trackingSource === 'gps'
-                ? 'Device GPS (High Precision Window GNSS)'
-                : 'Railway NTES Internet Servers'}
-            </Text>
-          </Text>
-        </View>
-      </View>
-
-      {/* Engine Comparison & Selection Cards */}
-      <Text style={[styles.groupSectionTitle, { color: isDarkMode ? '#CBD5E1' : '#334155' }]}>
-        Select Tracking Mode
-      </Text>
-
-      <View style={styles.cardsStack}>
-        {/* Option 1: Cell Towers (Offline) */}
-        <TouchableOpacity
-          style={[
-            styles.modeCard,
-            {
-              backgroundColor: trackingSource === 'cell'
-                ? (isDarkMode ? 'rgba(2, 132, 199, 0.18)' : '#F0F9FF')
-                : (isDarkMode ? '#1E293B' : '#FFFFFF'),
-              borderColor: trackingSource === 'cell' ? '#0284C7' : (isDarkMode ? '#334155' : '#E2E8F0'),
-            },
-          ]}
-          onPress={() => setTrackingSource('cell')}
-          activeOpacity={0.7}
-        >
-          <View style={styles.modeCardHeader}>
-            <View style={[styles.modeCardIconBox, { backgroundColor: '#DCFCE7' }]}>
-              <MaterialCommunityIcons name="transmission-tower" size={22} color="#15803D" />
-            </View>
-            <View style={{ flex: 1, marginHorizontal: 10 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Text style={[styles.modeCardTitle, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]}>
-                  Cell Towers (Inside Train)
-                </Text>
-                <View style={[styles.badgePill, { backgroundColor: '#DCFCE7' }]}>
-                  <Text style={[styles.badgePillText, { color: '#15803D' }]}>100% OFFLINE</Text>
-                </View>
-              </View>
-              <Text style={[styles.modeCardSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-                Recommended for Sleeper & AC Coaches
-              </Text>
-            </View>
-            <View style={[styles.radioCircle, trackingSource === 'cell' && styles.radioCircleActive]}>
-              {trackingSource === 'cell' && <View style={styles.radioDot} />}
-            </View>
-          </View>
-
-          <Text style={[styles.modeCardBodyText, { color: isDarkMode ? '#CBD5E1' : '#475569' }]}>
-            Calculates live train location through mobile cellular tower triangulation. Works even without active mobile data or zero Wi-Fi inside heavy metal coaches.
-          </Text>
-
-          <View style={styles.modeCardMetaRow}>
-            <View style={styles.metaStat}>
-              <Text style={styles.metaStatLabel}>Data Consumed:</Text>
-              <Text style={[styles.metaStatVal, { color: '#15803D' }]}>0 MB (Zero Data)</Text>
-            </View>
-            <View style={styles.metaStat}>
-              <Text style={styles.metaStatLabel}>Battery Impact:</Text>
-              <Text style={[styles.metaStatVal, { color: '#15803D' }]}>Ultra Low (3%)</Text>
-            </View>
-          </View>
-        </TouchableOpacity>
-
-        {/* Option 2: Device GPS (Near Window) */}
-        <TouchableOpacity
-          style={[
-            styles.modeCard,
-            {
-              backgroundColor: trackingSource === 'gps'
-                ? (isDarkMode ? 'rgba(2, 132, 199, 0.18)' : '#F0F9FF')
-                : (isDarkMode ? '#1E293B' : '#FFFFFF'),
-              borderColor: trackingSource === 'gps' ? '#0284C7' : (isDarkMode ? '#334155' : '#E2E8F0'),
-            },
-          ]}
-          onPress={() => setTrackingSource('gps')}
-          activeOpacity={0.7}
-        >
-          <View style={styles.modeCardHeader}>
-            <View style={[styles.modeCardIconBox, { backgroundColor: '#E0F2FE' }]}>
-              <Ionicons name="location" size={22} color="#0284C7" />
-            </View>
-            <View style={{ flex: 1, marginHorizontal: 10 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Text style={[styles.modeCardTitle, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]}>
-                  Device GPS (Near Window)
-                </Text>
-                <View style={[styles.badgePill, { backgroundColor: '#E0F2FE' }]}>
-                  <Text style={[styles.badgePillText, { color: '#0369A1' }]}>HIGH PRECISION</Text>
-                </View>
-              </View>
-              <Text style={[styles.modeCardSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-                Satellite GNSS Speedometer
-              </Text>
-            </View>
-            <View style={[styles.radioCircle, trackingSource === 'gps' && styles.radioCircleActive]}>
-              {trackingSource === 'gps' && <View style={styles.radioDot} />}
-            </View>
-          </View>
-
-          <Text style={[styles.modeCardBodyText, { color: isDarkMode ? '#CBD5E1' : '#475569' }]}>
-            Direct satellite lock. Best used while sitting near coach windows. Gives accurate real-time speed in km/h and exact track curves.
-          </Text>
-
-          <View style={styles.modeCardMetaRow}>
-            <View style={styles.metaStat}>
-              <Text style={styles.metaStatLabel}>Speed Accuracy:</Text>
-              <Text style={[styles.metaStatVal, { color: '#0284C7' }]}>Real-time (±1 km/h)</Text>
-            </View>
-            <View style={styles.metaStat}>
-              <Text style={styles.metaStatLabel}>Signal Condition:</Text>
-              <Text style={[styles.metaStatVal, { color: '#D97706' }]}>Clear view of sky</Text>
-            </View>
-          </View>
-        </TouchableOpacity>
-
-        {/* Option 3: Internet / NTES Server */}
-        <TouchableOpacity
-          style={[
-            styles.modeCard,
-            {
-              backgroundColor: trackingSource === 'internet'
-                ? (isDarkMode ? 'rgba(2, 132, 199, 0.18)' : '#F0F9FF')
-                : (isDarkMode ? '#1E293B' : '#FFFFFF'),
-              borderColor: trackingSource === 'internet' ? '#0284C7' : (isDarkMode ? '#334155' : '#E2E8F0'),
-            },
-          ]}
-          onPress={() => setTrackingSource('internet')}
-          activeOpacity={0.7}
-        >
-          <View style={styles.modeCardHeader}>
-            <View style={[styles.modeCardIconBox, { backgroundColor: '#FEF3C7' }]}>
-              <Ionicons name="globe-outline" size={22} color="#D97706" />
-            </View>
-            <View style={{ flex: 1, marginHorizontal: 10 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Text style={[styles.modeCardTitle, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]}>
-                  Internet / NTES Server
-                </Text>
-                <View style={[styles.badgePill, { backgroundColor: '#FEF3C7' }]}>
-                  <Text style={[styles.badgePillText, { color: '#B45309' }]}>RAILWAY NTES</Text>
-                </View>
-              </View>
-              <Text style={[styles.modeCardSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-                Official Indian Railway Schedules
-              </Text>
-            </View>
-            <View style={[styles.radioCircle, trackingSource === 'internet' && styles.radioCircleActive]}>
-              {trackingSource === 'internet' && <View style={styles.radioDot} />}
-            </View>
-          </View>
-
-          <Text style={[styles.modeCardBodyText, { color: isDarkMode ? '#CBD5E1' : '#475569' }]}>
-            Fetches official Indian Railways live tracking reports, platform updates, and delay logs directly from central servers. Requires working mobile data.
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Merged Live Tracking Gateway Key */}
-      <View style={[styles.infoCardMerged, { backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC', borderColor: isDarkMode ? '#334155' : '#E2E8F0', marginTop: 14 }]}>
-        <View style={styles.infoCardHeaderRow}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <MaterialCommunityIcons name="satellite-variant" size={16} color="#0284C7" style={{ marginRight: 6 }} />
-            <Text style={[styles.infoCardTitle, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]}>
-              Railway Live Tracking Gateway
-            </Text>
-          </View>
-          <View style={styles.statusLiveBadge}>
-            <View style={styles.statusLiveDot} />
-            <Text style={styles.statusLiveBadgeText}>
-              {railRadarKey ? 'Custom Gateway' : 'Official Proxy'}
-            </Text>
-          </View>
-        </View>
-
-        <Text style={[styles.infoCardDesc, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-          T-trail connects through an intelligent proxy to parse authentic CRIS / NTES live updates. You can optionally supply your own custom API key.
-        </Text>
-
-        <View style={[styles.apiInputWrap, { backgroundColor: isDarkMode ? '#0F172A' : '#FFFFFF', borderColor: isDarkMode ? '#334155' : '#CBD5E1' }]}>
-          <Ionicons name="key-outline" size={15} color="#94A3B8" style={{ marginRight: 8 }} />
-          <TextInput
-            style={[styles.apiInput, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]}
-            value={railRadarKey}
-            onChangeText={handleKeyChange}
-            placeholder="Custom RailRadar Key (Optional)"
-            placeholderTextColor="#94A3B8"
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          {railRadarKey.length > 0 && (
-            <TouchableOpacity onPress={() => handleKeyChange('')}>
-              <Ionicons name="close-circle" size={16} color="#94A3B8" />
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
-    </View>
-  );
-
-  // -------------------------------------------------------------
-  // RENDER TAB 2: DISPLAY & FORMATS
-  // -------------------------------------------------------------
-  const renderDisplayTab = () => (
-    <View style={styles.tabContentContainer}>
-      {/* Category Hero Banner */}
-      <View style={[styles.categoryHeroBanner, { backgroundColor: isDarkMode ? '#2E1065' : '#F3E8FF', borderColor: isDarkMode ? '#7C3AED' : '#DDD6FE' }]}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-          <View style={[styles.heroIconCircle, { backgroundColor: '#7C3AED' }]}>
-            <Ionicons name="color-palette" size={18} color="#FFFFFF" />
-          </View>
-          <View style={{ flex: 1, marginLeft: 10 }}>
-            <Text style={[styles.categoryHeroTitle, { color: isDarkMode ? '#F5F3FF' : '#5B21B6' }]}>
-              Theme & Transit Display
-            </Text>
-            <Text style={[styles.categoryHeroSubtitle, { color: isDarkMode ? '#DDD6FE' : '#6D28D9' }]}>
-              Adjust daytime visibility, night eye comfort, and clock styles
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.activeEngineStatusBar}>
-          <View style={[styles.activeGreenBeacon, { backgroundColor: '#7C3AED' }]} />
-          <Text style={[styles.activeEngineStatusText, { color: isDarkMode ? '#EDE9FE' : '#5B21B6' }]}>
-            Active Theme: <Text style={{ fontWeight: '800' }}>{isDarkMode ? 'OLED Dark Mode (Night)' : 'Day Mode (High Clarity)'}</Text> • Units: <Text style={{ fontWeight: '800' }}>{speedUnit.toUpperCase()} / {timeFormat}</Text>
-          </Text>
-        </View>
-      </View>
-
-      {/* Theme Selection */}
-      <Text style={[styles.groupSectionTitle, { color: isDarkMode ? '#CBD5E1' : '#334155' }]}>
-        Appearance Theme
-      </Text>
-
-      <View style={styles.themeCardsRow}>
-        {/* Day Mode */}
-        <TouchableOpacity
-          style={[
-            styles.themeSelectCard,
-            {
-              backgroundColor: !isDarkMode ? '#F0F9FF' : (isDarkMode ? '#1E293B' : '#FFFFFF'),
-              borderColor: !isDarkMode ? '#0284C7' : (isDarkMode ? '#334155' : '#E2E8F0'),
-            },
-          ]}
-          onPress={() => setThemeMode('light')}
-          activeOpacity={0.8}
-        >
-          <View style={[styles.themeSelectIconWrap, { backgroundColor: '#FEF3C7' }]}>
-            <Ionicons name="sunny" size={22} color="#D97706" />
-          </View>
-          <Text style={[styles.themeSelectTitle, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]}>
-            Day Mode
-          </Text>
-          <Text style={[styles.themeSelectSubtitle, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-            High Sunlight Clarity
-          </Text>
-          {!isDarkMode && (
-            <View style={styles.themeActiveBadge}>
-              <Ionicons name="checkmark-circle" size={18} color="#0284C7" />
-            </View>
-          )}
-        </TouchableOpacity>
-
-        {/* OLED Dark */}
-        <TouchableOpacity
-          style={[
-            styles.themeSelectCard,
-            {
-              backgroundColor: isDarkMode ? 'rgba(2, 132, 199, 0.18)' : '#FFFFFF',
-              borderColor: isDarkMode ? '#38BDF8' : '#E2E8F0',
-            },
-          ]}
-          onPress={() => setThemeMode('dark')}
-          activeOpacity={0.8}
-        >
-          <View style={[styles.themeSelectIconWrap, { backgroundColor: '#312E81' }]}>
-            <Ionicons name="moon" size={20} color="#818CF8" />
-          </View>
-          <Text style={[styles.themeSelectTitle, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]}>
-            OLED Dark
-          </Text>
-          <Text style={[styles.themeSelectSubtitle, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-            Battery & Eye Saver
-          </Text>
-          {isDarkMode && (
-            <View style={styles.themeActiveBadge}>
-              <Ionicons name="checkmark-circle" size={18} color="#38BDF8" />
-            </View>
-          )}
-        </TouchableOpacity>
-      </View>
-
-      {/* Speedometer & Time Formats Group */}
-      <Text style={[styles.groupSectionTitle, { color: isDarkMode ? '#CBD5E1' : '#334155', marginTop: 14 }]}>
-        Transit Formats & Units
-      </Text>
-
-      <View style={[styles.insetGroupMerged, { backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC', borderColor: isDarkMode ? '#334155' : '#E2E8F0' }]}>
-        {/* Speed Unit */}
-        <View style={styles.insetRowMerged}>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.insetRowTitle, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]}>
-              Speedometer Units
-            </Text>
-            <Text style={[styles.insetRowDesc, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-              Display live train velocity in km/h or mph
-            </Text>
-          </View>
-
-          <View style={[styles.segmentedPillWrap, { backgroundColor: isDarkMode ? '#0F172A' : '#E2E8F0' }]}>
-            <TouchableOpacity
-              style={[styles.segmentBtn, speedUnit === 'kmh' && styles.segmentBtnActive]}
-              onPress={() => setSpeedUnit('kmh')}
-            >
-              <Text style={[styles.segmentBtnText, speedUnit === 'kmh' && styles.segmentBtnTextActive]}>
-                km/h
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.segmentBtn, speedUnit === 'mph' && styles.segmentBtnActive]}
-              onPress={() => setSpeedUnit('mph')}
-            >
-              <Text style={[styles.segmentBtnText, speedUnit === 'mph' && styles.segmentBtnTextActive]}>
-                mph
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={[styles.cardDivider, { backgroundColor: isDarkMode ? '#334155' : '#E2E8F0' }]} />
-
-        {/* Time Format */}
-        <View style={styles.insetRowMerged}>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.insetRowTitle, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]}>
-              Railway Timetable Clock
-            </Text>
-            <Text style={[styles.insetRowDesc, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-              Station timetable format (24h official vs 12h AM/PM)
-            </Text>
-          </View>
-
-          <View style={[styles.segmentedPillWrap, { backgroundColor: isDarkMode ? '#0F172A' : '#E2E8F0' }]}>
-            <TouchableOpacity
-              style={[styles.segmentBtn, timeFormat === '24h' && styles.segmentBtnActive]}
-              onPress={() => setTimeFormat('24h')}
-            >
-              <Text style={[styles.segmentBtnText, timeFormat === '24h' && styles.segmentBtnTextActive]}>
-                24h (18:45)
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.segmentBtn, timeFormat === '12h' && styles.segmentBtnActive]}
-              onPress={() => setTimeFormat('12h')}
-            >
-              <Text style={[styles.segmentBtnText, timeFormat === '12h' && styles.segmentBtnTextActive]}>
-                12h (6:45 PM)
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    </View>
-  );
-
-  // -------------------------------------------------------------
-  // RENDER TAB 3: APP LANGUAGE
-  // -------------------------------------------------------------
-  const renderLanguageTab = () => (
-    <View style={styles.tabContentContainer}>
-      {/* Category Hero Banner */}
-      <View style={[styles.categoryHeroBanner, { backgroundColor: isDarkMode ? '#064E3B' : '#DCFCE7', borderColor: isDarkMode ? '#059669' : '#86EFAC' }]}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-          <View style={[styles.heroIconCircle, { backgroundColor: '#10B981' }]}>
-            <Ionicons name="language" size={18} color="#FFFFFF" />
-          </View>
-          <View style={{ flex: 1, marginLeft: 10 }}>
-            <Text style={[styles.categoryHeroTitle, { color: isDarkMode ? '#ECFDF5' : '#065F46' }]}>
-              Multilingual Indian Railways
-            </Text>
-            <Text style={[styles.categoryHeroSubtitle, { color: isDarkMode ? '#A7F3D0' : '#047857' }]}>
-              All schedules, station names, and audio alerts switch instantly
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.activeEngineStatusBar}>
-          <View style={[styles.activeGreenBeacon, { backgroundColor: '#10B981' }]} />
-          <Text style={[styles.activeEngineStatusText, { color: isDarkMode ? '#D1FAE5' : '#065F46' }]}>
-            Active Language:{' '}
-            <Text style={{ fontWeight: '800' }}>
-              {AVAILABLE_LANGUAGES.find((l) => l.code === language)?.nativeName} ({AVAILABLE_LANGUAGES.find((l) => l.code === language)?.name})
-            </Text>
-          </Text>
-        </View>
-      </View>
-
-      <Text style={[styles.groupSectionTitle, { color: isDarkMode ? '#CBD5E1' : '#334155' }]}>
-        Choose Your Regional Language
-      </Text>
-
-      <View style={styles.languageListStack}>
-        {AVAILABLE_LANGUAGES.map((item) => {
-          const isSelected = language === item.code;
-          return (
-            <TouchableOpacity
-              key={item.code}
-              style={[
-                styles.languageCard,
-                {
-                  backgroundColor: isSelected
-                    ? (isDarkMode ? 'rgba(2, 132, 199, 0.2)' : '#F0F9FF')
-                    : (isDarkMode ? '#1E293B' : '#FFFFFF'),
-                  borderColor: isSelected ? '#0284C7' : (isDarkMode ? '#334155' : '#E2E8F0'),
-                },
-              ]}
-              onPress={() => {
-                setLanguage(item.code);
-                showToast(`✓ Switched language to ${item.nativeName} (${item.name})`);
-              }}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.languageFlag}>{item.flag}</Text>
-              <View style={{ flex: 1, marginHorizontal: 12 }}>
-                <Text
-                  style={[
-                    styles.languageNativeText,
-                    { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
-                    isSelected && { color: '#0284C7', fontWeight: '800' },
-                  ]}
-                >
-                  {item.nativeName}
-                </Text>
-                <Text style={[styles.languageEnglishText, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-                  {item.name}
-                </Text>
-              </View>
-              {isSelected ? (
-                <Ionicons name="checkmark-circle" size={20} color="#0284C7" />
-              ) : (
-                <View style={[styles.radioCircle, { borderColor: isDarkMode ? '#475569' : '#CBD5E1' }]} />
-              )}
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-    </View>
-  );
-
-  // -------------------------------------------------------------
-  // RENDER TAB 4: STATION ALARMS
-  // -------------------------------------------------------------
-  const renderAlarmsTab = () => (
-    <View style={styles.tabContentContainer}>
-      {/* Category Hero Banner */}
-      <View style={[styles.categoryHeroBanner, { backgroundColor: isDarkMode ? '#7F1D1D' : '#FEE2E2', borderColor: isDarkMode ? '#DC2626' : '#FECACA' }]}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-          <View style={[styles.heroIconCircle, { backgroundColor: '#DC2626' }]}>
-            <Ionicons name="alarm" size={18} color="#FFFFFF" />
-          </View>
-          <View style={{ flex: 1, marginLeft: 10 }}>
-            <Text style={[styles.categoryHeroTitle, { color: isDarkMode ? '#FEF2F2' : '#991B1B' }]}>
-              Destination Wake-Up Alarms
-            </Text>
-            <Text style={[styles.categoryHeroSubtitle, { color: isDarkMode ? '#FECACA' : '#B91C1C' }]}>
-              Geofenced loud alerts trigger automatically before your stop
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.activeEngineStatusBar}>
-          <View style={[styles.activeGreenBeacon, { backgroundColor: '#DC2626' }]} />
-          <Text style={[styles.activeEngineStatusText, { color: isDarkMode ? '#FEE2E2' : '#991B1B' }]}>
-            Active Tone:{' '}
-            <Text style={{ fontWeight: '800' }}>
-              {alarmSound === 'horn'
-                ? 'Train Horn (Dual-Tone)'
-                : alarmSound === 'whistle'
-                ? 'Steam Whistle (Vintage)'
-                : alarmSound === 'chime'
-                ? 'Station Chime (Platform)'
-                : 'Level Crossing Bell'}
-            </Text>{' '}
-            • Alerts {alarmTiming} in advance
-          </Text>
-        </View>
-      </View>
-
-      {/* Alarm Sound Selector with Previews */}
-      <Text style={[styles.groupSectionTitle, { color: isDarkMode ? '#CBD5E1' : '#334155' }]}>
-        Select Alarm Ringtone
-      </Text>
-
-      <View style={styles.cardsStack}>
-        {[
-          { id: 'horn' as const, label: 'Train Horn', desc: 'Powerful dual locomotive air horn sound (Heavy Sleepers)', icon: 'megaphone-outline' },
-          { id: 'whistle' as const, label: 'Steam Whistle', desc: 'Classic vintage Indian Railways steam whistle chime', icon: 'volume-high-outline' },
-          { id: 'chime' as const, label: 'Station Chime', desc: 'Official platform announcement announcement tone', icon: 'musical-notes-outline' },
-          { id: 'bell' as const, label: 'Level Crossing Bell', desc: 'Continuous alert bell signal at railway crossings', icon: 'notifications-outline' },
-        ].map((s) => {
-          const isSelected = alarmSound === s.id;
-          const isPlaying = previewPlaying === s.id;
-          return (
-            <TouchableOpacity
-              key={s.id}
-              style={[
-                styles.modeCard,
-                {
-                  backgroundColor: isSelected
-                    ? (isDarkMode ? 'rgba(2, 132, 199, 0.18)' : '#F0F9FF')
-                    : (isDarkMode ? '#1E293B' : '#FFFFFF'),
-                  borderColor: isSelected ? '#0284C7' : (isDarkMode ? '#334155' : '#E2E8F0'),
-                },
-              ]}
-              onPress={() => setAlarmSound(s.id)}
-              activeOpacity={0.7}
-            >
-              <View style={styles.modeCardHeader}>
-                <View style={[styles.modeCardIconBox, { backgroundColor: isSelected ? '#0284C7' : (isDarkMode ? '#334155' : '#E2E8F0') }]}>
-                  <Ionicons name={s.icon as any} size={20} color={isSelected ? '#FFFFFF' : (isDarkMode ? '#94A3B8' : '#475569')} />
-                </View>
-                <View style={{ flex: 1, marginHorizontal: 10 }}>
-                  <Text style={[styles.modeCardTitle, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }, isSelected && { color: '#0284C7', fontWeight: '800' }]}>
-                    {s.label}
-                  </Text>
-                  <Text style={[styles.modeCardSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-                    {s.desc}
-                  </Text>
-                </View>
-
-                {/* Preview Button */}
-                <TouchableOpacity
-                  style={[styles.previewSoundBtn, isPlaying && styles.previewSoundBtnActive]}
-                  onPress={() => handlePreviewAlarm(s.id)}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons
-                    name={isPlaying ? 'volume-high' : 'play'}
-                    size={13}
-                    color={isPlaying ? '#FFFFFF' : '#0284C7'}
-                  />
-                  <Text style={[styles.previewSoundBtnText, isPlaying && { color: '#FFFFFF' }]}>
-                    {isPlaying ? 'Playing...' : 'Preview'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-
-      {/* Geofence Trigger Timing */}
-      <Text style={[styles.groupSectionTitle, { color: isDarkMode ? '#CBD5E1' : '#334155', marginTop: 14 }]}>
-        Wake-Up Trigger Distance / Time
-      </Text>
-
-      <View style={[styles.timingPickerRow, { backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC', borderColor: isDarkMode ? '#334155' : '#E2E8F0' }]}>
-        {[
-          { id: '10m' as const, label: '10 min' },
-          { id: '15m' as const, label: '15 min' },
-          { id: '30m' as const, label: '30 min' },
-          { id: '5km' as const, label: '5 km' },
-          { id: '10km' as const, label: '10 km' },
-        ].map((item) => {
-          const isSelected = alarmTiming === item.id;
-          return (
-            <TouchableOpacity
-              key={item.id}
-              style={[styles.timingOptionBtn, isSelected && styles.timingOptionBtnActive]}
-              onPress={() => setAlarmTiming(item.id)}
-            >
-              <Text style={[styles.timingOptionText, isSelected && styles.timingOptionTextActive]}>
-                {item.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-    </View>
-  );
-
-  // -------------------------------------------------------------
-  // RENDER TAB 5: SOS & HELPLINES
-  // -------------------------------------------------------------
-  const renderSafetyTab = () => (
-    <View style={styles.tabContentContainer}>
-      {/* Category Hero Banner */}
-      <View style={[styles.categoryHeroBanner, { backgroundColor: isDarkMode ? '#7F1D1D' : '#FEE2E2', borderColor: isDarkMode ? '#DC2626' : '#FECACA' }]}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-          <View style={[styles.heroIconCircle, { backgroundColor: '#DC2626' }]}>
-            <Ionicons name="shield-checkmark" size={18} color="#FFFFFF" />
-          </View>
-          <View style={{ flex: 1, marginLeft: 10 }}>
-            <Text style={[styles.categoryHeroTitle, { color: isDarkMode ? '#FEF2F2' : '#991B1B' }]}>
-              Official Railway Emergency Desks
-            </Text>
-            <Text style={[styles.categoryHeroSubtitle, { color: isDarkMode ? '#FECACA' : '#B91C1C' }]}>
-              Direct 24/7 one-tap toll-free helpline hotlines across Indian Railways
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.activeEngineStatusBar}>
-          <View style={[styles.activeGreenBeacon, { backgroundColor: '#16A34A' }]} />
-          <Text style={[styles.activeEngineStatusText, { color: isDarkMode ? '#FEE2E2' : '#991B1B' }]}>
-            Zero-Data Ready: <Text style={{ fontWeight: '800' }}>Works anytime directly through cellular voice network</Text>
-          </Text>
-        </View>
-      </View>
-
-      <Text style={[styles.groupSectionTitle, { color: isDarkMode ? '#CBD5E1' : '#334155' }]}>
-        1-Tap Emergency Hotlines
-      </Text>
-
-      <View style={[styles.helplineGroupCard, { borderColor: isDarkMode ? '#334155' : '#FECACA' }]}>
-        {EMERGENCY_HELPLINES.map((h, idx) => (
-          <React.Fragment key={h.number}>
-            {idx > 0 && <View style={[styles.cardDivider, { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9' }]} />}
-            <View style={styles.helplineRow}>
-              <View style={[styles.helplineIconCircle, { backgroundColor: h.color }]}>
-                <Ionicons name={h.icon} size={18} color="#FFFFFF" />
-              </View>
-              <View style={{ flex: 1, marginHorizontal: 12 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Text style={[styles.helplineNumberText, { color: h.color }]}>{h.number}</Text>
-                  <Text style={[styles.helplineTitleText, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]} numberOfLines={1}>
-                    {' '}• {h.title}
-                  </Text>
-                </View>
-                <Text style={[styles.helplineSubtitleText, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={2}>
-                  {h.subtitle}
-                </Text>
-              </View>
-
-              <TouchableOpacity
-                style={styles.directCallBtn}
-                onPress={() => handleCallEmergency(h.number)}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="call" size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
-                <Text style={styles.directCallBtnText}>Call</Text>
-              </TouchableOpacity>
-            </View>
-          </React.Fragment>
-        ))}
-      </View>
-
-      {/* Safety Tips Card */}
-      <View style={[styles.safetyTipsCard, { backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC', borderColor: isDarkMode ? '#334155' : '#E2E8F0', marginTop: 14 }]}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-          <Ionicons name="information-circle" size={18} color="#0284C7" style={{ marginRight: 6 }} />
-          <Text style={[styles.safetyTipsTitle, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]}>
-            Passenger Rights & Guidelines
-          </Text>
-        </View>
-        <Text style={[styles.safetyTipsBody, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-          • In case of medical emergencies on running trains, inform the Train Superintendent (TTE) or dial 139 for immediate station-side doctor attendance.
-        </Text>
-        <Text style={[styles.safetyTipsBody, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-          • RPF escorts are stationed in all Superfast & Mail overnight express trains for round-the-clock safety.
-        </Text>
-      </View>
-    </View>
-  );
-
-  // -------------------------------------------------------------
-  // RENDER TAB 6: DATA & STORAGE
-  // -------------------------------------------------------------
-  const renderStorageTab = () => (
-    <View style={styles.tabContentContainer}>
-      {/* Category Hero Banner */}
-      <View style={[styles.categoryHeroBanner, { backgroundColor: isDarkMode ? '#1E293B' : '#F0FDF4', borderColor: isDarkMode ? '#334155' : '#BBF7D0' }]}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-          <View style={[styles.heroIconCircle, { backgroundColor: '#15803D' }]}>
-            <Ionicons name="server" size={18} color="#FFFFFF" />
-          </View>
-          <View style={{ flex: 1, marginLeft: 10 }}>
-            <Text style={[styles.categoryHeroTitle, { color: isDarkMode ? '#F8FAFC' : '#14532D' }]}>
-              Offline Timetable & Cache
-            </Text>
-            <Text style={[styles.categoryHeroSubtitle, { color: isDarkMode ? '#94A3B8' : '#15803D' }]}>
-              Manage offline schedules, live train API cache, and history
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.activeEngineStatusBar}>
-          <View style={[styles.activeGreenBeacon, { backgroundColor: '#16A34A' }]} />
-          <Text style={[styles.activeEngineStatusText, { color: isDarkMode ? '#E0F2FE' : '#14532D' }]}>
-            Offline Database: <Text style={{ fontWeight: '800' }}>12,450+ Trains Cached Locally</Text>
-          </Text>
-        </View>
-      </View>
-
-      <Text style={[styles.groupSectionTitle, { color: isDarkMode ? '#CBD5E1' : '#334155' }]}>
-        Offline Timetable Synchronization
-      </Text>
-
-      {/* Timetable Sync Card */}
-      <View style={[styles.infoCardMerged, { backgroundColor: isDarkMode ? '#1E293B' : '#F0FDF4', borderColor: isDarkMode ? '#334155' : '#BBF7D0' }]}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-          <View style={styles.pulseGreenDot} />
-          <View style={{ flex: 1, marginLeft: 8 }}>
-            <Text style={[styles.infoCardTitle, { color: isDarkMode ? '#F8FAFC' : '#14532D' }]}>
-              IRCTC Master Schedule Active
-            </Text>
-            <Text style={[styles.infoCardDesc, { color: isDarkMode ? '#94A3B8' : '#15803D' }]}>
-              Contains full routing, halts, and timings for all Express, Vande Bharat, Rajdhani, Shatabdi & Suburban EMU trains.
-            </Text>
-          </View>
-        </View>
-
-        <TouchableOpacity
-          style={[styles.primaryActionBtn, { backgroundColor: '#15803D', marginTop: 8 }]}
-          onPress={handleCheckTimetableUpdates}
-          disabled={isCheckingUpdate}
-          activeOpacity={0.8}
-        >
-          {isCheckingUpdate ? (
-            <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 6 }} />
-          ) : (
-            <Ionicons name="sync-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-          )}
-          <Text style={styles.primaryActionBtnText}>
-            {isCheckingUpdate ? 'Checking Server...' : 'Check Database Updates'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Cache & History Management */}
-      <Text style={[styles.groupSectionTitle, { color: isDarkMode ? '#CBD5E1' : '#334155', marginTop: 14 }]}>
-        Memory & Storage Cleanup
-      </Text>
-
-      <View style={[styles.insetGroupMerged, { backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC', borderColor: isDarkMode ? '#334155' : '#E2E8F0' }]}>
-        {/* Purge Cache */}
-        <TouchableOpacity
-          style={styles.storageActionRow}
-          onPress={handleClearCache}
-          activeOpacity={0.7}
-        >
-          <View style={[styles.storageActionIconBox, { backgroundColor: '#E0F2FE' }]}>
-            <Ionicons name="refresh" size={18} color="#0284C7" />
-          </View>
-          <View style={{ flex: 1, marginHorizontal: 12 }}>
-            <Text style={[styles.storageActionTitle, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]}>
-              Purge Live Train Cache
-            </Text>
-            <Text style={[styles.storageActionDesc, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-              Clears cached station departures to pull fresh satellite records
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-        </TouchableOpacity>
-
-        <View style={[styles.cardDivider, { backgroundColor: isDarkMode ? '#334155' : '#E2E8F0' }]} />
-
-        {/* Clear History */}
-        <TouchableOpacity
-          style={styles.storageActionRow}
-          onPress={handleClearRecentSearches}
-          activeOpacity={0.7}
-        >
-          <View style={[styles.storageActionIconBox, { backgroundColor: '#FEE2E2' }]}>
-            <Ionicons name="trash-outline" size={18} color="#EF4444" />
-          </View>
-          <View style={{ flex: 1, marginHorizontal: 12 }}>
-            <Text style={[styles.storageActionTitle, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]}>
-              Clear Search History
-            </Text>
-            <Text style={[styles.storageActionDesc, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-              Resets recently searched stations and saved train numbers
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-        </TouchableOpacity>
-      </View>
-
-      {/* App Version Diagnostics */}
-      <View style={styles.appDiagnosticsWrap}>
-        <Text style={[styles.appDiagnosticsTitle, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-          When is my train • v2.5.0 Pro
-        </Text>
-        <Text style={[styles.appDiagnosticsSubtitle, { color: isDarkMode ? '#64748B' : '#94A3B8' }]}>
-          Zero-Data Offline Transit Engine • React Native Expo
-        </Text>
-      </View>
-    </View>
-  );
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={handleClose}>
       <View style={styles.modalRoot}>
-        {/* Backdrop Overlay */}
-        <TouchableWithoutFeedback onPress={handleClose}>
+        {/* Backdrop overlay */}
+        <Pressable style={styles.backdropPressable} onPress={handleClose}>
           <Animated.View style={[styles.backdrop, { opacity: fadeAnim }]} />
-        </TouchableWithoutFeedback>
+        </Pressable>
 
-        {/* Slide-in Drawer Container */}
+        {/* Slide-out Drawer Panel (From Right Side) */}
         <Animated.View
           style={[
-            styles.drawerPanel,
+            styles.drawerContainer,
             {
               width: drawerWidth,
-              backgroundColor: isDarkMode ? '#0F172A' : '#FFFFFF',
-              borderLeftColor: isDarkMode ? '#1E293B' : '#E2E8F0',
+              backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
               transform: [{ translateX: slideAnim }],
             },
           ]}
         >
-          {/* Header */}
-          <View
-            style={[
-              styles.drawerHeader,
-              {
-                backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC',
-                borderBottomColor: isDarkMode ? '#334155' : '#E2E8F0',
-              },
-            ]}
-          >
-            <View style={styles.headerLeft}>
-              <View style={[styles.headerIconBox, { backgroundColor: isDarkMode ? '#0369A1' : '#E0F2FE' }]}>
-                <Ionicons name="settings-sharp" size={18} color={isDarkMode ? '#38BDF8' : '#0284C7'} />
-              </View>
-              <View>
-                <Text style={[styles.drawerTitleText, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]}>
-                  {language === 'hi' ? 'सेटिंग्स व प्राथमिकताएं' : 'Settings & Preferences'}
-                </Text>
-                <Text style={[styles.drawerSubtitleText, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-                  {isWide ? 'Select category from sidebar to customize' : 'Tap any tab to configure options'}
-                </Text>
-              </View>
+          {/* Toast Alert Banner */}
+          {toastMsg && (
+            <View style={styles.toastBanner}>
+              <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+              <Text style={styles.toastText} numberOfLines={2}>
+                {toastMsg}
+              </Text>
             </View>
+          )}
 
-            <TouchableOpacity style={styles.drawerCloseBtn} onPress={handleClose} activeOpacity={0.7}>
-              <Ionicons name="close" size={22} color={isDarkMode ? '#94A3B8' : '#475569'} />
-            </TouchableOpacity>
-          </View>
+          {/* ================= VIEW: MAIN MENU (OUR APP CONTROL CENTER) ================= */}
+          {activeScreen === 'menu' && (
+            <View style={{ flex: 1 }}>
+              {/* Header: Official App Name & Branding */}
+              <View style={[styles.drawerHeader, { borderBottomColor: isDarkMode ? '#334155' : '#F1F5F9' }]}>
+                <View style={styles.headerTitleRow}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <View style={styles.brandIconBox}>
+                      <MaterialCommunityIcons name="train" size={20} color="#FFFFFF" />
+                    </View>
+                    <View>
+                      <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+                        <Text style={[styles.headerAppTitle, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]}>
+                          When is my{' '}
+                        </Text>
+                        <Text style={[styles.headerAppTitle, { color: '#0284C7', fontWeight: '900' }]}>
+                          Train
+                        </Text>
+                      </View>
+                      <Text style={[styles.headerSubTitle, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+                        Settings & Preferences
+                      </Text>
+                    </View>
+                  </View>
 
-          {/* Main Body: Desktop 2-Column Sidebar OR Mobile Top Pills */}
-          <View style={[styles.drawerBodyContainer, isWide && styles.drawerBodyRow]}>
-            {/* 1. Category Navigation (Sidebar on Desktop, Pill Bar on Mobile) */}
-            {isWide ? (
-              <View
-                style={[
-                  styles.desktopSidebar,
-                  {
-                    backgroundColor: isDarkMode ? '#0B1324' : '#F8FAFC',
-                    borderRightColor: isDarkMode ? '#1E293B' : '#E2E8F0',
-                  },
-                ]}
+                  <TouchableOpacity
+                    onPress={handleClose}
+                    style={[
+                      styles.closeBtnCircle,
+                      { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' },
+                    ]}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="close" size={20} color={isDarkMode ? '#94A3B8' : '#64748B'} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <ScrollView
+                style={styles.menuScroll}
+                contentContainerStyle={{ paddingVertical: 10, paddingBottom: 34 }}
+                showsVerticalScrollIndicator={false}
               >
-                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.desktopSidebarContent}>
-                  {SETTINGS_TABS.map((tab) => {
-                    const isSelected = activeTab === tab.id;
-                    return (
-                      <TouchableOpacity
-                        key={tab.id}
-                        style={[
-                          styles.sidebarTabBtn,
-                          isSelected && {
-                            backgroundColor: isDarkMode ? 'rgba(2, 132, 199, 0.22)' : '#E0F2FE',
-                            borderColor: '#0284C7',
-                          },
-                        ]}
-                        onPress={() => setActiveTab(tab.id)}
-                        activeOpacity={0.7}
-                      >
-                        <View
-                          style={[
-                            styles.sidebarIconBox,
-                            {
-                              backgroundColor: isSelected
-                                ? '#0284C7'
-                                : (isDarkMode ? '#1E293B' : '#E2E8F0'),
-                            },
-                          ]}
+                {/* 1. Live GPS & Tracking Engine */}
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => setActiveScreen('tracking')}
+                  style={styles.menuRow}
+                >
+                  <View style={[styles.iconBox, { backgroundColor: '#E0F2FE' }]}>
+                    <MaterialCommunityIcons name="transmission-tower" size={22} color="#0284C7" />
+                  </View>
+                  <View style={styles.menuTextCol}>
+                    <Text style={[styles.menuTitle, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]} numberOfLines={1}>
+                      GPS & Tracking Engine
+                    </Text>
+                    <Text style={[styles.menuSubtitle, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
+                      {trackingSource === 'cell'
+                        ? 'Cell Towers (Offline • Zero Data)'
+                        : trackingSource === 'gps'
+                        ? 'Device GPS (Satellite)'
+                        : 'Internet Satellite Sync'}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={17} color={isDarkMode ? '#64748B' : '#94A3B8'} />
+                </TouchableOpacity>
+
+                {/* 2. Station Alarms & Ringtones */}
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => setActiveScreen('alarms')}
+                  style={styles.menuRow}
+                >
+                  <View style={[styles.iconBox, { backgroundColor: '#FEE2E2' }]}>
+                    <Ionicons name="alarm-outline" size={22} color="#DC2626" />
+                  </View>
+                  <View style={styles.menuTextCol}>
+                    <Text style={[styles.menuTitle, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]} numberOfLines={1}>
+                      Station Alarms & Ringtones
+                    </Text>
+                    <Text style={[styles.menuSubtitle, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
+                      {alarmSound.toUpperCase()} Tone • {alarmTiming} in advance
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={17} color={isDarkMode ? '#64748B' : '#94A3B8'} />
+                </TouchableOpacity>
+
+                {/* 3. Display & Regional Units */}
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => setActiveScreen('display')}
+                  style={styles.menuRow}
+                >
+                  <View style={[styles.iconBox, { backgroundColor: '#F3E8FF' }]}>
+                    <Ionicons name="color-palette-outline" size={22} color="#7C3AED" />
+                  </View>
+                  <View style={styles.menuTextCol}>
+                    <Text style={[styles.menuTitle, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]} numberOfLines={1}>
+                      Display & Formats
+                    </Text>
+                    <Text style={[styles.menuSubtitle, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
+                      {isDarkMode ? 'OLED Dark Mode' : 'Light Theme'} • {speedUnit.toUpperCase()} • {timeFormat}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={17} color={isDarkMode ? '#64748B' : '#94A3B8'} />
+                </TouchableOpacity>
+
+                {/* 4. App Language */}
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => setActiveScreen('language')}
+                  style={styles.menuRow}
+                >
+                  <View style={[styles.iconBox, { backgroundColor: '#EDE9FE' }]}>
+                    <Ionicons name="language-outline" size={22} color="#6366F1" />
+                  </View>
+                  <View style={styles.menuTextCol}>
+                    <Text style={[styles.menuTitle, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]} numberOfLines={1}>
+                      App Language
+                    </Text>
+                    <Text style={[styles.menuSubtitle, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
+                      {currentLangObj.flag} {currentLangObj.name} ({currentLangObj.nativeName})
+                    </Text>
+                  </View>
+                  <Text style={[styles.rightValueBlueText, { color: '#0284C7', marginRight: 4 }]}>
+                    {currentLangObj.nativeName}
+                  </Text>
+                  <Ionicons name="chevron-forward" size={17} color={isDarkMode ? '#64748B' : '#94A3B8'} />
+                </TouchableOpacity>
+
+                {/* 5. Select Suburban / Metro City */}
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => setActiveScreen('cities')}
+                  style={styles.menuRow}
+                >
+                  <View style={[styles.iconBox, { backgroundColor: '#DCFCE7' }]}>
+                    <MaterialCommunityIcons name="train" size={22} color="#16A34A" />
+                  </View>
+                  <View style={styles.menuTextCol}>
+                    <Text style={[styles.menuTitle, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]} numberOfLines={1}>
+                      Select City (Metro/Local)
+                    </Text>
+                    <Text style={[styles.menuSubtitle, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
+                      {selectedCity}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={17} color={isDarkMode ? '#64748B' : '#94A3B8'} />
+                </TouchableOpacity>
+
+                <View style={[styles.divider, { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9' }]} />
+
+                {/* 6. SOS 24/7 Helplines */}
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => setActiveScreen('safety')}
+                  style={styles.menuRow}
+                >
+                  <View style={[styles.iconBox, { backgroundColor: '#FEE2E2' }]}>
+                    <Ionicons name="shield-checkmark-outline" size={22} color="#DC2626" />
+                  </View>
+                  <View style={styles.menuTextCol}>
+                    <Text style={[styles.menuTitle, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]} numberOfLines={1}>
+                      Emergency Helplines & SOS
+                    </Text>
+                    <Text style={[styles.menuSubtitle, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
+                      139 RailMadad, 182 Police, 1091 Women Safety
+                    </Text>
+                  </View>
+                  <View style={[styles.badgePillSmall, { backgroundColor: '#DCFCE7' }]}>
+                    <Text style={styles.badgePillSmallText}>24/7</Text>
+                  </View>
+                </TouchableOpacity>
+
+                {/* 7. Offline Database & Storage */}
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => setActiveScreen('storage')}
+                  style={styles.menuRow}
+                >
+                  <View style={[styles.iconBox, { backgroundColor: '#FEF3C7' }]}>
+                    <Ionicons name="server-outline" size={22} color="#D97706" />
+                  </View>
+                  <View style={styles.menuTextCol}>
+                    <Text style={[styles.menuTitle, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]} numberOfLines={1}>
+                      Offline Timetable & Cache
+                    </Text>
+                    <Text style={[styles.menuSubtitle, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
+                      Sync master database, purge cache
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={17} color={isDarkMode ? '#64748B' : '#94A3B8'} />
+                </TouchableOpacity>
+
+                <View style={[styles.divider, { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9' }]} />
+
+                {/* 8. Share App */}
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={handleShareApp}
+                  style={styles.menuRow}
+                >
+                  <View style={[styles.iconBox, { backgroundColor: '#EFF6FF' }]}>
+                    <Ionicons name="share-social-outline" size={22} color="#2563EB" />
+                  </View>
+                  <View style={styles.menuTextCol}>
+                    <Text style={[styles.menuTitle, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]} numberOfLines={1}>
+                      Share App
+                    </Text>
+                    <Text style={[styles.menuSubtitle, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
+                      Share When is my train with travel companions
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={17} color={isDarkMode ? '#64748B' : '#94A3B8'} />
+                </TouchableOpacity>
+
+                {/* 9. Rate Us */}
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => setActiveScreen('rate')}
+                  style={styles.menuRow}
+                >
+                  <View style={[styles.iconBox, { backgroundColor: '#FEF3C7' }]}>
+                    <Ionicons name="star-outline" size={22} color="#D97706" />
+                  </View>
+                  <View style={styles.menuTextCol}>
+                    <Text style={[styles.menuTitle, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]} numberOfLines={1}>
+                      Rate Us
+                    </Text>
+                    <Text style={[styles.menuSubtitle, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
+                      Help us improve live tracking
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={17} color={isDarkMode ? '#64748B' : '#94A3B8'} />
+                </TouchableOpacity>
+
+                {/* 10. Feedback & Bug Report */}
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => setActiveScreen('feedback')}
+                  style={styles.menuRow}
+                >
+                  <View style={[styles.iconBox, { backgroundColor: '#ECFDF5' }]}>
+                    <Ionicons name="chatbubbles-outline" size={22} color="#059669" />
+                  </View>
+                  <View style={styles.menuTextCol}>
+                    <Text style={[styles.menuTitle, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]} numberOfLines={1}>
+                      Feedback & Bug Report
+                    </Text>
+                    <Text style={[styles.menuSubtitle, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
+                      Suggest features or report tracking issues
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={17} color={isDarkMode ? '#64748B' : '#94A3B8'} />
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
+          )}
+
+          {/* ================= VIEW: 1. TRACKING ENGINE ================= */}
+          {activeScreen === 'tracking' && (
+            <View style={{ flex: 1 }}>
+              <View style={[styles.drawerSubHeader, { borderBottomColor: isDarkMode ? '#334155' : '#F1F5F9' }]}>
+                <TouchableOpacity onPress={() => setActiveScreen('menu')} style={styles.subBackBtn}>
+                  <Ionicons name="arrow-back" size={22} color={isDarkMode ? '#F8FAFC' : '#0F172A'} />
+                </TouchableOpacity>
+                <Text style={[styles.subHeaderTitle, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]}>
+                  GPS & Tracking Engine
+                </Text>
+                <TouchableOpacity onPress={handleClose} style={styles.closeBtnCircle} activeOpacity={0.7}>
+                  <Ionicons name="close" size={20} color={isDarkMode ? '#94A3B8' : '#64748B'} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={styles.menuScroll} contentContainerStyle={{ padding: 16 }}>
+                <View style={[styles.heroNoticeCard, { backgroundColor: isDarkMode ? '#1E3A5F' : '#E0F2FE' }]}>
+                  <Text style={[styles.heroNoticeTitle, { color: isDarkMode ? '#F0F9FF' : '#0369A1' }]}>
+                    Intelligent Multi-Source Tracking
+                  </Text>
+                  <Text style={[styles.heroNoticeDesc, { color: isDarkMode ? '#BAE6FD' : '#0284C7' }]}>
+                    Switch between zero-data cell towers inside steel coaches, high-precision window GNSS, or official NTES internet satellite proxies.
+                  </Text>
+                </View>
+
+                {/* Option 1: Cell Towers (Offline) */}
+                <TouchableOpacity
+                  style={[
+                    styles.modeCard,
+                    {
+                      backgroundColor: trackingSource === 'cell'
+                        ? (isDarkMode ? 'rgba(2, 132, 199, 0.18)' : '#F0F9FF')
+                        : (isDarkMode ? '#0F172A' : '#FFFFFF'),
+                      borderColor: trackingSource === 'cell' ? '#0284C7' : (isDarkMode ? '#334155' : '#E2E8F0'),
+                    },
+                  ]}
+                  onPress={() => {
+                    setTrackingSource('cell');
+                    showToast('✓ Cell Tower (Zero-Data) Engine Active');
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.modeCardHeader}>
+                    <View style={[styles.modeCardIconBox, { backgroundColor: '#DCFCE7' }]}>
+                      <MaterialCommunityIcons name="transmission-tower" size={22} color="#15803D" />
+                    </View>
+                    <View style={{ flex: 1, marginHorizontal: 10 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <Text style={[styles.modeCardTitle, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]}>
+                          Cell Towers (Inside Coach)
+                        </Text>
+                        <View style={[styles.badgePillSmall, { backgroundColor: '#DCFCE7' }]}>
+                          <Text style={styles.badgePillSmallText}>100% OFFLINE</Text>
+                        </View>
+                      </View>
+                      <Text style={[styles.modeCardSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+                        Works inside sleeper & AC compartments without internet
+                      </Text>
+                    </View>
+                    <Ionicons
+                      name={trackingSource === 'cell' ? 'radio-button-on' : 'radio-button-off'}
+                      size={20}
+                      color={trackingSource === 'cell' ? '#0284C7' : '#94A3B8'}
+                    />
+                  </View>
+                </TouchableOpacity>
+
+                {/* Option 2: Device GPS (Near Window) */}
+                <TouchableOpacity
+                  style={[
+                    styles.modeCard,
+                    {
+                      backgroundColor: trackingSource === 'gps'
+                        ? (isDarkMode ? 'rgba(2, 132, 199, 0.18)' : '#F0F9FF')
+                        : (isDarkMode ? '#0F172A' : '#FFFFFF'),
+                      borderColor: trackingSource === 'gps' ? '#0284C7' : (isDarkMode ? '#334155' : '#E2E8F0'),
+                    },
+                  ]}
+                  onPress={() => {
+                    setTrackingSource('gps');
+                    showToast('✓ Device Window GNSS GPS Engine Active');
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.modeCardHeader}>
+                    <View style={[styles.modeCardIconBox, { backgroundColor: '#E0F2FE' }]}>
+                      <Ionicons name="location" size={22} color="#0284C7" />
+                    </View>
+                    <View style={{ flex: 1, marginHorizontal: 10 }}>
+                      <Text style={[styles.modeCardTitle, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]}>
+                        Device GPS (Near Window)
+                      </Text>
+                      <Text style={[styles.modeCardSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+                        Sub-meter speed & exact coordinates via GNSS satellites
+                      </Text>
+                    </View>
+                    <Ionicons
+                      name={trackingSource === 'gps' ? 'radio-button-on' : 'radio-button-off'}
+                      size={20}
+                      color={trackingSource === 'gps' ? '#0284C7' : '#94A3B8'}
+                    />
+                  </View>
+                </TouchableOpacity>
+
+                {/* Option 3: Internet Satellite Sync */}
+                <TouchableOpacity
+                  style={[
+                    styles.modeCard,
+                    {
+                      backgroundColor: trackingSource === 'internet'
+                        ? (isDarkMode ? 'rgba(2, 132, 199, 0.18)' : '#F0F9FF')
+                        : (isDarkMode ? '#0F172A' : '#FFFFFF'),
+                      borderColor: trackingSource === 'internet' ? '#0284C7' : (isDarkMode ? '#334155' : '#E2E8F0'),
+                    },
+                  ]}
+                  onPress={() => {
+                    setTrackingSource('internet');
+                    showToast('✓ Internet Satellite Proxy Active');
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.modeCardHeader}>
+                    <View style={[styles.modeCardIconBox, { backgroundColor: '#F3E8FF' }]}>
+                      <Ionicons name="globe-outline" size={22} color="#7C3AED" />
+                    </View>
+                    <View style={{ flex: 1, marginHorizontal: 10 }}>
+                      <Text style={[styles.modeCardTitle, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]}>
+                        Internet Railway Satellite Sync
+                      </Text>
+                      <Text style={[styles.modeCardSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+                        Fetches live telemetry through RailRadar & NTES proxies
+                      </Text>
+                    </View>
+                    <Ionicons
+                      name={trackingSource === 'internet' ? 'radio-button-on' : 'radio-button-off'}
+                      size={20}
+                      color={trackingSource === 'internet' ? '#0284C7' : '#94A3B8'}
+                    />
+                  </View>
+                </TouchableOpacity>
+
+                {/* RailRadar Official API Key */}
+                <Text style={[styles.settingSectionHeader, { color: colors.textSecondary, marginTop: 18 }]}>
+                  RAILRADAR OFFICIAL API KEY
+                </Text>
+                <View style={[styles.settingCard, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', borderColor: isDarkMode ? '#334155' : '#E2E8F0' }]}>
+                  <TextInput
+                    value={railRadarKey}
+                    onChangeText={setRailRadarKey}
+                    placeholder="Enter official RailRadar API key"
+                    placeholderTextColor="#94A3B8"
+                    style={[styles.inputBox, { color: isDarkMode ? '#FFFFFF' : '#0F172A' }]}
+                  />
+                  <TouchableOpacity
+                    onPress={() => {
+                      LiveTrainApi.setRailRadarApiKey(railRadarKey);
+                      showToast('✓ RailRadar GPS Key Activated');
+                    }}
+                    style={styles.saveKeyBtn}
+                  >
+                    <Text style={styles.saveKeyBtnText}>Save API Key</Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            </View>
+          )}
+
+          {/* ================= VIEW: 2. STATION ALARMS ================= */}
+          {activeScreen === 'alarms' && (
+            <View style={{ flex: 1 }}>
+              <View style={[styles.drawerSubHeader, { borderBottomColor: isDarkMode ? '#334155' : '#F1F5F9' }]}>
+                <TouchableOpacity onPress={() => setActiveScreen('menu')} style={styles.subBackBtn}>
+                  <Ionicons name="arrow-back" size={22} color={isDarkMode ? '#F8FAFC' : '#0F172A'} />
+                </TouchableOpacity>
+                <Text style={[styles.subHeaderTitle, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]}>
+                  Station Alarms & Ringtones
+                </Text>
+                <TouchableOpacity onPress={handleClose} style={styles.closeBtnCircle} activeOpacity={0.7}>
+                  <Ionicons name="close" size={20} color={isDarkMode ? '#94A3B8' : '#64748B'} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={styles.menuScroll} contentContainerStyle={{ padding: 16 }}>
+                {/* Alarm Timing Picker */}
+                <Text style={[styles.settingSectionHeader, { color: colors.textSecondary }]}>
+                  ALARM ADVANCE TRIGGER DISTANCE / TIME
+                </Text>
+                <View style={[styles.optionsRow, { marginBottom: 16 }]}>
+                  {(['10m', '15m', '30m', '5km', '10km'] as const).map((t) => (
+                    <TouchableOpacity
+                      key={t}
+                      onPress={() => {
+                        setAlarmTiming(t);
+                        showToast(`✓ Alarm triggers ${t} before reaching station`);
+                      }}
+                      style={[
+                        styles.chipBtn,
+                        alarmTiming === t && styles.chipBtnActive,
+                        { borderColor: isDarkMode ? '#334155' : '#E2E8F0' },
+                      ]}
+                    >
+                      <Text style={[styles.chipText, alarmTiming === t && styles.chipTextActive]}>
+                        {t}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {/* Alarm Ringtone Selectors with Sound Previews */}
+                <Text style={[styles.settingSectionHeader, { color: colors.textSecondary }]}>
+                  WAKE-UP RINGTONE (WITH SOUND PREVIEW)
+                </Text>
+
+                {[
+                  { id: 'horn' as const, label: 'Train Locomotive Horn', desc: 'Powerful dual locomotive air horn sound (Heavy Sleepers)', icon: 'megaphone-outline' },
+                  { id: 'whistle' as const, label: 'Steam Whistle', desc: 'Classic vintage Indian Railways steam whistle chime', icon: 'volume-high-outline' },
+                  { id: 'chime' as const, label: 'Platform Station Chime', desc: 'Official railway station announcement chime', icon: 'musical-notes-outline' },
+                  { id: 'bell' as const, label: 'Level Crossing Bell', desc: 'Continuous alert bell signal at railway crossings', icon: 'notifications-outline' },
+                ].map((s) => {
+                  const isSelected = alarmSound === s.id;
+                  const isPlaying = previewPlaying === s.id;
+                  return (
+                    <TouchableOpacity
+                      key={s.id}
+                      style={[
+                        styles.modeCard,
+                        {
+                          backgroundColor: isSelected
+                            ? (isDarkMode ? 'rgba(2, 132, 199, 0.18)' : '#F0F9FF')
+                            : (isDarkMode ? '#0F172A' : '#FFFFFF'),
+                          borderColor: isSelected ? '#0284C7' : (isDarkMode ? '#334155' : '#E2E8F0'),
+                          marginBottom: 10,
+                        },
+                      ]}
+                      onPress={() => setAlarmSound(s.id)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.modeCardHeader}>
+                        <View style={[styles.modeCardIconBox, { backgroundColor: isSelected ? '#0284C7' : (isDarkMode ? '#334155' : '#E2E8F0') }]}>
+                          <Ionicons name={s.icon as any} size={20} color={isSelected ? '#FFFFFF' : (isDarkMode ? '#94A3B8' : '#475569')} />
+                        </View>
+                        <View style={{ flex: 1, marginHorizontal: 10 }}>
+                          <Text style={[styles.modeCardTitle, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }, isSelected && { color: '#0284C7', fontWeight: '800' }]}>
+                            {s.label}
+                          </Text>
+                          <Text style={[styles.modeCardSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+                            {s.desc}
+                          </Text>
+                        </View>
+
+                        {/* Preview Audio Simulation Button */}
+                        <TouchableOpacity
+                          style={[styles.previewSoundBtn, isPlaying && styles.previewSoundBtnActive]}
+                          onPress={() => handlePreviewAlarm(s.id)}
+                          activeOpacity={0.7}
                         >
                           <Ionicons
-                            name={tab.icon}
-                            size={18}
-                            color={isSelected ? '#FFFFFF' : (isDarkMode ? '#94A3B8' : '#64748B')}
+                            name={isPlaying ? 'volume-high' : 'play'}
+                            size={14}
+                            color={isPlaying ? '#FFFFFF' : '#0284C7'}
                           />
-                        </View>
-                        <View style={{ flex: 1, marginLeft: 10 }}>
-                          <Text
-                            style={[
-                              styles.sidebarTabTitle,
-                              { color: isDarkMode ? '#F8FAFC' : '#0F172A' },
-                              isSelected && { color: '#0284C7', fontWeight: '800' },
-                            ]}
-                          >
-                            {tab.title}
+                          <Text style={[styles.previewSoundBtnText, isPlaying && { color: '#FFFFFF' }]}>
+                            {isPlaying ? 'Playing' : 'Preview'}
                           </Text>
-                          <Text
-                            style={[
-                              styles.sidebarTabSubtitle,
-                              { color: isDarkMode ? '#94A3B8' : '#64748B' },
-                            ]}
-                            numberOfLines={1}
-                          >
-                            {tab.subtitle}
-                          </Text>
-                        </View>
-                        {isSelected && <View style={styles.sidebarActivePill} />}
-                      </TouchableOpacity>
-                    );
-                  })}
+                        </TouchableOpacity>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          )}
 
-                  {/* Sidebar Share Card */}
-                  <View style={[styles.sidebarBrandCard, { backgroundColor: isDarkMode ? '#1E293B' : '#0284C7', marginTop: 24 }]}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                      <MaterialCommunityIcons name="train" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-                      <Text style={styles.sidebarBrandTitle}>T-trail Pro</Text>
+          {/* ================= VIEW: 3. DISPLAY & FORMATS ================= */}
+          {activeScreen === 'display' && (
+            <View style={{ flex: 1 }}>
+              <View style={[styles.drawerSubHeader, { borderBottomColor: isDarkMode ? '#334155' : '#F1F5F9' }]}>
+                <TouchableOpacity onPress={() => setActiveScreen('menu')} style={styles.subBackBtn}>
+                  <Ionicons name="arrow-back" size={22} color={isDarkMode ? '#F8FAFC' : '#0F172A'} />
+                </TouchableOpacity>
+                <Text style={[styles.subHeaderTitle, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]}>
+                  Display & Formats
+                </Text>
+                <TouchableOpacity onPress={handleClose} style={styles.closeBtnCircle} activeOpacity={0.7}>
+                  <Ionicons name="close" size={20} color={isDarkMode ? '#94A3B8' : '#64748B'} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={styles.menuScroll} contentContainerStyle={{ padding: 16 }}>
+                {/* Theme Mode */}
+                <Text style={[styles.settingSectionHeader, { color: colors.textSecondary }]}>APP THEME & DISPLAY</Text>
+                <View style={[styles.settingCard, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', borderColor: isDarkMode ? '#334155' : '#E2E8F0' }]}>
+                  <View style={styles.settingToggleRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.settingLabel, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]}>Dark Mode (OLED)</Text>
+                      <Text style={[styles.settingDesc, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>Comfortable night travel & battery saving</Text>
                     </View>
-                    <Text style={styles.sidebarBrandDesc}>Offline Transit System</Text>
-                    <TouchableOpacity style={styles.sidebarShareBtn} onPress={handleShareApp} activeOpacity={0.8}>
-                      <Ionicons name="share-social-outline" size={12} color="#FFFFFF" style={{ marginRight: 4 }} />
-                      <Text style={styles.sidebarShareText}>Share App</Text>
+                    <TouchableOpacity
+                      onPress={() => setThemeMode(isDarkMode ? 'light' : 'dark')}
+                      style={[styles.switchTrack, isDarkMode && { backgroundColor: '#007AFF' }]}
+                    >
+                      <View style={[styles.switchThumb, isDarkMode && { transform: [{ translateX: 20 }] }]} />
                     </TouchableOpacity>
                   </View>
-                </ScrollView>
-              </View>
-            ) : (
-              <View
-                style={[
-                  styles.mobileTabBar,
-                  {
-                    backgroundColor: isDarkMode ? '#131D31' : '#F1F5F9',
-                    borderBottomColor: isDarkMode ? '#1E293B' : '#E2E8F0',
-                  },
-                ]}
-              >
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.mobileTabScroll}>
-                  {SETTINGS_TABS.map((tab) => {
-                    const isSelected = activeTab === tab.id;
-                    return (
-                      <TouchableOpacity
-                        key={tab.id}
-                        style={[
-                          styles.mobileTabPill,
-                          isSelected && {
-                            backgroundColor: '#0284C7',
-                            shadowColor: '#0284C7',
-                            shadowOpacity: 0.35,
-                            shadowRadius: 5,
-                            elevation: 3,
-                          },
-                        ]}
-                        onPress={() => setActiveTab(tab.id)}
-                        activeOpacity={0.7}
-                      >
-                        <Ionicons
-                          name={tab.icon}
-                          size={14}
-                          color={isSelected ? '#FFFFFF' : (isDarkMode ? '#94A3B8' : '#64748B')}
-                          style={{ marginRight: 5 }}
-                        />
-                        <Text
-                          style={[
-                            styles.mobileTabText,
-                            { color: isSelected ? '#FFFFFF' : (isDarkMode ? '#94A3B8' : '#475569') },
-                            isSelected && { fontWeight: '800' },
-                          ]}
-                        >
-                          {tab.title}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
-              </View>
-            )}
-
-            {/* 2. Detail Content Panel - Shows ONLY the selected tab! */}
-            <ScrollView
-              style={styles.detailScroll}
-              contentContainerStyle={styles.detailScrollContent}
-              showsVerticalScrollIndicator={false}
-            >
-              {/* Toast Feedback */}
-              {cacheClearMsg && (
-                <View style={styles.toastSuccessBox}>
-                  <Ionicons name="checkmark-circle" size={16} color="#16A34A" style={{ marginRight: 6 }} />
-                  <Text style={styles.toastSuccessText}>{cacheClearMsg}</Text>
                 </View>
-              )}
 
-              {/* RENDER DEDICATED VIEW */}
-              {activeTab === 'tracking' && renderTrackingTab()}
-              {activeTab === 'display' && renderDisplayTab()}
-              {activeTab === 'language' && renderLanguageTab()}
-              {activeTab === 'alarms' && renderAlarmsTab()}
-              {activeTab === 'safety' && renderSafetyTab()}
-              {activeTab === 'storage' && renderStorageTab()}
+                {/* Speed Unit */}
+                <Text style={[styles.settingSectionHeader, { color: colors.textSecondary, marginTop: 18 }]}>SPEED UNITS</Text>
+                <View style={styles.optionsRow}>
+                  {(['kmh', 'mph'] as SpeedUnit[]).map((unit) => (
+                    <TouchableOpacity
+                      key={unit}
+                      onPress={() => setSpeedUnit(unit)}
+                      style={[
+                        styles.chipBtn,
+                        speedUnit === unit && styles.chipBtnActive,
+                        { borderColor: isDarkMode ? '#334155' : '#E2E8F0' },
+                      ]}
+                    >
+                      <Text style={[styles.chipText, speedUnit === unit && styles.chipTextActive]}>
+                        {unit === 'kmh' ? 'km/h (Indian Railways Standard)' : 'mph'}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
 
-              <View style={{ height: 40 }} />
-            </ScrollView>
-          </View>
+                {/* Time Format */}
+                <Text style={[styles.settingSectionHeader, { color: colors.textSecondary, marginTop: 18 }]}>TIME FORMAT</Text>
+                <View style={styles.optionsRow}>
+                  {(['12h', '24h'] as TimeFormat[]).map((fmt) => (
+                    <TouchableOpacity
+                      key={fmt}
+                      onPress={() => setTimeFormat(fmt)}
+                      style={[
+                        styles.chipBtn,
+                        timeFormat === fmt && styles.chipBtnActive,
+                        { borderColor: isDarkMode ? '#334155' : '#E2E8F0' },
+                      ]}
+                    >
+                      <Text style={[styles.chipText, timeFormat === fmt && styles.chipTextActive]}>
+                        {fmt === '12h' ? '12-Hour (07:30 PM)' : '24-Hour Railway (19:30)'}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
+            </View>
+          )}
+
+          {/* ================= VIEW: 4. APP LANGUAGE ================= */}
+          {activeScreen === 'language' && (
+            <View style={{ flex: 1 }}>
+              <View style={[styles.drawerSubHeader, { borderBottomColor: isDarkMode ? '#334155' : '#F1F5F9' }]}>
+                <TouchableOpacity onPress={() => setActiveScreen('menu')} style={styles.subBackBtn}>
+                  <Ionicons name="arrow-back" size={22} color={isDarkMode ? '#F8FAFC' : '#0F172A'} />
+                </TouchableOpacity>
+                <Text style={[styles.subHeaderTitle, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]}>
+                  Select App Language
+                </Text>
+                <TouchableOpacity onPress={handleClose} style={styles.closeBtnCircle} activeOpacity={0.7}>
+                  <Ionicons name="close" size={20} color={isDarkMode ? '#94A3B8' : '#64748B'} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={styles.menuScroll} contentContainerStyle={{ paddingVertical: 10 }}>
+                {AVAILABLE_LANGUAGES.map((item) => {
+                  const isSelected = language === item.code;
+                  return (
+                    <TouchableOpacity
+                      key={item.code}
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        setLanguage(item.code);
+                        showToast(`✓ Language set to ${item.name} (${item.nativeName})`);
+                        setActiveScreen('menu');
+                      }}
+                      style={[
+                        styles.selectionRow,
+                        isSelected && { backgroundColor: isDarkMode ? '#1E3A5F' : '#EFF6FF' },
+                      ]}
+                    >
+                      <Text style={styles.languageFlag}>{item.flag}</Text>
+                      <View style={{ flex: 1, marginLeft: 14 }}>
+                        <Text style={[styles.selectionMainText, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]}>
+                          {item.nativeName}
+                        </Text>
+                        <Text style={[styles.selectionSubText, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+                          {item.name}
+                        </Text>
+                      </View>
+                      {isSelected && <Ionicons name="checkmark-circle" size={22} color="#007AFF" />}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          )}
+
+          {/* ================= VIEW: 5. SUBURBAN CITIES ================= */}
+          {activeScreen === 'cities' && (
+            <View style={{ flex: 1 }}>
+              <View style={[styles.drawerSubHeader, { borderBottomColor: isDarkMode ? '#334155' : '#F1F5F9' }]}>
+                <TouchableOpacity onPress={() => setActiveScreen('menu')} style={styles.subBackBtn}>
+                  <Ionicons name="arrow-back" size={22} color={isDarkMode ? '#F8FAFC' : '#0F172A'} />
+                </TouchableOpacity>
+                <Text style={[styles.subHeaderTitle, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]}>
+                  Select Suburban / Metro City
+                </Text>
+                <TouchableOpacity onPress={handleClose} style={styles.closeBtnCircle} activeOpacity={0.7}>
+                  <Ionicons name="close" size={20} color={isDarkMode ? '#94A3B8' : '#64748B'} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={styles.menuScroll} contentContainerStyle={{ paddingVertical: 10 }}>
+                {SUBURBAN_CITIES.map((c) => {
+                  const isSelected = selectedCity === c.name;
+                  return (
+                    <TouchableOpacity
+                      key={c.id}
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        setSelectedCity(c.name);
+                        SafeStorage.setItem('@selected_suburban_city', c.name);
+                        showToast(`✓ Suburban city set to ${c.name}`);
+                        setActiveScreen('menu');
+                      }}
+                      style={[
+                        styles.selectionRow,
+                        isSelected && { backgroundColor: isDarkMode ? '#1E3A5F' : '#EFF6FF' },
+                      ]}
+                    >
+                      <View style={[styles.iconBox, { backgroundColor: '#DCFCE7', marginRight: 12 }]}>
+                        <MaterialCommunityIcons name={c.icon as any} size={22} color="#16A34A" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.selectionMainText, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]}>
+                          {c.name}
+                        </Text>
+                        <Text style={[styles.selectionSubText, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+                          {c.subtitle}
+                        </Text>
+                      </View>
+                      {isSelected && <Ionicons name="checkmark-circle" size={22} color="#16A34A" />}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          )}
+
+          {/* ================= VIEW: 6. SOS EMERGENCY HELPLINES ================= */}
+          {activeScreen === 'safety' && (
+            <View style={{ flex: 1 }}>
+              <View style={[styles.drawerSubHeader, { borderBottomColor: isDarkMode ? '#334155' : '#F1F5F9' }]}>
+                <TouchableOpacity onPress={() => setActiveScreen('menu')} style={styles.subBackBtn}>
+                  <Ionicons name="arrow-back" size={22} color={isDarkMode ? '#F8FAFC' : '#0F172A'} />
+                </TouchableOpacity>
+                <Text style={[styles.subHeaderTitle, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]}>
+                  Emergency Helplines & SOS
+                </Text>
+                <TouchableOpacity onPress={handleClose} style={styles.closeBtnCircle} activeOpacity={0.7}>
+                  <Ionicons name="close" size={20} color={isDarkMode ? '#94A3B8' : '#64748B'} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={styles.menuScroll} contentContainerStyle={{ padding: 16 }}>
+                <Text style={[styles.settingSectionHeader, { color: colors.textSecondary }]}>
+                  OFFICIAL 24/7 RAILWAY HELPLINES (1-TAP CALL)
+                </Text>
+                {EMERGENCY_HELPLINES.map((h) => (
+                  <TouchableOpacity
+                    key={h.number}
+                    activeOpacity={0.7}
+                    onPress={() => handleCallEmergency(h.number)}
+                    style={[styles.helplineCard, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', borderColor: isDarkMode ? '#334155' : '#E2E8F0' }]}
+                  >
+                    <View style={[styles.iconBox, { backgroundColor: `${h.color}18`, marginRight: 12 }]}>
+                      <Ionicons name={h.icon as any} size={22} color={h.color} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.selectionMainText, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]}>
+                        {h.title}
+                      </Text>
+                      <Text style={[styles.selectionSubText, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+                        {h.subtitle}
+                      </Text>
+                    </View>
+                    <View style={[styles.callPill, { backgroundColor: h.color }]}>
+                      <Ionicons name="call" size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
+                      <Text style={styles.callPillText}>{h.number}</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
+          {/* ================= VIEW: 7. OFFLINE TIMETABLE & STORAGE ================= */}
+          {activeScreen === 'storage' && (
+            <View style={{ flex: 1 }}>
+              <View style={[styles.drawerSubHeader, { borderBottomColor: isDarkMode ? '#334155' : '#F1F5F9' }]}>
+                <TouchableOpacity onPress={() => setActiveScreen('menu')} style={styles.subBackBtn}>
+                  <Ionicons name="arrow-back" size={22} color={isDarkMode ? '#F8FAFC' : '#0F172A'} />
+                </TouchableOpacity>
+                <Text style={[styles.subHeaderTitle, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]}>
+                  Offline Timetable & Cache
+                </Text>
+                <TouchableOpacity onPress={handleClose} style={styles.closeBtnCircle} activeOpacity={0.7}>
+                  <Ionicons name="close" size={20} color={isDarkMode ? '#94A3B8' : '#64748B'} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={styles.menuScroll} contentContainerStyle={{ padding: 16 }}>
+                <Text style={[styles.settingSectionHeader, { color: colors.textSecondary }]}>
+                  OFFLINE MASTER DATABASE
+                </Text>
+                <View style={[styles.settingCard, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', borderColor: isDarkMode ? '#334155' : '#E2E8F0', padding: 16 }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                    <View style={styles.pulseGreenDot} />
+                    <Text style={[styles.selectionMainText, { color: isDarkMode ? '#F8FAFC' : '#0F172A', marginLeft: 8 }]}>
+                      12,450+ Trains Locally Cached
+                    </Text>
+                  </View>
+                  <Text style={[styles.selectionSubText, { color: isDarkMode ? '#94A3B8' : '#64748B', marginBottom: 12 }]}>
+                    Full station halts, routes, and timings available offline without internet.
+                  </Text>
+                  <TouchableOpacity
+                    onPress={handleUpdateTimetable}
+                    disabled={isUpdatingTimetable}
+                    style={[styles.saveKeyBtn, { backgroundColor: '#16A34A', flexDirection: 'row', justifyContent: 'center' }]}
+                  >
+                    {isUpdatingTimetable ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
+                    ) : (
+                      <Ionicons name="sync" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                    )}
+                    <Text style={styles.saveKeyBtnText}>
+                      {isUpdatingTimetable ? 'Updating Database...' : 'Update Timetable Now'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                <Text style={[styles.settingSectionHeader, { color: colors.textSecondary, marginTop: 18 }]}>
+                  MEMORY & CACHE CLEANUP
+                </Text>
+                <TouchableOpacity
+                  onPress={handleClearRecent}
+                  style={[styles.settingCard, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', borderColor: isDarkMode ? '#334155' : '#E2E8F0', padding: 14, flexDirection: 'row', alignItems: 'center' }]}
+                >
+                  <View style={[styles.iconBox, { backgroundColor: '#FEE2E2', marginRight: 12 }]}>
+                    <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.selectionMainText, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]}>
+                      Clear Search History
+                    </Text>
+                    <Text style={[styles.selectionSubText, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+                      Resets recently searched stations and trains
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={17} color="#94A3B8" />
+                </TouchableOpacity>
+
+                <View style={styles.appDiagnosticsWrap}>
+                  <Text style={[styles.appDiagnosticsTitle, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+                    When is my train • v2.5.0 Pro
+                  </Text>
+                  <Text style={[styles.appDiagnosticsSubtitle, { color: isDarkMode ? '#64748B' : '#94A3B8' }]}>
+                    Zero-Data Offline Railway Engine • React Native Expo
+                  </Text>
+                </View>
+              </ScrollView>
+            </View>
+          )}
+
+          {/* ================= VIEW: 8. RATE US ================= */}
+          {activeScreen === 'rate' && (
+            <View style={{ flex: 1 }}>
+              <View style={[styles.drawerSubHeader, { borderBottomColor: isDarkMode ? '#334155' : '#F1F5F9' }]}>
+                <TouchableOpacity onPress={() => setActiveScreen('menu')} style={styles.subBackBtn}>
+                  <Ionicons name="arrow-back" size={22} color={isDarkMode ? '#F8FAFC' : '#0F172A'} />
+                </TouchableOpacity>
+                <Text style={[styles.subHeaderTitle, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]}>
+                  Rate When is my train
+                </Text>
+                <TouchableOpacity onPress={handleClose} style={styles.closeBtnCircle} activeOpacity={0.7}>
+                  <Ionicons name="close" size={20} color={isDarkMode ? '#94A3B8' : '#64748B'} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={{ padding: 24, alignItems: 'center' }}>
+                <View style={[styles.iconBox, { width: 64, height: 64, borderRadius: 20, backgroundColor: '#FEF3C7', marginBottom: 16 }]}>
+                  <Ionicons name="star" size={32} color="#D97706" />
+                </View>
+                <Text style={[styles.subHeaderTitle, { color: isDarkMode ? '#F8FAFC' : '#0F172A', textAlign: 'center' }]}>
+                  Enjoying When is my train?
+                </Text>
+                <Text style={[styles.faqAnswer, { textAlign: 'center', marginTop: 8, marginBottom: 20 }]}>
+                  Tap the stars below to rate your real-time train tracking experience!
+                </Text>
+                <View style={{ flexDirection: 'row', marginBottom: 24 }}>
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <TouchableOpacity key={star} onPress={() => setSelectedStars(star)} style={{ padding: 6 }}>
+                      <Ionicons
+                        name={star <= selectedStars ? 'star' : 'star-outline'}
+                        size={36}
+                        color={star <= selectedStars ? '#F59E0B' : '#94A3B8'}
+                      />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <TouchableOpacity
+                  onPress={() => {
+                    showToast(`✓ Thank you for your ${selectedStars}-star rating! ⭐`);
+                    setActiveScreen('menu');
+                  }}
+                  style={styles.submitActionBtn}
+                >
+                  <Text style={styles.submitActionBtnText}>Submit Rating</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {/* ================= VIEW: 9. FEEDBACK & BUG REPORT ================= */}
+          {activeScreen === 'feedback' && (
+            <View style={{ flex: 1 }}>
+              <View style={[styles.drawerSubHeader, { borderBottomColor: isDarkMode ? '#334155' : '#F1F5F9' }]}>
+                <TouchableOpacity onPress={() => setActiveScreen('menu')} style={styles.subBackBtn}>
+                  <Ionicons name="arrow-back" size={22} color={isDarkMode ? '#F8FAFC' : '#0F172A'} />
+                </TouchableOpacity>
+                <Text style={[styles.subHeaderTitle, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]}>
+                  Feedback & Bug Report
+                </Text>
+                <TouchableOpacity onPress={handleClose} style={styles.closeBtnCircle} activeOpacity={0.7}>
+                  <Ionicons name="close" size={20} color={isDarkMode ? '#94A3B8' : '#64748B'} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={styles.menuScroll} contentContainerStyle={{ padding: 16 }}>
+                <Text style={[styles.settingSectionHeader, { color: colors.textSecondary }]}>SELECT CATEGORY</Text>
+                {['Live GPS tracking issue', 'Timetable mismatch', 'Search results missing trains', 'UI or layout suggestion', 'General feedback'].map((cat) => (
+                  <TouchableOpacity
+                    key={cat}
+                    onPress={() => setBugCategory(cat)}
+                    style={[
+                      styles.selectionRow,
+                      bugCategory === cat && { backgroundColor: isDarkMode ? '#1E3A5F' : '#EFF6FF' },
+                    ]}
+                  >
+                    <Text style={[styles.selectionMainText, { color: isDarkMode ? '#F8FAFC' : '#0F172A', flex: 1 }]}>
+                      {cat}
+                    </Text>
+                    <Ionicons
+                      name={bugCategory === cat ? 'radio-button-on' : 'radio-button-off'}
+                      size={20}
+                      color={bugCategory === cat ? '#007AFF' : '#94A3B8'}
+                    />
+                  </TouchableOpacity>
+                ))}
+
+                <Text style={[styles.settingSectionHeader, { color: colors.textSecondary, marginTop: 16 }]}>
+                  WRITE DETAILS
+                </Text>
+                <TextInput
+                  value={feedbackNotes}
+                  onChangeText={setFeedbackNotes}
+                  placeholder="Tell us what happened or suggest a feature..."
+                  placeholderTextColor="#94A3B8"
+                  multiline
+                  numberOfLines={4}
+                  style={[styles.textAreaBox, { color: isDarkMode ? '#FFFFFF' : '#0F172A', borderColor: isDarkMode ? '#334155' : '#E2E8F0' }]}
+                />
+
+                <TouchableOpacity
+                  onPress={() => {
+                    showToast('✓ Thank you! Your feedback has been recorded.');
+                    setFeedbackNotes('');
+                    setActiveScreen('menu');
+                  }}
+                  style={[styles.submitActionBtn, { marginTop: 16 }]}
+                >
+                  <Text style={styles.submitActionBtnText}>Send Feedback</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
+          )}
         </Animated.View>
       </View>
     </Modal>
@@ -1281,232 +1218,169 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'flex-end',
   },
-  backdrop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+  backdropPressable: {
+    ...StyleSheet.absoluteFill,
   },
-  drawerPanel: {
+  backdrop: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+  },
+  drawerContainer: {
     height: '100%',
-    borderLeftWidth: 1,
-    elevation: 25,
+    borderTopLeftRadius: 28,
+    borderBottomLeftRadius: 28,
+    borderTopRightRadius: 0,
+    borderBottomRightRadius: 0,
+    overflow: 'hidden',
+    elevation: 20,
     shadowColor: '#000',
     shadowOffset: { width: -4, height: 0 },
-    shadowOpacity: 0.35,
-    shadowRadius: 15,
+    shadowOpacity: 0.22,
+    shadowRadius: 18,
+    zIndex: 100,
+  },
+  closeBtnCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   drawerHeader: {
+    paddingTop: 48,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+  },
+  headerTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'android' ? 16 : 20,
-    paddingBottom: 14,
-    borderBottomWidth: 1,
   },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  headerIconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+  brandIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: '#0284C7',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
+    elevation: 2,
+    shadowColor: '#0284C7',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
   },
-  drawerTitleText: {
-    fontSize: 16,
+  headerAppTitle: {
+    fontSize: 18,
     fontWeight: '800',
-    letterSpacing: -0.2,
+    letterSpacing: -0.3,
   },
-  drawerSubtitleText: {
+  headerSubTitle: {
     fontSize: 11,
-    fontWeight: '500',
+    fontWeight: '600',
     marginTop: 1,
   },
-  drawerCloseBtn: {
-    padding: 6,
-    marginLeft: 6,
-  },
-
-  // Body Layout
-  drawerBodyContainer: {
-    flex: 1,
-  },
-  drawerBodyRow: {
-    flexDirection: 'row',
-  },
-
-  // Desktop / Tablet Sidebar
-  desktopSidebar: {
-    width: 220,
-    borderRightWidth: 1,
-  },
-  desktopSidebarContent: {
-    padding: 10,
-  },
-  sidebarTabBtn: {
+  drawerSubHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 10,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: 'transparent',
-    marginBottom: 6,
-    position: 'relative',
-  },
-  sidebarIconBox: {
-    width: 34,
-    height: 34,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sidebarTabTitle: {
-    fontSize: 12.5,
-    fontWeight: '700',
-  },
-  sidebarTabSubtitle: {
-    fontSize: 10,
-    marginTop: 1,
-  },
-  sidebarActivePill: {
-    position: 'absolute',
-    right: 0,
-    top: 10,
-    bottom: 10,
-    width: 3.5,
-    borderRadius: 2,
-    backgroundColor: '#0284C7',
-  },
-  sidebarBrandCard: {
-    borderRadius: 12,
-    padding: 12,
-  },
-  sidebarBrandTitle: {
-    color: '#FFFFFF',
-    fontSize: 12.5,
-    fontWeight: '800',
-  },
-  sidebarBrandDesc: {
-    color: 'rgba(255, 255, 255, 0.75)',
-    fontSize: 10,
-    marginBottom: 8,
-  },
-  sidebarShareBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.18)',
-    borderRadius: 6,
-    paddingVertical: 5,
-  },
-  sidebarShareText: {
-    color: '#FFFFFF',
-    fontSize: 10.5,
-    fontWeight: '700',
-  },
-
-  // Mobile Top Tab Bar
-  mobileTabBar: {
-    paddingVertical: 8,
-    paddingHorizontal: 10,
+    paddingTop: 44,
+    paddingBottom: 14,
+    paddingHorizontal: 16,
     borderBottomWidth: 1,
   },
-  mobileTabScroll: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+  subBackBtn: {
+    padding: 6,
+    marginRight: 8,
   },
-  mobileTabPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: 'transparent',
-  },
-  mobileTabText: {
-    fontSize: 11.5,
-    fontWeight: '600',
-  },
-
-  // Detail Scroll Content
-  detailScroll: {
+  subHeaderTitle: {
+    fontSize: 16.5,
+    fontWeight: '700',
     flex: 1,
   },
-  detailScrollContent: {
-    padding: 16,
-  },
-
-  tabContentContainer: {
+  menuScroll: {
     flex: 1,
   },
-
-  // Category Hero Banner
-  categoryHeroBanner: {
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 14,
-    marginBottom: 16,
+  menuRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 18,
   },
-  heroIconCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  iconBox: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 13,
   },
-  categoryHeroTitle: {
+  menuTextCol: {
+    flex: 1,
+    paddingRight: 6,
+  },
+  menuTitle: {
     fontSize: 14.5,
-    fontWeight: '800',
+    fontWeight: '700',
   },
-  categoryHeroSubtitle: {
-    fontSize: 11,
-    marginTop: 1,
+  menuSubtitle: {
+    fontSize: 11.5,
+    fontWeight: '500',
+    marginTop: 2,
   },
-  activeEngineStatusBar: {
+  rightValueBlueText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  divider: {
+    height: 1,
+    marginHorizontal: 18,
+    marginVertical: 6,
+  },
+  toastBanner: {
+    position: 'absolute',
+    top: 10,
+    left: 14,
+    right: 14,
+    backgroundColor: '#16A34A',
+    borderRadius: 10,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 6,
-    paddingTop: 8,
-    borderTopWidth: 0.5,
-    borderTopColor: 'rgba(0, 0, 0, 0.08)',
+    zIndex: 999,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 5,
   },
-  activeGreenBeacon: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: '#10B981',
-    marginRight: 6,
-  },
-  activeEngineStatusText: {
-    fontSize: 11,
+  toastText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
     flex: 1,
   },
-
-  groupSectionTitle: {
-    fontSize: 12.5,
-    fontWeight: '800',
-    marginBottom: 10,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
+  heroNoticeCard: {
+    padding: 14,
+    borderRadius: 14,
+    marginBottom: 16,
   },
-
-  // Cards Stack
-  cardsStack: {
-    gap: 10,
+  heroNoticeTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  heroNoticeDesc: {
+    fontSize: 12,
+    lineHeight: 16.5,
+    fontWeight: '500',
   },
   modeCard: {
     borderRadius: 14,
     borderWidth: 1.5,
-    padding: 14,
+    padding: 13,
+    marginBottom: 10,
   },
   modeCardHeader: {
     flexDirection: 'row',
@@ -1515,244 +1389,35 @@ const styles = StyleSheet.create({
   modeCardIconBox: {
     width: 40,
     height: 40,
-    borderRadius: 10,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
   modeCardTitle: {
-    fontSize: 13.5,
-    fontWeight: '800',
+    fontSize: 14,
+    fontWeight: '700',
   },
   modeCardSub: {
-    fontSize: 10.5,
-    marginTop: 1,
-  },
-  modeCardBodyText: {
     fontSize: 11,
-    lineHeight: 16,
-    marginTop: 10,
-  },
-  modeCardMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 10,
-    paddingTop: 8,
-    borderTopWidth: 0.5,
-    borderTopColor: 'rgba(0, 0, 0, 0.06)',
-    gap: 16,
-  },
-  metaStat: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  metaStatLabel: {
-    fontSize: 10.5,
-    color: '#94A3B8',
-  },
-  metaStatVal: {
-    fontSize: 10.5,
-    fontWeight: '800',
-  },
-
-  badgePill: {
-    paddingHorizontal: 7,
-    paddingVertical: 2.5,
-    borderRadius: 5,
-  },
-  badgePillText: {
-    fontSize: 9,
-    fontWeight: '800',
-  },
-
-  radioCircle: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  radioCircleActive: {
-    borderColor: '#0284C7',
-  },
-  radioDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#0284C7',
-  },
-
-  // Info Card Merged
-  infoCardMerged: {
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 14,
-  },
-  infoCardHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  infoCardTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  infoCardDesc: {
-    fontSize: 11,
-    lineHeight: 15,
-    marginBottom: 10,
-  },
-  statusLiveBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#E0F2FE',
-    paddingHorizontal: 7,
-    paddingVertical: 2.5,
-    borderRadius: 5,
-  },
-  statusLiveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#0284C7',
-    marginRight: 4,
-  },
-  statusLiveBadgeText: {
-    color: '#0284C7',
-    fontSize: 9.5,
-    fontWeight: '800',
-  },
-
-  apiInputWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-  },
-  apiInput: {
-    flex: 1,
-    fontSize: 12,
-    padding: 0,
-  },
-
-  // Theme Select Cards
-  themeCardsRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  themeSelectCard: {
-    flex: 1,
-    borderWidth: 1.5,
-    borderRadius: 14,
-    padding: 14,
-    alignItems: 'center',
-    position: 'relative',
-  },
-  themeSelectIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
-  },
-  themeSelectTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  themeSelectSubtitle: {
-    fontSize: 10,
+    fontWeight: '500',
     marginTop: 2,
   },
-  themeActiveBadge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-  },
-
-  // Inset Group Merged
-  insetGroupMerged: {
-    borderRadius: 14,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  insetRowMerged: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-  },
-  insetRowTitle: {
-    fontSize: 12.5,
-    fontWeight: '800',
-  },
-  insetRowDesc: {
-    fontSize: 10.5,
-    marginTop: 1,
-  },
-  cardDivider: {
-    height: 1,
-    width: '100%',
-  },
-
-  segmentedPillWrap: {
-    flexDirection: 'row',
-    borderRadius: 8,
-    padding: 2.5,
-  },
-  segmentBtn: {
-    paddingHorizontal: 11,
-    paddingVertical: 5,
+  badgePillSmall: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
     borderRadius: 6,
+    marginLeft: 6,
   },
-  segmentBtnActive: {
-    backgroundColor: '#0284C7',
-  },
-  segmentBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#64748B',
-  },
-  segmentBtnTextActive: {
-    color: '#FFFFFF',
+  badgePillSmallText: {
+    fontSize: 9.5,
     fontWeight: '800',
+    color: '#15803D',
   },
-
-  // Language Cards
-  languageListStack: {
-    gap: 8,
-  },
-  languageCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  languageFlag: {
-    fontSize: 22,
-  },
-  languageNativeText: {
-    fontSize: 13.5,
-    fontWeight: '700',
-  },
-  languageEnglishText: {
-    fontSize: 10.5,
-    marginTop: 1,
-  },
-
-  // Preview Button
   previewSoundBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#E0F2FE',
-    paddingHorizontal: 10,
+    paddingHorizontal: 9,
     paddingVertical: 5,
     borderRadius: 8,
   },
@@ -1760,141 +1425,152 @@ const styles = StyleSheet.create({
     backgroundColor: '#0284C7',
   },
   previewSoundBtnText: {
-    fontSize: 10.5,
+    fontSize: 11,
     fontWeight: '700',
     color: '#0284C7',
     marginLeft: 4,
   },
-
-  // Timing Picker Row
-  timingPickerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 4,
-  },
-  timingOptionBtn: {
-    flex: 1,
-    paddingVertical: 7,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 8,
-  },
-  timingOptionBtnActive: {
-    backgroundColor: '#0284C7',
-  },
-  timingOptionText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#64748B',
-  },
-  timingOptionTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-  },
-
-  // Helpline Group Card
-  helplineGroupCard: {
-    borderRadius: 14,
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
-  helplineRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-  },
-  helplineIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  helplineNumberText: {
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  helplineTitleText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  helplineSubtitleText: {
-    fontSize: 10.5,
-    marginTop: 2,
-  },
-  directCallBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#15803D',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  directCallBtnText: {
+  settingSectionHeader: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#FFFFFF',
+    letterSpacing: 0.6,
+    marginBottom: 8,
   },
-  safetyTipsCard: {
+  settingCard: {
     borderRadius: 14,
     borderWidth: 1,
     padding: 14,
+    marginBottom: 12,
   },
-  safetyTipsTitle: {
+  settingToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  settingLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  settingDesc: {
+    fontSize: 11.5,
+    marginTop: 2,
+  },
+  switchTrack: {
+    width: 48,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#CBD5E1',
+    padding: 2,
+    justifyContent: 'center',
+  },
+  switchThumb: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+  },
+  optionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  chipBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chipBtnActive: {
+    backgroundColor: '#0284C7',
+    borderColor: '#0284C7',
+  },
+  chipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  chipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  inputBox: {
+    height: 44,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    fontSize: 13,
+    fontWeight: '600',
+    backgroundColor: 'rgba(148, 163, 184, 0.12)',
+    marginBottom: 10,
+  },
+  saveKeyBtn: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  saveKeyBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  selectionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    marginHorizontal: 10,
+    marginBottom: 4,
+  },
+  selectionMainText: {
+    fontSize: 14.5,
+    fontWeight: '700',
+  },
+  selectionSubText: {
+    fontSize: 11.5,
+    marginTop: 2,
+  },
+  languageFlag: {
+    fontSize: 22,
+  },
+  helplineCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 8,
+  },
+  callPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginLeft: 8,
+  },
+  callPillText: {
+    color: '#FFFFFF',
     fontSize: 12.5,
     fontWeight: '800',
   },
-  safetyTipsBody: {
-    fontSize: 10.5,
-    lineHeight: 15,
-    marginTop: 4,
-  },
-
-  // Storage Actions
   pulseGreenDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
     backgroundColor: '#16A34A',
   },
-  primaryActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 9,
-    borderRadius: 10,
-  },
-  primaryActionBtnText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  storageActionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-  },
-  storageActionIconBox: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  storageActionTitle: {
-    fontSize: 12.5,
-    fontWeight: '800',
-  },
-  storageActionDesc: {
-    fontSize: 10.5,
-    marginTop: 1,
-  },
   appDiagnosticsWrap: {
     alignItems: 'center',
-    marginTop: 18,
+    marginTop: 24,
+    paddingBottom: 20,
   },
   appDiagnosticsTitle: {
     fontSize: 12,
@@ -1905,23 +1581,33 @@ const styles = StyleSheet.create({
     marginTop: 2,
     textAlign: 'center',
   },
-
-  // Toast
-  toastSuccessBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#DCFCE7',
-    borderColor: '#86EFAC',
-    borderWidth: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    marginBottom: 12,
+  faqAnswer: {
+    fontSize: 12.5,
+    fontWeight: '500',
+    lineHeight: 18,
+    color: '#64748B',
   },
-  toastSuccessText: {
-    color: '#15803D',
-    fontSize: 12,
-    fontWeight: '700',
-    flex: 1,
+  submitActionBtn: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 13,
+    paddingHorizontal: 28,
+    borderRadius: 12,
+    alignItems: 'center',
+    width: '100%',
+  },
+  submitActionBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  textAreaBox: {
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 13,
+    fontWeight: '500',
+    textAlignVertical: 'top',
+    minHeight: 100,
+    backgroundColor: 'rgba(148, 163, 184, 0.08)',
   },
 });

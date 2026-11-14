@@ -415,13 +415,12 @@ async function fetchTrainsBetweenStations(fromCode, toCode) {
   }
 
   const html = await response.text();
-  const regex = /<div class=['"]OneTrain['"][^>]*data-train=['"]([^'"]+)['"][^>]*>([\s\S]*?)<\/div>/g;
+  const regex = /<div[^>]*class=['"][^'"]*OneTrain[^'"]*['"][^>]*data-train=['"]([^'"]+)['"][^>]*>/g;
   let match;
   const trains = [];
 
   while ((match = regex.exec(html)) !== null) {
     const rawData = match[1];
-    const innerHtml = match[2];
     const parts = rawData.split('_');
     if (parts.length >= 10) {
       const number = parts[0].trim();
@@ -450,17 +449,25 @@ async function fetchTrainsBetweenStations(fromCode, toCode) {
       if (upperName.includes('VANDE BHARAT')) type = 'Vande Bharat';
       else if (upperName.includes('RAJDHANI')) type = 'Rajdhani';
       else if (upperName.includes('SHATABDI')) type = 'Shatabdi';
+      else if (upperName.includes('TEJAS')) type = 'Tejas Express';
+      else if (upperName.includes('AMRIT BHARAT')) type = 'Amrit Bharat';
       else if (upperName.includes('DURONTO')) type = 'Superfast';
       else if (upperName.includes('HUMSAFAR')) type = 'Superfast';
-      else if (upperName.includes('GARIB RATH')) type = 'Superfast';
+      else if (upperName.includes('GARIB RATH')) type = 'Garib Rath';
       else if (upperName.includes('LOCAL') || upperName.includes('EMU') || upperName.includes('MEMU')) type = 'EMU Local';
       else if (upperName.includes('EXPRESS') || upperName.includes('EXP')) type = 'Express';
       else if (upperName.includes('MAIL')) type = 'Express';
       else if (upperName.includes('SPL') || upperName.includes('SPECIAL')) type = 'Special';
 
-      // Parse classes from innerHtml
-      const classMatches = [...innerHtml.matchAll(/<td>([1-3][A-Z]|CC|EC|SL|2S|EA|FC)<\/td>/g)].map(m => m[1]);
-      const classTypes = classMatches.length > 0 ? classMatches : ['SL', '3A', '2A'];
+      const classTypes = (type === 'Shatabdi' || type === 'Tejas Express')
+        ? ['CC', 'EC']
+        : type === 'Vande Bharat'
+        ? ['CC', 'EC']
+        : type === 'Rajdhani'
+        ? ['3A', '2A', '1A']
+        : type === 'Amrit Bharat'
+        ? ['SL', '2S']
+        : ['SL', '3A', '2A'];
 
       // Generate realistic price & seat availability for each class
       const classes = classTypes.map(cType => {

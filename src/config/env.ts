@@ -56,6 +56,12 @@ export async function setActiveRailRadarKey(key: string): Promise<void> {
   await SafeStorage.setItem(STORAGE_KEYS.RAILRADAR_API_KEY, cleanKey);
 }
 
+export const DATA_MODE: 'scraper' | 'api' =
+  process.env.EXPO_PUBLIC_DATA_MODE === 'api' ? 'api' : 'scraper';
+
+export const FORCE_PROVIDER_FAIL: boolean =
+  process.env.EXPO_PUBLIC_FORCE_PROVIDER_FAIL === '1';
+
 /**
  * Checks if a real external API key is active
  */

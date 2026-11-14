@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '../theme/colors';
 import { usePreferences } from '../context/PreferencesContext';
@@ -18,38 +18,47 @@ export const Header: React.FC<HeaderProps> = ({
   subtitle = "IRCTC & Live GPS Tracking",
   showBack = false,
   onBack,
-  onNotificationPress,
   onOpenPreferences,
 }) => {
-  const { language, setLanguage, isDarkMode, toggleTheme, t } = usePreferences();
-
-  const handleToggleLang = () => {
-    setLanguage(language === 'en' ? 'hi' : 'en');
-  };
+  const { isDarkMode } = usePreferences();
 
   return (
     <View style={[styles.headerContainer, { backgroundColor: isDarkMode ? '#0F172A' : Colors.primary }]}>
       <View style={styles.leftSection}>
         {showBack ? (
-          <TouchableOpacity 
-            style={styles.backBtn} 
-            activeOpacity={0.7} 
-            onPress={onBack}
-          >
-            <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
-          </TouchableOpacity>
+          <View style={styles.childHeaderRow}>
+            <TouchableOpacity 
+              style={styles.backBtn} 
+              activeOpacity={0.7} 
+              onPress={onBack}
+            >
+              <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
+            </TouchableOpacity>
+            <View style={styles.childTitleWrapper}>
+              <Text style={styles.childTitle} numberOfLines={1}>{title}</Text>
+              {subtitle ? (
+                <Text style={styles.childSubtitle} numberOfLines={1}>{subtitle}</Text>
+              ) : null}
+            </View>
+          </View>
         ) : (
-          <TouchableOpacity
-            style={styles.menuBtn}
-            activeOpacity={0.7}
-            onPress={onOpenPreferences}
-          >
-            <Ionicons name="menu" size={26} color="#FFFFFF" />
-          </TouchableOpacity>
+          /* Stylish Mobile Branding: Sleek Train Badge + Styled Two-Tone Typography */
+          <View style={styles.brandContainer}>
+            <View style={styles.brandIconWrapper}>
+              <MaterialCommunityIcons name="train" size={21} color="#FFFFFF" />
+            </View>
+            <View style={styles.brandTextCol}>
+              <View style={styles.titleRow}>
+                <Text style={styles.brandPrefix}>When is my </Text>
+                <Text style={styles.brandSuffix}>Train</Text>
+              </View>
+              <View style={styles.liveTagRow}>
+                <View style={styles.liveHeaderDot} />
+                <Text style={styles.brandLiveTag}>LIVE GPS & IRCTC</Text>
+              </View>
+            </View>
+          </View>
         )}
-        <View style={styles.titleWrapper}>
-          <Text style={styles.title} numberOfLines={1}>{title}</Text>
-        </View>
       </View>
 
       <View style={styles.rightSection}>
@@ -60,7 +69,7 @@ export const Header: React.FC<HeaderProps> = ({
             activeOpacity={0.7}
             onPress={onOpenPreferences}
           >
-            <Ionicons name="settings-outline" size={20} color="#FFFFFF" />
+            <Ionicons name="settings-sharp" size={19} color="#FFFFFF" />
           </TouchableOpacity>
         )}
       </View>
@@ -73,9 +82,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 18,
-    paddingTop: 16,
-    paddingBottom: 16,
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'android' ? 34 : 14,
+    paddingBottom: 13,
     elevation: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -89,46 +98,89 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
   },
+  childHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
   backBtn: {
-    width: 40,
-    height: 40,
+    width: 38,
+    height: 38,
     borderRadius: 12,
     backgroundColor: 'rgba(255, 255, 255, 0.18)',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
   },
-  menuBtn: {
-    padding: 6,
-    marginRight: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconCircle: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.18)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  titleWrapper: {
+  childTitleWrapper: {
     justifyContent: 'center',
     flex: 1,
   },
-  title: {
-    fontSize: 20,
+  childTitle: {
+    fontSize: 18,
     fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -0.2,
+  },
+  childSubtitle: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#BAE6FD',
+    marginTop: 1,
+    letterSpacing: 0.3,
+  },
+  brandContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  brandIconWrapper: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 11,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.28)',
+  },
+  brandTextCol: {
+    justifyContent: 'center',
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  brandPrefix: {
+    fontSize: 18.5,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.94)',
+    letterSpacing: -0.2,
+  },
+  brandSuffix: {
+    fontSize: 19,
+    fontWeight: '900',
     color: '#FFFFFF',
     letterSpacing: -0.3,
   },
-  subtitle: {
-    fontSize: 11.5,
-    fontWeight: '500',
-    color: 'rgba(255, 255, 255, 0.8)',
+  brandLiveTag: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#BAE6FD',
+    letterSpacing: 0.8,
+  },
+  liveTagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginTop: 2,
-    letterSpacing: 0.1,
+  },
+  liveHeaderDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#34D399',
+    marginRight: 4,
   },
   rightSection: {
     flexDirection: 'row',
@@ -138,31 +190,10 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'relative',
-  },
-  langPillBtn: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  langPillText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#0284C7',
-  },
-  alertDot: {
-    position: 'absolute',
-    top: 9,
-    right: 9,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#FACC15',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.28)',
   },
 });
