@@ -100,3 +100,4 @@ export const StorageSection: React.FC<StorageSectionProps> = ({ onShowToast }) =
     </SectionCard>
   );
 };
+

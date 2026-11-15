@@ -44,3 +44,4 @@ export const HelpSection: React.FC = () => {
     </SectionCard>
   );
 };
+

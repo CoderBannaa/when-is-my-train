@@ -84,7 +84,7 @@ export const TrainResultCard: React.FC<TrainResultCardProps> = React.memo(({
   const dayOffset = getArrivalDayOffset(train.depTime, durationMin);
   const trainType = deriveTrainTypeName(train.name, train.type);
 
-  const isDimmed = !runsToday || isDeparted;
+  const isDimmed = !runsToday;
   const nextRun = !runsToday ? getNextRunningDate(selectedDate, runsOn) : null;
   const currentDayName = SHORT_DAY_NAMES[selectedDayIndex];
 
@@ -183,8 +183,8 @@ export const TrainResultCard: React.FC<TrainResultCardProps> = React.memo(({
         </View>
       </View>
 
-      {/* ROW 3: Sub Status (Not running on Sat • Next: Mon, 17 Nov / Departed) */}
-      {isDimmed && (
+      {/* ROW 3: Sub Status (Not running on Day / Departed) */}
+      {(!runsToday || isDeparted) && (
         <View style={styles.rowStatus}>
           {!runsToday ? (
             <Text style={[styles.statusDimText, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
